@@ -1,0 +1,27 @@
+{
+  "name": "@mvp/worker-codegen",
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx src/index.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/index.js",
+    "db:generate": "prisma generate",
+    "db:push": "prisma db push"
+  },
+  "dependencies": {
+    "@mvp/agent-tools": "workspace:*",
+    "@mvp/shared": "workspace:*",
+    "bullmq": "^5.7.0",
+    "dotenv": "^16.4.1",
+    "openai": "^5.12.2",
+    "prisma": "^5.22.0",
+    "@prisma/client": "^5.22.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.30",
+    "tsx": "^4.7.0",
+    "typescript": "^5.4.0"
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "name": "@mvp/agent-tools",
+  "version": "0.1.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/tools.ts"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.0"
+  }
+}

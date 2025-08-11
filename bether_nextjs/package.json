@@ -1,0 +1,16 @@
+{
+  "name": "lovable-mvp-monorepo",
+  "private": true,
+  "packageManager": "pnpm@9.0.0",
+  "devDependencies": {
+    "tsx": "^4.7.0",
+    "typescript": "^5.4.0"
+  },
+  "scripts": {
+    "build": "echo Build root (per-package builds only)",
+    "test": "echo Tests run per package"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.54.0"
+  }
+}
