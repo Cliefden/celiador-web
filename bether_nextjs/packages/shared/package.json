@@ -2,12 +2,19 @@
   "name": "@mvp/shared",
   "version": "0.1.0",
   "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsc -p tsconfig.json --watch"
+  },
   "exports": {
-    ".": "./src/index.ts",
-    "./db": "./src/db.ts"
+    ".": "./dist/index.js",
+    "./db": "./dist/db.js"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",
     "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.0"
   }
 }

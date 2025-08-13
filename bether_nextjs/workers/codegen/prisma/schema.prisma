@@ -40,6 +40,12 @@ model Project {
   // Environment variables (stored as JSON)
   env Json?
 
+  // Audit fields
+  creator   String?
+  updater   String?
+  deleter   String?
+  deletedAt DateTime?
+
   // Relations
   userId String
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -60,6 +66,12 @@ model Job {
   output   String?
   error    String?
   metadata Json? // Stored as JSON
+
+  // Audit fields
+  creator   String?
+  updater   String?
+  deleter   String?
+  deletedAt DateTime?
 
   // Relations
   projectId String

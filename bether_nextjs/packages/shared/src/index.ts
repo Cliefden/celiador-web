@@ -10,7 +10,9 @@ export type JobStatus = z.infer<typeof JobStatus>;
 
 // Job data schema
 export const JobData = z.object({
+  jobId: z.string().optional(), // Added for worker to update job status
   projectId: z.string(),
+  userId: z.string(),
   type: JobType,
   prompt: z.string().optional(),
   templateKey: z.string(),
@@ -52,8 +54,13 @@ export const LLMMetadata = z.object({
   llmError: z.string().optional(),
   prompt: z.string().optional(),
   testFile: z.string().optional(),
-  projectDir: z.string().optional()
-});
+  projectDir: z.string().optional(),
+  filesUploaded: z.number().optional(),
+  storageLocation: z.string().optional(),
+  error: z.string().optional(),
+  exitCode: z.number().optional(),
+  deployed: z.boolean().optional()
+}).passthrough(); // Allow additional properties
 
 export type LLMMetadata = z.infer<typeof LLMMetadata>;
 
@@ -63,3 +70,6 @@ export const EnhancedJobResult = JobResult.extend({
 });
 
 export type EnhancedJobResult = z.infer<typeof EnhancedJobResult>;
+
+// File storage exports
+export { FileStorageService, type FileData, type FileTreeItem } from './storage.js';

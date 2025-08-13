@@ -2,7 +2,7 @@
 import 'dotenv/config';
 import { Worker } from 'bullmq';
 import { tools } from '@mvp/agent-tools';
-import { JobData, JobResult, JobStatus } from '@mvp/shared';
+import { JobData, EnhancedJobResult as JobResult, JobStatus, FileStorageService, FileData } from '@mvp/shared';
 import { LLMService, CodeGenerationContext } from './llm-service.js';
 
 // Redis connection
@@ -41,10 +41,58 @@ const worker = new Worker('codegen-jobs', async (job) => {
     result.success = true;
     console.log(`[codegen] Job ${job.id} completed successfully`);
     
+    // Update job status in database
+    try {
+      // Small delay to ensure orchestrator is ready
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      const response = await fetch(`http://localhost:4000/jobs/${jobData.jobId}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          status: 'COMPLETED',
+          output: result.output,
+          metadata: result.metadata
+        })
+      });
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.warn(`[codegen] Failed to update job status: ${response.status} - ${errorText}`);
+      } else {
+        console.log(`[codegen] Job status updated successfully`);
+      }
+    } catch (error) {
+      console.warn(`[codegen] Failed to update job status:`, error);
+    }
+    
   } catch (error) {
     result.success = false;
     result.error = error instanceof Error ? error.message : 'Unknown error';
     console.error(`[codegen] Job ${job.id} failed:`, error);
+    
+    // Update job status in database for failed jobs
+    try {
+      const response = await fetch(`http://localhost:4000/jobs/${jobData.jobId}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          status: 'FAILED',
+          error: result.error,
+          metadata: { error: result.error }
+        })
+      });
+      
+      if (!response.ok) {
+        console.warn(`[codegen] Failed to update job status: ${response.statusText}`);
+      }
+    } catch (updateError) {
+      console.warn(`[codegen] Failed to update job status:`, updateError);
+    }
   }
 
   return result;
@@ -61,56 +109,123 @@ async function handleScaffoldJob(jobData: JobData, result: JobResult) {
     throw new Error('Template key and repo are required for scaffold jobs');
   }
 
-  // Create project directory (use absolute path from project root)
-  const projectDir = `../../projects/${jobData.projectId}`;
-  await tools.runCmd('mkdir', ['-p', projectDir]);
+  const storageService = new FileStorageService();
+  const fsPromises = await import('fs/promises');
   
-  // Copy template
-  const templateDir = `../../packages/templates/${jobData.templateKey}`;
-  await tools.runCmd('cp', ['-r', templateDir, projectDir]);
+  // Create temporary local directory
+  const tempDir = `/tmp/project-${jobData.projectId}`;
+  await tools.runCmd('mkdir', ['-p', tempDir]);
   
-  // Initialize git repository
-  await tools.runCmd('git', ['init'], { cwd: projectDir });
-  await tools.createBranch('main', undefined, { cwd: projectDir });
-  
-  // Use LLM to customize the template if a prompt is provided
-  if (jobData.prompt) {
+  try {
+    // Copy template to temp directory
+    const templateDir = `../../packages/templates/${jobData.templateKey}`;
+    console.log(`[codegen] Copying template from: ${templateDir} to: ${tempDir}`);
+    
+    // Check if template directory exists
     try {
-      const llmService = new LLMService();
-      const context: CodeGenerationContext = {
-        projectId: jobData.projectId,
-        templateKey: jobData.templateKey,
-        existingFiles: [],
-        projectStructure: ''
-      };
-      
-      console.log(`[codegen] Using LLM to customize project with prompt: ${jobData.prompt}`);
-      const llmResult = await llmService.scaffoldProject(jobData.prompt, context);
-      
-      if (llmResult.success) {
-        result.output = `Project scaffolded and customized successfully in ${projectDir}. Files modified: ${llmResult.filesModified.join(', ')}`;
-        result.metadata = { 
-          projectDir, 
-          filesModified: llmResult.filesModified,
-          llmGenerated: true
-        };
-      } else {
-        console.warn(`[codegen] LLM customization failed: ${llmResult.error}`);
-        result.output = `Project scaffolded successfully in ${projectDir} (LLM customization failed: ${llmResult.error})`;
-        result.metadata = { projectDir, llmError: llmResult.error };
-      }
+      const templateStats = await fsPromises.stat(templateDir);
+      console.log(`[codegen] Template directory exists: ${templateStats.isDirectory()}`);
     } catch (error) {
-      console.error(`[codegen] LLM service error:`, error);
-      result.output = `Project scaffolded successfully in ${projectDir} (LLM service unavailable)`;
-      result.metadata = { projectDir, llmError: error instanceof Error ? error.message : 'Unknown error' };
+      console.error(`[codegen] Template directory not found: ${templateDir}`);
+      throw new Error(`Template directory not found: ${templateDir}`);
     }
-  } else {
-    result.output = `Project scaffolded successfully in ${projectDir}`;
-    result.metadata = { projectDir };
+    
+    const copyResult = await tools.runCmd('cp', ['-r', `${templateDir}/*`, tempDir]);
+    console.log(`[codegen] Copy result:`, copyResult);
+    
+    // Check what was copied
+    const tempFiles = await fsPromises.readdir(tempDir);
+    console.log(`[codegen] Files in temp directory after copy:`, tempFiles);
+    
+    // Initialize git repository
+    await tools.runCmd('git', ['init'], { cwd: tempDir });
+    await tools.createBranch('main', undefined, { cwd: tempDir });
+    
+    // Use LLM to customize the template if a prompt is provided
+    if (jobData.prompt) {
+      try {
+        const llmService = new LLMService();
+        const context: CodeGenerationContext = {
+          projectId: jobData.projectId,
+          templateKey: jobData.templateKey,
+          existingFiles: [],
+          projectStructure: ''
+        };
+        
+        console.log(`[codegen] Using LLM to customize project with prompt: ${jobData.prompt}`);
+        const llmResult = await llmService.scaffoldProject(jobData.prompt, context);
+        
+        if (llmResult.success) {
+          result.output = `Project scaffolded and customized successfully. Files modified: ${llmResult.filesModified.join(', ')}`;
+          result.metadata = { 
+            filesModified: llmResult.filesModified,
+            llmGenerated: true
+          };
+        } else {
+          console.warn(`[codegen] LLM customization failed: ${llmResult.error}`);
+          result.output = `Project scaffolded successfully (LLM customization failed: ${llmResult.error})`;
+          result.metadata = { llmError: llmResult.error };
+        }
+      } catch (error) {
+        console.error(`[codegen] LLM service error:`, error);
+        result.output = `Project scaffolded successfully (LLM service unavailable)`;
+        result.metadata = { llmError: error instanceof Error ? error.message : 'Unknown error' };
+      }
+    } else {
+      result.output = `Project scaffolded successfully`;
+      result.metadata = {};
+    }
+    
+    // Install dependencies
+    await tools.runCmd('pnpm', ['install'], { cwd: tempDir });
+    
+    // Read all files and upload to Supabase Storage
+    console.log(`[codegen] Reading files from ${tempDir}`);
+    
+    // Use fs.readdir directly to list files in the temp directory
+    const files = await fsPromises.readdir(tempDir, { withFileTypes: true });
+    const fileNames = files
+      .filter(file => file.isFile()) // Only include files, not directories
+      .map(file => file.name);
+    
+    console.log(`[codegen] Found ${fileNames.length} files:`, fileNames);
+    
+    const fileData: FileData[] = [];
+    
+    for (const file of fileNames) {
+      console.log(`[codegen] Reading file: ${file}`);
+      const contentResult = await tools.readFile(`${tempDir}/${file}`);
+      if (contentResult.content) {
+        fileData.push({
+          path: file,
+          content: contentResult.content,
+          contentType: 'text/plain'
+        });
+        console.log(`[codegen] Added file: ${file} (${contentResult.content.length} bytes)`);
+      } else {
+        console.warn(`[codegen] Failed to read file: ${file} - ${contentResult.error}`);
+      }
+    }
+    
+    console.log(`[codegen] Uploading ${fileData.length} files to Supabase Storage`);
+    // Upload files to Supabase Storage
+    await storageService.uploadProjectFiles(jobData.projectId, jobData.userId, fileData);
+    console.log(`[codegen] Files uploaded successfully`);
+    
+    result.output += ` and uploaded to cloud storage (${fileData.length} files)`;
+    result.metadata = {
+      ...result.metadata,
+      filesUploaded: fileData.length,
+      storageLocation: `supabase://project-files/${jobData.userId || 'unknown'}/${jobData.projectId}`
+    };
+    
+  } catch (error) {
+    console.error(`[codegen] Scaffold job failed:`, error);
+    throw error;
+  } finally {
+    // Clean up temp directory
+    await tools.runCmd('rm', ['-rf', tempDir]);
   }
-  
-  // Install dependencies
-  await tools.runCmd('pnpm', ['install'], { cwd: projectDir });
 }
 
 // Handle edit jobs (modify existing project)

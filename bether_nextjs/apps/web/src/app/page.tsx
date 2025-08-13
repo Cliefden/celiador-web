@@ -1,271 +1,134 @@
 
 'use client';
 
-import { useState, useEffect } from 'react';
-import { Sidebar } from '../components/layout/sidebar';
-import { ProjectView } from '../components/project/project-view';
-import { CreateProjectModal } from '../components/modals/create-project-modal';
-import { supabase, isSupabaseConfigured } from '../lib/supabase';
+import { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import Header from '../components/layout/Header';
+import Footer from '../components/layout/Footer';
+import Hero from '../components/landing/Hero';
+import Features from '../components/landing/Features';
+import { Button } from '../components/ui/button';
+import { useAuth } from '../contexts/AuthContext';
 
-interface User {
-  id: string;
-  email: string;
-  name?: string;
-}
-
-interface Project {
-  id: string;
-  name: string;
-  templatekey: string;
-  repoprovider: string;
-  repoowner: string;
-  reponame: string;
-  status: string;
-  createdat: string;
-  updatedat: string;
-}
-
-export default function Home() {
-  const [user, setUser] = useState<User | null>(null);
-  const [selectedProject, setSelectedProject] = useState<Project | null>(null);
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [isLogin, setIsLogin] = useState(true);
+export default function HomePage() {
+  const { user, isLoading } = useAuth();
+  const router = useRouter();
 
   useEffect(() => {
-    checkUser();
-  }, []);
-
-  const checkUser = async () => {
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session?.user) {
-        setUser({
-          id: session.user.id,
-          email: session.user.email!,
-          name: session.user.user_metadata?.name
-        });
-        fetchProjects(session.access_token);
-      }
-    } catch (error) {
-      console.error('Error checking user:', error);
-    } finally {
-      setIsLoading(false);
+    // If user is authenticated, redirect to dashboard
+    if (!isLoading && user) {
+      router.push('/dashboard');
     }
-  };
+  }, [user, isLoading, router]);
 
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password
-      });
-
-      if (error) throw error;
-
-      if (data.user && data.session) {
-        setUser({
-          id: data.user.id,
-          email: data.user.email!,
-          name: data.user.user_metadata?.name
-        });
-        fetchProjects(data.session.access_token);
-      }
-    } catch (error) {
-      console.error('Login error:', error);
-      alert('Login failed');
-    }
-  };
-
-  const handleRegister = async (e: React.FormEvent) => {
-    e.preventDefault();
-    try {
-      const { data, error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          data: { name: email.split('@')[0] }
-        }
-      });
-
-      if (error) throw error;
-
-      if (data.user && data.session) {
-        setUser({
-          id: data.user.id,
-          email: data.user.email!,
-          name: data.user.user_metadata?.name
-        });
-        fetchProjects(data.session.access_token);
-      }
-    } catch (error) {
-      console.error('Registration error:', error);
-      alert('Registration failed');
-    }
-  };
-
-  const handleLogout = async () => {
-    try {
-      await supabase.auth.signOut();
-      setUser(null);
-      setProjects([]);
-      setSelectedProject(null);
-    } catch (error) {
-      console.error('Logout error:', error);
-    }
-  };
-
-  const fetchProjects = async (accessToken?: string) => {
-    try {
-      const response = await fetch('http://localhost:4000/projects', {
-        headers: {
-          'Authorization': `Bearer ${accessToken}`
-        }
-      });
-      
-      if (response.ok) {
-        const data = await response.json();
-        setProjects(data);
-      }
-    } catch (error) {
-      console.error('Error fetching projects:', error);
-    }
-  };
-
-  const handleCreateProject = async (projectData: any) => {
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) throw new Error('No session');
-
-      const response = await fetch('http://localhost:4000/projects', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session.access_token}`
-        },
-        body: JSON.stringify(projectData)
-      });
-
-      if (response.ok) {
-        const newProject = await response.json();
-        setProjects([newProject, ...projects]);
-        setIsModalOpen(false);
-      }
-    } catch (error) {
-      console.error('Error creating project:', error);
-    }
-  };
-
+  // Show loading state while checking authentication
   if (isLoading) {
-    return <div className="flex items-center justify-center min-h-screen">Loading...</div>;
-  }
-
-  if (!isSupabaseConfigured()) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
+      <div className="min-h-screen bg-white flex items-center justify-center">
         <div className="text-center">
-          <h1 className="text-2xl font-bold mb-4">Supabase Setup Required</h1>
-          <p className="text-gray-600 mb-4">
-            Please configure your Supabase environment variables in <code>.env.local</code>
-          </p>
-          <div className="bg-gray-100 p-4 rounded text-left text-sm">
-            <p><strong>NEXT_PUBLIC_SUPABASE_URL</strong>=https://your-project.supabase.co</p>
-            <p><strong>NEXT_PUBLIC_SUPABASE_ANON_KEY</strong>=your_anon_key</p>
+          <div className="w-12 h-12 bg-gradient-to-br from-blue-600 to-purple-600 rounded-xl flex items-center justify-center mx-auto mb-4 animate-pulse">
+            <span className="text-white font-bold text-lg">B</span>
           </div>
+          <p className="text-gray-600">Loading...</p>
         </div>
       </div>
     );
   }
 
-  if (!user) {
-    return (
-      <div className="flex items-center justify-center min-h-screen bg-gray-50">
-        <div className="bg-white p-8 rounded-lg shadow-md w-96">
-          <h1 className="text-2xl font-bold mb-6 text-center">
-            {isLogin ? 'Sign In' : 'Sign Up'}
-          </h1>
-          
-          <form onSubmit={isLogin ? handleLogin : handleRegister}>
-            <div className="mb-4">
-              <label className="block text-sm font-medium mb-2">Email</label>
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500"
-                required
-              />
-            </div>
-            
-            <div className="mb-6">
-              <label className="block text-sm font-medium mb-2">Password</label>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500"
-                required
-              />
-            </div>
-            
-            <button
-              type="submit"
-              className="w-full bg-blue-500 text-white p-2 rounded hover:bg-blue-600"
-            >
-              {isLogin ? 'Sign In' : 'Sign Up'}
-            </button>
-          </form>
-          
-          <button
-            onClick={() => setIsLogin(!isLogin)}
-            className="w-full mt-4 text-blue-500 hover:underline"
-          >
-            {isLogin ? 'Need an account? Sign up' : 'Have an account? Sign in'}
-          </button>
-        </div>
-      </div>
-    );
+  // Don't render landing page if user is authenticated
+  if (user) {
+    return null;
   }
 
   return (
-    <div className="flex h-screen bg-gray-50">
-      <Sidebar
-        projects={projects}
-        selectedProject={selectedProject}
-        onProjectSelect={(project) => setSelectedProject(project)}
-        onCreateProject={() => setIsModalOpen(true)}
-        user={user}
-        onLogout={handleLogout}
-      />
+    <div className="min-h-screen bg-white">
+      <Header />
       
-      <div className="flex-1 overflow-auto">
-        {selectedProject ? (
-          <ProjectView project={selectedProject} userId={user.id} />
-        ) : (
-          <div className="flex items-center justify-center h-full">
-            <div className="text-center">
-              <h2 className="text-xl font-semibold mb-2">Welcome to Bether</h2>
-              <p className="text-gray-600 mb-4">Select a project or create a new one to get started</p>
-              <button
-                onClick={() => setIsModalOpen(true)}
-                className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600"
-              >
-                Create Project
-              </button>
+      {/* Hero Section */}
+      <Hero />
+      
+      {/* Features Section */}
+      <Features />
+      
+      {/* How It Works Section */}
+      <div className="py-12 bg-white">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="lg:text-center">
+            <h2 className="text-base text-blue-600 font-semibold tracking-wide uppercase">How It Works</h2>
+            <p className="mt-2 text-3xl leading-8 font-extrabold tracking-tight text-gray-900 sm:text-4xl">
+              Get started in minutes, not hours
+            </p>
+            <p className="mt-4 max-w-2xl text-xl text-gray-500 lg:mx-auto">
+              Our streamlined process makes it easy to go from idea to deployed application.
+            </p>
+          </div>
+
+          <div className="mt-10">
+            <div className="grid grid-cols-1 gap-8 md:grid-cols-3">
+              <div className="text-center">
+                <div className="flex items-center justify-center h-12 w-12 rounded-md bg-blue-600 text-white mx-auto">
+                  <span className="text-xl font-bold">1</span>
+                </div>
+                <h3 className="mt-4 text-lg font-medium text-gray-900">Describe Your App</h3>
+                <p className="mt-2 text-base text-gray-500">
+                  Tell us what you want to build. Our AI understands natural language and generates the perfect starting point.
+                </p>
+              </div>
+              
+              <div className="text-center">
+                <div className="flex items-center justify-center h-12 w-12 rounded-md bg-blue-600 text-white mx-auto">
+                  <span className="text-xl font-bold">2</span>
+                </div>
+                <h3 className="mt-4 text-lg font-medium text-gray-900">Generate & Customize</h3>
+                <p className="mt-2 text-base text-gray-500">
+                  Review the generated code, customize it to your needs, and add your own features and styling.
+                </p>
+              </div>
+              
+              <div className="text-center">
+                <div className="flex items-center justify-center h-12 w-12 rounded-md bg-blue-600 text-white mx-auto">
+                  <span className="text-xl font-bold">3</span>
+                </div>
+                <h3 className="mt-4 text-lg font-medium text-gray-900">Deploy & Scale</h3>
+                <p className="mt-2 text-base text-gray-500">
+                  Deploy your application with one click. Our platform handles hosting, scaling, and monitoring.
+                </p>
+              </div>
             </div>
           </div>
-        )}
+        </div>
       </div>
 
-      <CreateProjectModal
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        onSubmit={handleCreateProject}
-      />
+      {/* CTA Section */}
+      <div className="bg-gradient-to-r from-blue-600 to-purple-600">
+        <div className="max-w-7xl mx-auto py-12 px-4 sm:px-6 lg:py-16 lg:px-8 lg:flex lg:items-center lg:justify-between">
+          <h2 className="text-3xl font-extrabold tracking-tight text-white sm:text-4xl">
+            <span className="block">Ready to build better apps?</span>
+            <span className="block text-blue-200">Start your free trial today.</span>
+          </h2>
+          <div className="mt-8 flex lg:mt-0 lg:flex-shrink-0">
+            <div className="inline-flex rounded-md shadow">
+              <Button 
+                className="inline-flex items-center justify-center px-5 py-3 border border-transparent text-base font-medium rounded-md text-blue-600 bg-white hover:bg-blue-50"
+                onClick={() => window.location.href = '/dashboard'}
+              >
+                Get Started Free
+              </Button>
+            </div>
+            <div className="ml-3 inline-flex rounded-md shadow">
+              <Button 
+                variant="outline" 
+                className="inline-flex items-center justify-center px-5 py-3 border border-transparent text-base font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700"
+                onClick={() => window.location.href = '/solutions'}
+              >
+                Learn More
+              </Button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <Footer />
     </div>
   );
 }

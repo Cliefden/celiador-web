@@ -7,6 +7,7 @@ interface FileNode {
   name: string;
   type: 'file' | 'directory';
   path: string;
+  size?: number;
   children?: FileNode[];
 }
 
@@ -18,20 +19,15 @@ interface FileTreeProps {
 
 export function FileTree({ files, onFileSelect, selectedFile }: FileTreeProps) {
   return (
-    <div className="w-full h-full overflow-auto">
-      <div className="p-2">
-        <h3 className="text-sm font-medium mb-2">Files</h3>
-        <div className="space-y-1">
-          {files.map((file) => (
-            <FileTreeNode
-              key={file.path}
-              node={file}
-              onFileSelect={onFileSelect}
-              selectedFile={selectedFile}
-            />
-          ))}
-        </div>
-      </div>
+    <div className="space-y-1">
+      {files.map((file) => (
+        <FileTreeNode
+          key={file.path}
+          node={file}
+          onFileSelect={onFileSelect}
+          selectedFile={selectedFile}
+        />
+      ))}
     </div>
   );
 }
@@ -58,20 +54,20 @@ function FileTreeNode({ node, onFileSelect, selectedFile, level = 0 }: FileTreeN
   return (
     <div>
       <div
-        className={`flex items-center px-2 py-1 rounded text-sm cursor-pointer transition-colors ${
+        className={`flex items-center px-3 py-2 rounded-lg text-sm cursor-pointer transition-all duration-200 ${
           isSelected 
-            ? 'bg-primary text-primary-foreground' 
-            : 'hover:bg-muted'
+            ? 'bg-gradient-to-r from-blue-500 to-purple-500 text-white shadow-md' 
+            : 'hover:bg-gray-100 text-gray-700'
         }`}
-        style={{ paddingLeft: `${level * 16 + 8}px` }}
+        style={{ paddingLeft: `${level * 16 + 12}px` }}
         onClick={handleClick}
       >
         {node.type === 'directory' ? (
           <>
             {isExpanded ? (
-              <ChevronDown className="w-4 h-4 mr-1" />
+              <ChevronDown className="w-4 h-4 mr-2 text-blue-500" />
             ) : (
-              <ChevronRight className="w-4 h-4 mr-1" />
+              <ChevronRight className="w-4 h-4 mr-2 text-blue-500" />
             )}
             {isExpanded ? (
               <FolderOpen className="w-4 h-4 mr-2 text-blue-500" />
@@ -82,11 +78,16 @@ function FileTreeNode({ node, onFileSelect, selectedFile, level = 0 }: FileTreeN
         ) : (
           <File className="w-4 h-4 mr-2 text-gray-500" />
         )}
-        <span className="truncate">{node.name}</span>
+        <span className="truncate font-medium">{node.name}</span>
+        {node.size && (
+          <span className="ml-auto text-xs text-gray-400">
+            {node.size > 1024 ? `${(node.size / 1024).toFixed(1)}KB` : `${node.size}B`}
+          </span>
+        )}
       </div>
       
       {node.type === 'directory' && isExpanded && node.children && (
-        <div>
+        <div className="mt-1">
           {node.children.map((child) => (
             <FileTreeNode
               key={child.path}

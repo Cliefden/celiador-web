@@ -56,7 +56,7 @@ export class DatabaseService {
         repoProvider: data.repoProvider,
         repoOwner: data.repoOwner,
         repoName: data.repoName,
-        env: data.env ? JSON.stringify(data.env) : null,
+        env: data.env || undefined,
         userId: data.userId
       }
     });
@@ -130,7 +130,7 @@ export class DatabaseService {
         status,
         output,
         error,
-        metadata: metadata ? JSON.stringify(metadata) : null
+        metadata: metadata || undefined
       }
     });
   }

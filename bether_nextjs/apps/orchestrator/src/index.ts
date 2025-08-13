@@ -4,6 +4,7 @@ import cors from 'cors';
 import morgan from 'morgan';
 import { Queue } from 'bullmq';
 import { createClient } from '@supabase/supabase-js';
+import { FileStorageService } from '@mvp/shared';
 import dotenv from 'dotenv';
 
 // Load environment variables from .env file
@@ -81,6 +82,7 @@ const db = {
       .from('jobs')
       .insert({
         projectid: data.projectId,
+        userid: data.userId,
         type: data.type,
         prompt: data.prompt,
         status: 'PENDING'
@@ -130,13 +132,27 @@ const db = {
   
   updateJobStatus: async (id: string, status: string, output?: string, error?: string, metadata?: any) => {
     console.log('Supabase: updateJobStatus called for job:', id, 'status:', status);
+    
+    // First get the job to find the userid
+    const { data: existingJob, error: getError } = await supabaseService
+      .from('jobs')
+      .select('userid')
+      .eq('id', id)
+      .single();
+    
+    if (getError) {
+      console.error('Supabase error getting job for update:', getError);
+      throw getError;
+    }
+    
     const { data, error: updateError } = await supabaseService
       .from('jobs')
       .update({
         status,
         output,
         error,
-        metadata
+        metadata,
+        updater: existingJob.userid // Set updater to the job's userid
       })
       .eq('id', id)
       .select()
@@ -145,6 +161,29 @@ const db = {
     if (updateError) {
       console.error('Supabase error updating job:', updateError);
       throw updateError;
+    }
+    
+    return data;
+  },
+
+  deleteProject: async (id: string, userId: string) => {
+    console.log('Supabase: deleteProject called for project:', id);
+    
+    // Soft delete the project
+    const { data, error } = await supabaseService
+      .from('projects')
+      .update({
+        deletedAt: new Date().toISOString(),
+        deleter: userId
+      })
+      .eq('id', id)
+      .eq('userid', userId) // Ensure user owns the project
+      .select()
+      .single();
+    
+    if (error) {
+      console.error('Supabase error deleting project:', error);
+      throw error;
     }
     
     return data;
@@ -319,6 +358,24 @@ app.get('/projects/:id', authenticateUser, async (req, res) => {
   }
 });
 
+app.delete('/projects/:id', authenticateUser, async (req, res) => {
+  try {
+    const user = (req as any).user;
+    const { id } = req.params;
+
+    const project = await db.deleteProject(id, user.id);
+    
+    if (!project) {
+      return res.status(404).json({ error: 'Project not found or access denied' });
+    }
+
+    res.json({ message: 'Project deleted successfully' });
+  } catch (error) {
+    console.error('Failed to delete project:', error);
+    res.status(500).json({ error: 'Failed to delete project' });
+  }
+});
+
 app.post('/projects/:id/jobs', authenticateUser, async (req, res) => {
   try {
     const user = (req as any).user;
@@ -350,9 +407,15 @@ app.post('/projects/:id/jobs', authenticateUser, async (req, res) => {
     await jobQueue.add('codegen-jobs', {
       jobId: job.id,
       projectId: id,
+      userId: user.id,
       type,
       prompt,
-      projectDir: `../../projects/${id}`
+      templateKey: project.templatekey,
+      repo: {
+        provider: project.repoprovider,
+        owner: project.repoowner,
+        name: project.reponame
+      }
     });
 
     res.status(201).json(job);
@@ -389,6 +452,26 @@ app.get('/jobs/:id', authenticateUser, async (req, res) => {
   }
 });
 
+// Update job status (used by worker)
+app.patch('/jobs/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status, output, error, metadata } = req.body;
+
+    const job = await db.getJobById(id);
+    if (!job) {
+      return res.status(404).json({ error: 'Job not found' });
+    }
+
+    await db.updateJobStatus(id, status, output, error, metadata);
+    
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Failed to update job:', error);
+    res.status(500).json({ error: 'Failed to update job' });
+  }
+});
+
 app.get('/projects/:id/jobs', authenticateUser, async (req, res) => {
   try {
     const user = (req as any).user;
@@ -408,6 +491,96 @@ app.get('/projects/:id/jobs', authenticateUser, async (req, res) => {
   } catch (error) {
     console.error('Failed to fetch jobs:', error);
     res.status(500).json({ error: 'Failed to fetch jobs' });
+  }
+});
+
+// File storage endpoints
+app.get('/projects/:id/files', authenticateUser, async (req, res) => {
+  try {
+    const user = (req as any).user;
+    const { id } = req.params;
+
+    // Verify project ownership
+    const project = await db.getProjectById(id);
+    if (!project) {
+      return res.status(404).json({ error: 'Project not found' });
+    }
+    if (project.userid !== user.id) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    const storageService = new FileStorageService();
+    const files = await storageService.downloadProjectFiles(id, user.id);
+    
+    res.json({ files });
+  } catch (error) {
+    console.error('Failed to download project files:', error);
+    res.status(500).json({ error: 'Failed to download project files' });
+  }
+});
+
+app.get('/projects/:id/files/tree', authenticateUser, async (req, res) => {
+  try {
+    const user = (req as any).user;
+    const { id } = req.params;
+
+    console.log(`[orchestrator] File tree request for project ${id}, user ${user.id}`);
+
+    // Verify project ownership
+    const project = await db.getProjectById(id);
+    if (!project) {
+      console.log(`[orchestrator] Project ${id} not found`);
+      return res.status(404).json({ error: 'Project not found' });
+    }
+    if (project.userid !== user.id) {
+      console.log(`[orchestrator] Access denied: project.userid=${project.userid}, user.id=${user.id}`);
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    console.log(`[orchestrator] Getting file tree for project ${id}, user ${user.id}`);
+    const storageService = new FileStorageService();
+    const fileTree = await storageService.getProjectFileTree(id, user.id);
+    
+    console.log(`[orchestrator] File tree result:`, JSON.stringify(fileTree, null, 2));
+    res.json({ tree: fileTree });
+  } catch (error) {
+    console.error('Failed to get project file tree:', error);
+    res.status(500).json({ error: 'Failed to get project file tree' });
+  }
+});
+
+app.get('/projects/:id/files/:filePath(*)', authenticateUser, async (req, res) => {
+  try {
+    const user = (req as any).user;
+    const { id, filePath } = req.params;
+
+    console.log(`[orchestrator] File content request for project ${id}, file ${filePath}, user ${user.id}`);
+
+    // Verify project ownership
+    const project = await db.getProjectById(id);
+    if (!project) {
+      console.log(`[orchestrator] Project ${id} not found`);
+      return res.status(404).json({ error: 'Project not found' });
+    }
+    if (project.userid !== user.id) {
+      console.log(`[orchestrator] Access denied: project.userid=${project.userid}, user.id=${user.id}`);
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    console.log(`[orchestrator] Getting file content for project ${id}, file ${filePath}, user ${user.id}`);
+    const storageService = new FileStorageService();
+    const file = await storageService.getFile(id, user.id, filePath);
+    
+    if (!file) {
+      console.log(`[orchestrator] File ${filePath} not found`);
+      return res.status(404).json({ error: 'File not found' });
+    }
+    
+    console.log(`[orchestrator] File content retrieved successfully, size: ${file.content.length} bytes`);
+    res.json({ file });
+  } catch (error) {
+    console.error('Failed to get file:', error);
+    res.status(500).json({ error: 'Failed to get file' });
   }
 });
 
