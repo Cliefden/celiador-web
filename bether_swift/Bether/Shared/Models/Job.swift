@@ -42,9 +42,9 @@ struct Job:
     SBTypeNameable,
     SBManageable,
     Hashable,
-    HasStatus
+    HasStatus,
+    Named
 {
-    
     static let path = "jobs"
     static let idName = String(typeName.lowercased()) + "_id"
     static let typeName = "Job"
@@ -70,12 +70,12 @@ struct Job:
     
     enum CodingKeys: String, CodingKey {
         case id
-        case createdAt = "created_at"
+        case createdAt = "createdat"
         case creator
         case updater
-        case updatedAt = "updated_at"
+        case updatedAt = "updatedat"
         case deleter
-        case deletedAt = "deleted_at"
+        case deletedAt = "deletedat"
         
         case type
         case status
@@ -94,5 +94,9 @@ struct Job:
     
     static func == (lhs: Job, rhs: Job) -> Bool {
         return lhs.id == rhs.id
+    }
+    
+    var name: String? {
+        return prompt
     }
 }

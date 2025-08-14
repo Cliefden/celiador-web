@@ -630,10 +630,11 @@ app.get('/projects/:id/files/tree', authenticateUser, async (req, res) => {
   }
 });
 
-app.get('/projects/:id/files/:filePath(*)', authenticateUser, async (req, res) => {
+app.get('/projects/:id/files/*', authenticateUser, async (req, res) => {
   try {
     const user = (req as any).user;
-    const { id, filePath } = req.params;
+    const { id } = req.params;
+    const filePath = req.params[0]; // Get the wildcard parameter
 
     console.log(`[orchestrator] File content request for project ${id}, file ${filePath}, user ${user.id}`);
 
@@ -666,11 +667,11 @@ app.get('/projects/:id/files/:filePath(*)', authenticateUser, async (req, res) =
 });
 
 // Save file content
-app.put('/projects/:id/files/:filePath(*)', authenticateUser, async (req, res) => {
+app.put('/projects/:id/files/save', authenticateUser, async (req, res) => {
   try {
     const user = (req as any).user;
-    const { id, filePath } = req.params;
-    const { content } = req.body;
+    const { id } = req.params;
+    const { filePath, content } = req.body;
 
     console.log(`[orchestrator] File save request for project ${id}, file ${filePath}, user ${user.id}`);
 
@@ -698,10 +699,11 @@ app.put('/projects/:id/files/:filePath(*)', authenticateUser, async (req, res) =
 });
 
 // Delete file
-app.delete('/projects/:id/files/:filePath(*)', authenticateUser, async (req, res) => {
+app.delete('/projects/:id/files/*', authenticateUser, async (req, res) => {
   try {
     const user = (req as any).user;
-    const { id, filePath } = req.params;
+    const { id } = req.params;
+    const filePath = req.params[0]; // Get the wildcard parameter
 
     console.log(`[orchestrator] File delete request for project ${id}, file ${filePath}, user ${user.id}`);
 

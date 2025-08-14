@@ -181,7 +181,7 @@ export function ProjectView({ project, userId, onProjectDeleted }: ProjectViewPr
       if (!session) return;
 
       console.log(`[web] Fetching file content for: ${filePath}`);
-      const response = await fetch(`http://localhost:4000/projects/${project.id}/files/${encodeURIComponent(filePath)}`, {
+      const response = await fetch(`http://localhost:4000/projects/${project.id}/files/${filePath}`, {
         headers: {
           'Authorization': `Bearer ${session.access_token}`
         }
@@ -219,21 +219,31 @@ export function ProjectView({ project, userId, onProjectDeleted }: ProjectViewPr
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) return;
 
-      const response = await fetch(`http://localhost:4000/projects/${project.id}/files/${encodeURIComponent(selectedFile)}`, {
+      console.log(`[web] Saving file: ${selectedFile}, content length: ${content.length}`);
+      console.log(`[web] Project ID: ${project.id}`);
+      console.log(`[web] User ID: ${session.user.id}`);
+      console.log(`[web] File path: ${selectedFile}`);
+      console.log(`[web] URL: http://localhost:4000/projects/${project.id}/files/${selectedFile}`);
+      const response = await fetch(`http://localhost:4000/projects/${project.id}/files/save`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${session.access_token}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ content }),
+        body: JSON.stringify({ filePath: selectedFile, content }),
       });
 
+      console.log(`[web] Save response status: ${response.status}`);
       if (response.ok) {
+        const result = await response.json();
+        console.log(`[web] Save response:`, result);
         setSelectedFileContent(content);
         // Refresh file tree to show updated file
         fetchFileTree();
       } else {
-        throw new Error('Failed to save file');
+        const errorText = await response.text();
+        console.error(`[web] Save error: ${response.status} - ${errorText}`);
+        throw new Error(`Failed to save file: ${errorText}`);
       }
     } catch (error) {
       console.error('Error saving file:', error);
@@ -246,7 +256,7 @@ export function ProjectView({ project, userId, onProjectDeleted }: ProjectViewPr
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) return;
 
-      const response = await fetch(`http://localhost:4000/projects/${project.id}/files/${encodeURIComponent(file.path)}`, {
+      const response = await fetch(`http://localhost:4000/projects/${project.id}/files/${file.path}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${session.access_token}`,
@@ -307,7 +317,7 @@ export function ProjectView({ project, userId, onProjectDeleted }: ProjectViewPr
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) return;
 
-      const response = await fetch(`http://localhost:4000/projects/${project.id}/files/${encodeURIComponent(file.path)}`, {
+      const response = await fetch(`http://localhost:4000/projects/${project.id}/files/${file.path}`, {
         headers: {
           'Authorization': `Bearer ${session.access_token}`,
           'Content-Type': 'application/json',

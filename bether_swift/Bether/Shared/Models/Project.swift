@@ -61,12 +61,12 @@ struct Project:
     
     enum CodingKeys: String, CodingKey {
         case id
-        case createdAt = "created_at"
+        case createdAt = "createdat"
         case creator
         case updater
-        case updatedAt = "updated_at"
+        case updatedAt = "updatedat"
         case deleter
-        case deletedAt = "deleted_at"
+        case deletedAt = "deletedat"
         
         case name
         case templateKey = "templatekey"

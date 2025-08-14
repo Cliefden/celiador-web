@@ -25,7 +25,7 @@ import {
 } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
-import { useToast } from '../ui/toast';
+import { useToast, ToastContainer } from '../ui/toast';
 
 interface FileNode {
   name: string;
@@ -56,7 +56,7 @@ export function FileEditor({
   isReadOnly = false,
   className = ""
 }: FileEditorProps) {
-  const { success, error, info } = useToast();
+  const { toasts, removeToast, success, error, info } = useToast();
   const [editedContent, setEditedContent] = useState(content);
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -78,13 +78,17 @@ export function FileEditor({
     if (!onSave || !hasChanges) return;
     
     try {
+      console.log('[FileEditor] Starting save operation...');
       setIsSaving(true);
       await onSave(editedContent);
+      console.log('[FileEditor] Save operation completed successfully');
       setHasChanges(false);
       success('File Saved', `${file?.name} has been saved successfully`);
     } catch (err) {
+      console.error('[FileEditor] Save operation failed:', err);
       error('Save Failed', 'Failed to save the file');
     } finally {
+      console.log('[FileEditor] Setting isSaving to false');
       setIsSaving(false);
     }
   };
@@ -195,6 +199,7 @@ export function FileEditor({
 
   return (
     <div className={`h-full flex flex-col ${className} ${isFullscreen ? 'fixed inset-0 z-50 bg-white' : ''}`}>
+      <ToastContainer toasts={toasts} onRemove={removeToast} />
       {/* Header */}
       <Card className="mb-4">
         <CardHeader className="pb-3">
@@ -236,7 +241,7 @@ export function FileEditor({
                       <Button
                         onClick={handleSave}
                         disabled={!hasChanges || isSaving}
-                        className="button-primary"
+                        className="bg-blue-600 hover:bg-blue-700 text-white"
                       >
                         {isSaving ? (
                           <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-1" />
