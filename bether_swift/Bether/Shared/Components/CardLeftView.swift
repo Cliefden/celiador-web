@@ -27,6 +27,7 @@ struct CardLeftView: View {
     var fifthText: CompoundText? = nil
     var sixthText: CompoundText? = nil
     var seventhText: CompoundText? = nil
+    var eighthText: CompoundText? = nil
     var dates: Dates? = nil
     var date: Date? = nil
     var withTime: Bool = false
@@ -142,6 +143,14 @@ struct CardLeftView: View {
                             text: seventhText.text,
                             textUnit: seventhText.unit,
                             textUnitColor: seventhText.color,
+                            textStyle: .secondary
+                        )
+                    }
+                    if let eighthText {
+                        TextView(
+                            text: eighthText.text,
+                            textUnit: eighthText.unit,
+                            textUnitColor: eighthText.color,
                             textStyle: .secondary
                         )
                     }

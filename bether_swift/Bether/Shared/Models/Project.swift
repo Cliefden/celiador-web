@@ -32,7 +32,8 @@ struct Project:
     SBListable,
     SBTypeNameable,
     SBManageable,
-    Named
+    Named,
+    HasStatus
 {
     
     static let path = "projects"

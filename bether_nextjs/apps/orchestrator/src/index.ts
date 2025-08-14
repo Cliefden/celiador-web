@@ -494,6 +494,87 @@ app.get('/projects/:id/jobs', authenticateUser, async (req, res) => {
   }
 });
 
+// Cancel job
+app.post('/jobs/:id/cancel', authenticateUser, async (req, res) => {
+  try {
+    const user = (req as any).user;
+    const { id } = req.params;
+
+    // Get job and verify ownership
+    const job = await db.getJobById(id);
+    if (!job) {
+      return res.status(404).json({ error: 'Job not found' });
+    }
+
+    // Verify project ownership
+    const project = await db.getProjectById(job.projectid);
+    if (!project || project.userid !== user.id) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    // Update job status to cancelled
+    await db.updateJobStatus(id, 'CANCELLED');
+    
+    res.json({ success: true, message: 'Job cancelled successfully' });
+  } catch (error) {
+    console.error('Failed to cancel job:', error);
+    res.status(500).json({ error: 'Failed to cancel job' });
+  }
+});
+
+// Retry failed job
+app.post('/jobs/:id/retry', authenticateUser, async (req, res) => {
+  try {
+    const user = (req as any).user;
+    const { id } = req.params;
+
+    // Get job and verify ownership
+    const job = await db.getJobById(id);
+    if (!job) {
+      return res.status(404).json({ error: 'Job not found' });
+    }
+
+    // Verify project ownership
+    const project = await db.getProjectById(job.projectid);
+    if (!project || project.userid !== user.id) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    // Only allow retrying failed jobs
+    if (job.status !== 'FAILED') {
+      return res.status(400).json({ error: 'Only failed jobs can be retried' });
+    }
+
+    // Create a new job with the same parameters
+    const newJob = await db.createJob({
+      type: job.type,
+      prompt: job.prompt,
+      projectId: job.projectid,
+      userId: user.id
+    });
+
+    // Add job to queue
+    await jobQueue.add('codegen-jobs', {
+      jobId: newJob.id,
+      projectId: job.projectid,
+      userId: user.id,
+      type: job.type,
+      prompt: job.prompt,
+      templateKey: project.templatekey,
+      repo: {
+        provider: project.repoprovider,
+        owner: project.repoowner,
+        name: project.reponame
+      }
+    });
+
+    res.json(newJob);
+  } catch (error) {
+    console.error('Failed to retry job:', error);
+    res.status(500).json({ error: 'Failed to retry job' });
+  }
+});
+
 // File storage endpoints
 app.get('/projects/:id/files', authenticateUser, async (req, res) => {
   try {
@@ -581,6 +662,103 @@ app.get('/projects/:id/files/:filePath(*)', authenticateUser, async (req, res) =
   } catch (error) {
     console.error('Failed to get file:', error);
     res.status(500).json({ error: 'Failed to get file' });
+  }
+});
+
+// Save file content
+app.put('/projects/:id/files/:filePath(*)', authenticateUser, async (req, res) => {
+  try {
+    const user = (req as any).user;
+    const { id, filePath } = req.params;
+    const { content } = req.body;
+
+    console.log(`[orchestrator] File save request for project ${id}, file ${filePath}, user ${user.id}`);
+
+    // Verify project ownership
+    const project = await db.getProjectById(id);
+    if (!project) {
+      console.log(`[orchestrator] Project ${id} not found`);
+      return res.status(404).json({ error: 'Project not found' });
+    }
+    if (project.userid !== user.id) {
+      console.log(`[orchestrator] Access denied: project.userid=${project.userid}, user.id=${user.id}`);
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    console.log(`[orchestrator] Saving file content for project ${id}, file ${filePath}, user ${user.id}`);
+    const storageService = new FileStorageService();
+    await storageService.saveFile(id, user.id, filePath, content);
+    
+    console.log(`[orchestrator] File content saved successfully`);
+    res.json({ success: true, message: 'File saved successfully' });
+  } catch (error) {
+    console.error('Failed to save file:', error);
+    res.status(500).json({ error: 'Failed to save file' });
+  }
+});
+
+// Delete file
+app.delete('/projects/:id/files/:filePath(*)', authenticateUser, async (req, res) => {
+  try {
+    const user = (req as any).user;
+    const { id, filePath } = req.params;
+
+    console.log(`[orchestrator] File delete request for project ${id}, file ${filePath}, user ${user.id}`);
+
+    // Verify project ownership
+    const project = await db.getProjectById(id);
+    if (!project) {
+      console.log(`[orchestrator] Project ${id} not found`);
+      return res.status(404).json({ error: 'Project not found' });
+    }
+    if (project.userid !== user.id) {
+      console.log(`[orchestrator] Access denied: project.userid=${project.userid}, user.id=${user.id}`);
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    console.log(`[orchestrator] Deleting file for project ${id}, file ${filePath}, user ${user.id}`);
+    const storageService = new FileStorageService();
+    await storageService.deleteFile(id, user.id, filePath);
+    
+    console.log(`[orchestrator] File deleted successfully`);
+    res.json({ success: true, message: 'File deleted successfully' });
+  } catch (error) {
+    console.error('Failed to delete file:', error);
+    res.status(500).json({ error: 'Failed to delete file' });
+  }
+});
+
+// Upload file
+app.post('/projects/:id/files/upload', authenticateUser, async (req, res) => {
+  try {
+    const user = (req as any).user;
+    const { id } = req.params;
+    const { fileName, content, path } = req.body;
+
+    console.log(`[orchestrator] File upload request for project ${id}, file ${fileName}, user ${user.id}`);
+
+    // Verify project ownership
+    const project = await db.getProjectById(id);
+    if (!project) {
+      console.log(`[orchestrator] Project ${id} not found`);
+      return res.status(404).json({ error: 'Project not found' });
+    }
+    if (project.userid !== user.id) {
+      console.log(`[orchestrator] Access denied: project.userid=${project.userid}, user.id=${user.id}`);
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    const filePath = path ? `${path}/${fileName}` : fileName;
+    console.log(`[orchestrator] Uploading file for project ${id}, file ${filePath}, user ${user.id}`);
+    
+    const storageService = new FileStorageService();
+    await storageService.saveFile(id, user.id, filePath, content);
+    
+    console.log(`[orchestrator] File uploaded successfully`);
+    res.json({ success: true, message: 'File uploaded successfully', filePath });
+  } catch (error) {
+    console.error('Failed to upload file:', error);
+    res.status(500).json({ error: 'Failed to upload file' });
   }
 });
 

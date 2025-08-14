@@ -41,7 +41,8 @@ struct Job:
     SBListable,
     SBTypeNameable,
     SBManageable,
-    Hashable
+    Hashable,
+    HasStatus
 {
     
     static let path = "jobs"

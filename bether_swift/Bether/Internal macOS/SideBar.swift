@@ -16,6 +16,12 @@ struct SideBar: View {
                     editView: { AnyView(ProjectAddOrEdit(itemToEdit: $0)) }
                 )
             }
+            NavigationLink("Jobs") {
+                NamedEntityList(
+                    detailView: { AnyView(JobDetail(item: $0)) },
+                    editView: { AnyView(JobAddOrEdit(itemToEdit: $0)) }
+                )
+            }
         }
     }
 }

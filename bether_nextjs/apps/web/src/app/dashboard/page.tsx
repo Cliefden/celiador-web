@@ -201,6 +201,9 @@ export default function DashboardPage() {
                 <a href="/dashboard" className="text-blue-600 font-medium px-3 py-2 text-sm">
                   Dashboard
                 </a>
+                <a href="/dashboard/jobs" className="text-gray-700 hover:text-blue-600 px-3 py-2 text-sm font-medium transition-colors duration-200">
+                  Jobs
+                </a>
                 <a href="/solutions" className="text-gray-700 hover:text-blue-600 px-3 py-2 text-sm font-medium transition-colors duration-200">
                   Solutions
                 </a>

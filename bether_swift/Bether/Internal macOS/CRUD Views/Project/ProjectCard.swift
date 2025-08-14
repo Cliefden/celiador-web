@@ -14,21 +14,6 @@ struct ProjectCard: View {
     let item: Project
     @State private var editItem = false
     @State private var userName: String?
-    
-    private var statusColor: Color {
-        switch item.status?.lowercased() {
-        case "ready":
-            return .green
-        case "running":
-            return .orange
-        case "failed":
-            return .red
-        case "completed":
-            return .blue
-        default:
-            return .secondary
-        }
-    }
 
     var body: some View {
         CardView(item: item) {
@@ -46,7 +31,7 @@ struct ProjectCard: View {
                 ),
                 fourthText: .init(
                     text: "Status: \(item.status.uW)",
-                    color: statusColor
+                    color: item.statusColor
                 ),
                 fifthText: .init(
                     text: "Repository: \(item.repoProvider.uW)/\(item.repoOwner.uW)/\(item.repoName.uW)",

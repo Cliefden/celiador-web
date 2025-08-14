@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
-import { FileTree } from '../file-tree/file-tree';
+import { FileExplorer } from '../file-tree/FileExplorer';
+import { FileEditor } from '../file-tree/FileEditor';
 import { JobLogs } from '../jobs/job-logs';
 import { ProjectInfo } from './ProjectInfo';
 import { Button } from '../ui/button';
@@ -133,43 +134,43 @@ export function ProjectView({ project, userId, onProjectDeleted }: ProjectViewPr
     }
   };
 
+  const fetchFileTree = async () => {
+    try {
+      setIsLoadingFiles(true);
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+
+      console.log(`[web] Fetching file tree for project ${project.id}`);
+      const response = await fetch(`http://localhost:4000/projects/${project.id}/files/tree`, {
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`
+        }
+      });
+      
+      console.log(`[web] File tree response status: ${response.status}`);
+      if (response.ok) {
+        const data = await response.json();
+        console.log(`[web] File tree data:`, data);
+        setFileTree(data.tree || []);
+      } else if (response.status === 404) {
+        // No files yet, that's okay
+        console.log(`[web] No files found (404)`);
+        setFileTree([]);
+      } else {
+        const errorText = await response.text();
+        console.error(`[web] File tree error: ${response.status} - ${errorText}`);
+        setFileTree([]);
+      }
+    } catch (error) {
+      console.error('Failed to fetch file tree:', error);
+      setFileTree([]);
+    } finally {
+      setIsLoadingFiles(false);
+    }
+  };
+
   // Fetch project file tree
   useEffect(() => {
-    const fetchFileTree = async () => {
-      try {
-        setIsLoadingFiles(true);
-        const { data: { session } } = await supabase.auth.getSession();
-        if (!session) return;
-
-        console.log(`[web] Fetching file tree for project ${project.id}`);
-        const response = await fetch(`http://localhost:4000/projects/${project.id}/files/tree`, {
-          headers: {
-            'Authorization': `Bearer ${session.access_token}`
-          }
-        });
-        
-        console.log(`[web] File tree response status: ${response.status}`);
-        if (response.ok) {
-          const data = await response.json();
-          console.log(`[web] File tree data:`, data);
-          setFileTree(data.tree || []);
-        } else if (response.status === 404) {
-          // No files yet, that's okay
-          console.log(`[web] No files found (404)`);
-          setFileTree([]);
-        } else {
-          const errorText = await response.text();
-          console.error(`[web] File tree error: ${response.status} - ${errorText}`);
-          setFileTree([]);
-        }
-      } catch (error) {
-        console.error('Failed to fetch file tree:', error);
-        setFileTree([]);
-      } finally {
-        setIsLoadingFiles(false);
-      }
-    };
-
     fetchFileTree();
   }, [project.id]);
 
@@ -208,6 +209,128 @@ export function ProjectView({ project, userId, onProjectDeleted }: ProjectViewPr
     setSelectedFile(file.path);
     if (file.type === 'file') {
       fetchFileContent(file.path);
+    }
+  };
+
+  const handleFileSave = async (content: string) => {
+    if (!selectedFile) return;
+    
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+
+      const response = await fetch(`http://localhost:4000/projects/${project.id}/files/${encodeURIComponent(selectedFile)}`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ content }),
+      });
+
+      if (response.ok) {
+        setSelectedFileContent(content);
+        // Refresh file tree to show updated file
+        fetchFileTree();
+      } else {
+        throw new Error('Failed to save file');
+      }
+    } catch (error) {
+      console.error('Error saving file:', error);
+      throw error;
+    }
+  };
+
+  const handleFileDelete = async (file: any) => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+
+      const response = await fetch(`http://localhost:4000/projects/${project.id}/files/${encodeURIComponent(file.path)}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (response.ok) {
+        // Refresh file tree
+        fetchFileTree();
+        // Clear selected file if it was deleted
+        if (selectedFile === file.path) {
+          setSelectedFile(undefined);
+          setSelectedFileContent('');
+        }
+      } else {
+        throw new Error('Failed to delete file');
+      }
+    } catch (error) {
+      console.error('Error deleting file:', error);
+      throw error;
+    }
+  };
+
+  const handleFileUpload = async (file: File) => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+
+      const content = await file.text();
+      const response = await fetch(`http://localhost:4000/projects/${project.id}/files/upload`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          fileName: file.name,
+          content,
+          path: '', // Upload to root directory
+        }),
+      });
+
+      if (response.ok) {
+        // Refresh file tree
+        fetchFileTree();
+      } else {
+        throw new Error('Failed to upload file');
+      }
+    } catch (error) {
+      console.error('Error uploading file:', error);
+      throw error;
+    }
+  };
+
+  const handleFileDownload = async (file: any) => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+
+      const response = await fetch(`http://localhost:4000/projects/${project.id}/files/${encodeURIComponent(file.path)}`, {
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const blob = new Blob([data.file.content], { type: 'text/plain' });
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = file.name;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+      } else {
+        throw new Error('Failed to download file');
+      }
+    } catch (error) {
+      console.error('Error downloading file:', error);
+      throw error;
     }
   };
 
@@ -327,69 +450,36 @@ export function ProjectView({ project, userId, onProjectDeleted }: ProjectViewPr
 
       {/* Main Content */}
       <div className="flex-1 flex overflow-hidden">
-        {/* File Tree */}
+        {/* File Explorer */}
         <div className="w-80 bg-white/70 backdrop-blur-sm border-r border-gray-200/50">
-          <div className="p-4">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-gray-900">Files</h3>
-              {isLoadingFiles && <Loader2 className="w-4 h-4 animate-spin text-gray-500" />}
-            </div>
-            
-            {fileTree.length > 0 ? (
-              <FileTree
-                files={fileTree}
-                onFileSelect={handleFileSelect}
-                selectedFile={selectedFile}
-              />
-            ) : (
-              <div className="text-center py-8">
-                <FileText className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-                <p className="text-gray-500">No files yet</p>
-                <p className="text-sm text-gray-400">Run a scaffold job to generate files</p>
-              </div>
-            )}
-          </div>
+          <FileExplorer
+            files={fileTree}
+            onFileSelect={handleFileSelect}
+            onFileEdit={(file) => handleFileSelect(file)}
+            onFileDelete={handleFileDelete}
+            onFileUpload={handleFileUpload}
+            onFileDownload={handleFileDownload}
+            selectedFile={selectedFile}
+            projectId={project.id}
+            className="h-full"
+          />
         </div>
 
-        {/* Editor Content */}
+        {/* File Editor */}
         <div className="flex-1 flex flex-col">
-          {selectedFile ? (
-            <Card className="m-4 flex-1">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-lg flex items-center">
-                  <FileText className="w-5 h-5 mr-2 text-blue-500" />
-                  {selectedFile}
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="flex-1">
-                <div className="bg-gray-900 rounded-lg p-4 h-full overflow-auto">
-                  {isLoadingFileContent ? (
-                    <div className="flex items-center justify-center h-full">
-                      <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
-                      <span className="ml-2 text-gray-400">Loading file content...</span>
-                    </div>
-                  ) : selectedFileContent ? (
-                    <pre className="text-gray-100 text-sm font-mono whitespace-pre-wrap">
-                      {selectedFileContent}
-                    </pre>
-                  ) : (
-                    <div className="text-center text-gray-400">
-                      <FileText className="w-8 h-8 mx-auto mb-2" />
-                      <p>No content available</p>
-                    </div>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          ) : (
-            <div className="flex items-center justify-center flex-1">
-              <div className="text-center">
-                <FileText className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-                <h3 className="text-lg font-medium text-gray-900 mb-2">Select a File</h3>
-                <p className="text-gray-500">Choose a file from the tree to view its contents</p>
-              </div>
-            </div>
-          )}
+          <FileEditor
+            file={selectedFile ? {
+              name: selectedFile.split('/').pop() || selectedFile,
+              type: 'file',
+              path: selectedFile,
+              size: selectedFileContent?.length
+            } : null}
+            content={selectedFileContent || ''}
+            onSave={handleFileSave}
+            onDownload={handleFileDownload}
+            isReadOnly={false}
+            className="h-full"
+          />
         </div>
 
         {/* Job Logs */}
@@ -439,7 +529,17 @@ export function ProjectView({ project, userId, onProjectDeleted }: ProjectViewPr
       {/* Job History */}
       {jobs.length > 0 && (
         <div className="glass border-t border-gray-200/50 p-4">
-          <h3 className="text-sm font-medium text-gray-900 mb-3">Recent Jobs</h3>
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-medium text-gray-900">Recent Jobs</h3>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => window.open(`/dashboard/jobs?project=${project.id}`, '_blank')}
+              className="text-blue-600 hover:text-blue-700"
+            >
+              View All Jobs
+            </Button>
+          </div>
           <div className="flex space-x-3 overflow-x-auto pb-2">
             {jobs.slice(-5).reverse().map((job) => (
               <Card
