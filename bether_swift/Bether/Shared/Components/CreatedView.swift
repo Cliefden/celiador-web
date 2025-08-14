@@ -21,10 +21,10 @@ struct CreatedView: View {
         .font(.caption)
         .foregroundStyle(.tertiary)
         .task {
-            let profile = await SBTableManager<Profile2>.fetchWithReference(idName: "id", id: creator.uW).first
-            
-            let individual = await SBTableManager<Individual>.fetchWithReference(idName: "id", id: (profile?.individualID).uW).first
-            creatorName = individual?.name
+            if let creator = creator {
+                let profile = await SBTableManager<Profile>.fetchWithReference(idName: "id", id: creator).first
+                creatorName = profile?.uWName
+            }
         }
     }
 }

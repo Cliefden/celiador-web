@@ -8,10 +8,12 @@
 import SwiftUI
 import OptionalHelpers
 import Naming
+import Supabasable
 
 struct ProjectCard: View {
     let item: Project
     @State private var editItem = false
+    @State private var userName: String?
     
     private var statusColor: Color {
         switch item.status?.lowercased() {
@@ -51,7 +53,7 @@ struct ProjectCard: View {
                     color: .green
                 ),
                 sixthText: .init(
-                    text: "User ID: \(item.userId.uW)",
+                    text: "User: \(item.userId.uW.uuidString))",
                     color: .secondary
                 ),
                 seventhText: .init(
@@ -79,6 +81,12 @@ struct ProjectCard: View {
         }
         .sheet(isPresented: $editItem) {
             ProjectAddOrEdit(itemToEdit: item)
+        }
+        .task {
+            if let userId = item.userId {
+                let profile = await SBTableManager<Profile>.fetchWithReference(idName: "id", id: userId).first
+                userName = profile?.uWName
+            }
         }
     }
 }
