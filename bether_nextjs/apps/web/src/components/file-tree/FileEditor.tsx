@@ -57,6 +57,12 @@ export function FileEditor({
   className = ""
 }: FileEditorProps) {
   const { toasts, removeToast, success, error, info } = useToast();
+  
+  // Gentle debugging
+  useEffect(() => {
+    console.log('[FileEditor] File prop:', file);
+    console.log('[FileEditor] Content length:', content?.length || 0);
+  }, [file, content]);
   const [editedContent, setEditedContent] = useState(content);
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);

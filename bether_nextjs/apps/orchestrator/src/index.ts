@@ -26,6 +26,7 @@ const db = {
       .from('projects')
       .select('*')
       .eq('userid', userId)
+      .is('deletedAt', null) // Only get non-deleted projects
       .order('createdat', { ascending: false });
     
     if (error) {
@@ -33,6 +34,7 @@ const db = {
       throw error;
     }
     
+    console.log('Supabase: Found', data?.length || 0, 'projects for user:', userId);
     return data || [];
   },
   
@@ -210,25 +212,32 @@ const jobQueue = new Queue('codegen-jobs', {
 const authenticateUser = async (req: express.Request, res: express.Response, next: express.NextFunction) => {
   const authHeader = req.headers.authorization;
   
+  console.log('[orchestrator] Auth middleware - headers:', req.headers.authorization ? 'present' : 'missing');
+  
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    console.log('[orchestrator] Auth middleware - invalid header format');
     return res.status(401).json({ error: 'Missing or invalid authorization header' });
   }
 
   const token = authHeader.substring(7);
+  console.log('[orchestrator] Auth middleware - token length:', token.length);
   
   try {
     // Verify the JWT token with Supabase
+    console.log('[orchestrator] Auth middleware - verifying token...');
     const { data: { user }, error } = await supabase.auth.getUser(token);
     
     if (error || !user) {
+      console.log('[orchestrator] Auth middleware - token validation failed:', error?.message);
       return res.status(401).json({ error: 'Invalid token' });
     }
 
+    console.log('[orchestrator] Auth middleware - token validated for user:', user.id);
     // Add user to request
     (req as any).user = user as any;
     next();
   } catch (error) {
-    console.error('Auth error:', error);
+    console.error('[orchestrator] Auth middleware - error:', error);
     return res.status(401).json({ error: 'Authentication failed' });
   }
 };
@@ -302,8 +311,11 @@ app.post('/auth/login', async (req, res) => {
 // Protected routes
 app.get('/projects', authenticateUser, async (req, res) => {
   try {
+    console.log('[orchestrator] GET /projects - request received');
     const user = (req as any).user;
+    console.log('[orchestrator] GET /projects - user:', user.id);
     const projects = await db.getProjectsByUserId((user as any).id);
+    console.log('[orchestrator] GET /projects - returning', projects.length, 'projects');
     res.json(projects);
   } catch (error) {
     console.error('Failed to fetch projects:', error);

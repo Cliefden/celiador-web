@@ -67,6 +67,12 @@ export function FileExplorer({
   className = ""
 }: FileExplorerProps) {
   const { success, error, info } = useToast();
+  
+  // Gentle debugging
+  useEffect(() => {
+    console.log('[FileExplorer] Received files:', files);
+    console.log('[FileExplorer] Selected file:', selectedFile);
+  }, [files, selectedFile]);
   const [searchTerm, setSearchTerm] = useState('');
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
   const [viewMode, setViewMode] = useState<'tree' | 'list'>('tree');

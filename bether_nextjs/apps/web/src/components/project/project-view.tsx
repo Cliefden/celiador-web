@@ -138,7 +138,10 @@ export function ProjectView({ project, userId, onProjectDeleted }: ProjectViewPr
     try {
       setIsLoadingFiles(true);
       const { data: { session } } = await supabase.auth.getSession();
-      if (!session) return;
+      if (!session) {
+        console.log('[web] No session available for file tree fetch');
+        return;
+      }
 
       console.log(`[web] Fetching file tree for project ${project.id}`);
       const response = await fetch(`http://localhost:4000/projects/${project.id}/files/tree`, {
@@ -154,7 +157,7 @@ export function ProjectView({ project, userId, onProjectDeleted }: ProjectViewPr
         setFileTree(data.tree || []);
       } else if (response.status === 404) {
         // No files yet, that's okay
-        console.log(`[web] No files found (404)`);
+        console.log(`[web] No files found (404) - this is normal for new projects`);
         setFileTree([]);
       } else {
         const errorText = await response.text();
@@ -162,7 +165,7 @@ export function ProjectView({ project, userId, onProjectDeleted }: ProjectViewPr
         setFileTree([]);
       }
     } catch (error) {
-      console.error('Failed to fetch file tree:', error);
+      console.error('[web] Failed to fetch file tree:', error);
       setFileTree([]);
     } finally {
       setIsLoadingFiles(false);
@@ -178,10 +181,13 @@ export function ProjectView({ project, userId, onProjectDeleted }: ProjectViewPr
     try {
       setIsLoadingFileContent(true);
       const { data: { session } } = await supabase.auth.getSession();
-      if (!session) return;
+      if (!session) {
+        console.log('[web] No session available for file content fetch');
+        return;
+      }
 
       console.log(`[web] Fetching file content for: ${filePath}`);
-      const response = await fetch(`http://localhost:4000/projects/${project.id}/files/${filePath}`, {
+      const response = await fetch(`http://localhost:4000/projects/${project.id}/files/${encodeURIComponent(filePath)}`, {
         headers: {
           'Authorization': `Bearer ${session.access_token}`
         }
@@ -190,7 +196,7 @@ export function ProjectView({ project, userId, onProjectDeleted }: ProjectViewPr
       console.log(`[web] File content response status: ${response.status}`);
       if (response.ok) {
         const data = await response.json();
-        console.log(`[web] File content data:`, data);
+        console.log(`[web] File content data received, size: ${data.file?.content?.length || 0} bytes`);
         setSelectedFileContent(data.file.content || '');
       } else {
         const errorText = await response.text();
@@ -198,7 +204,7 @@ export function ProjectView({ project, userId, onProjectDeleted }: ProjectViewPr
         setSelectedFileContent('Error loading file content');
       }
     } catch (error) {
-      console.error('Failed to fetch file content:', error);
+      console.error('[web] Failed to fetch file content:', error);
       setSelectedFileContent('Error loading file content');
     } finally {
       setIsLoadingFileContent(false);
@@ -219,34 +225,32 @@ export function ProjectView({ project, userId, onProjectDeleted }: ProjectViewPr
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) return;
 
-      console.log(`[web] Saving file: ${selectedFile}, content length: ${content.length}`);
-      console.log(`[web] Project ID: ${project.id}`);
-      console.log(`[web] User ID: ${session.user.id}`);
-      console.log(`[web] File path: ${selectedFile}`);
-      console.log(`[web] URL: http://localhost:4000/projects/${project.id}/files/${selectedFile}`);
+      console.log(`[web] Saving file ${selectedFile} for project ${project.id}`);
       const response = await fetch(`http://localhost:4000/projects/${project.id}/files/save`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${session.access_token}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ filePath: selectedFile, content }),
+        body: JSON.stringify({ 
+          filePath: selectedFile,
+          content 
+        }),
       });
 
       console.log(`[web] Save response status: ${response.status}`);
       if (response.ok) {
-        const result = await response.json();
-        console.log(`[web] Save response:`, result);
         setSelectedFileContent(content);
         // Refresh file tree to show updated file
         fetchFileTree();
+        console.log(`[web] File saved successfully`);
       } else {
         const errorText = await response.text();
-        console.error(`[web] Save error: ${response.status} - ${errorText}`);
-        throw new Error(`Failed to save file: ${errorText}`);
+        console.error(`[web] Save failed: ${response.status} - ${errorText}`);
+        throw new Error(`Failed to save file: ${response.status} ${errorText}`);
       }
     } catch (error) {
-      console.error('Error saving file:', error);
+      console.error('[web] Error saving file:', error);
       throw error;
     }
   };
@@ -256,7 +260,8 @@ export function ProjectView({ project, userId, onProjectDeleted }: ProjectViewPr
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) return;
 
-      const response = await fetch(`http://localhost:4000/projects/${project.id}/files/${file.path}`, {
+      console.log(`[web] Deleting file ${file.path} for project ${project.id}`);
+      const response = await fetch(`http://localhost:4000/projects/${project.id}/files/${encodeURIComponent(file.path)}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${session.access_token}`,
@@ -264,6 +269,7 @@ export function ProjectView({ project, userId, onProjectDeleted }: ProjectViewPr
         },
       });
 
+      console.log(`[web] Delete response status: ${response.status}`);
       if (response.ok) {
         // Refresh file tree
         fetchFileTree();
@@ -272,11 +278,14 @@ export function ProjectView({ project, userId, onProjectDeleted }: ProjectViewPr
           setSelectedFile(undefined);
           setSelectedFileContent('');
         }
+        console.log(`[web] File deleted successfully`);
       } else {
-        throw new Error('Failed to delete file');
+        const errorText = await response.text();
+        console.error(`[web] Delete failed: ${response.status} - ${errorText}`);
+        throw new Error(`Failed to delete file: ${response.status} ${errorText}`);
       }
     } catch (error) {
-      console.error('Error deleting file:', error);
+      console.error('[web] Error deleting file:', error);
       throw error;
     }
   };
@@ -317,13 +326,15 @@ export function ProjectView({ project, userId, onProjectDeleted }: ProjectViewPr
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) return;
 
-      const response = await fetch(`http://localhost:4000/projects/${project.id}/files/${file.path}`, {
+      console.log(`[web] Downloading file ${file.path} for project ${project.id}`);
+      const response = await fetch(`http://localhost:4000/projects/${project.id}/files/${encodeURIComponent(file.path)}`, {
         headers: {
           'Authorization': `Bearer ${session.access_token}`,
           'Content-Type': 'application/json',
         },
       });
 
+      console.log(`[web] Download response status: ${response.status}`);
       if (response.ok) {
         const data = await response.json();
         const blob = new Blob([data.file.content], { type: 'text/plain' });
@@ -335,11 +346,14 @@ export function ProjectView({ project, userId, onProjectDeleted }: ProjectViewPr
         a.click();
         window.URL.revokeObjectURL(url);
         document.body.removeChild(a);
+        console.log(`[web] File downloaded successfully`);
       } else {
-        throw new Error('Failed to download file');
+        const errorText = await response.text();
+        console.error(`[web] Download failed: ${response.status} - ${errorText}`);
+        throw new Error(`Failed to download file: ${response.status} ${errorText}`);
       }
     } catch (error) {
-      console.error('Error downloading file:', error);
+      console.error('[web] Error downloading file:', error);
       throw error;
     }
   };
@@ -455,7 +469,7 @@ export function ProjectView({ project, userId, onProjectDeleted }: ProjectViewPr
 
       {/* Project Information */}
       <div className="glass border-b border-gray-200/50 p-6">
-                      <ProjectInfo project={project} onDelete={handleDeleteProject} />
+        <ProjectInfo project={project} onDelete={handleDeleteProject} />
       </div>
 
       {/* Main Content */}

@@ -29,5 +29,8 @@ struct Internal_macOSApp: App {
 //            }
 //            .environment(authViewModel)
         }
+        WindowGroup("Terminal") {
+            TerminalWindowView()
+        }
     }
 }
