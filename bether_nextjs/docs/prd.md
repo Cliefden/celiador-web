@@ -65,4 +65,158 @@ The Bether Conversational Development Platform addresses this core friction thro
 
 ---
 
+## Technical Assumptions
+
+**IMPORTANT:** This section prioritizes database schema extensions as the foundation for conversational capabilities.
+
+### Repository Structure: Monorepo
+Continue using existing monorepo structure with apps/orchestrator managing core data and workers/codegen handling LLM processing.
+
+### Service Architecture
+**Extending Existing Architecture:**
+- **Database Layer:** Add conversational schema to existing Prisma/Supabase setup
+- **API Layer:** Extend existing Express orchestrator with conversation endpoints  
+- **Worker Layer:** Enhance existing LLM worker with conversation context capabilities
+- **Frontend Layer:** Add conversational components to existing Next.js interface
+
+### Conversational Database Schema Extensions
+
+**Building on existing User, Profile, Project, Job models:**
+
+```prisma
+// Conversation threads - each project can have multiple conversation contexts
+model Conversation {
+  id          String   @id @default(cuid())
+  title       String?  // Optional conversation title
+  status      String   @default("ACTIVE") // ACTIVE, ARCHIVED, DELETED
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  // Context linking
+  projectId   String?   // Optional - conversations can be project-specific or global
+  project     Project?  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // Audit fields matching existing pattern
+  creator     String?
+  updater     String?
+  deleter     String?
+  deletedAt   DateTime? @map("deleted_at")
+
+  // Relations
+  messages    Message[]
+  
+  @@map("conversations")
+}
+
+// Individual messages within conversations
+model Message {
+  id            String   @id @default(cuid())
+  content       String   // The actual message text
+  role          String   // "user", "assistant", "system"
+  messageType   String   @default("text") @map("message_type") // "text", "command", "file_reference", "job_result"
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  // Context and metadata
+  metadata      Json?    // Store additional context, file references, job IDs, etc.
+  parentId      String?  @map("parent_id") // For threaded conversations
+  parent        Message? @relation("MessageThread", fields: [parentId], references: [id])
+  children      Message[] @relation("MessageThread")
+
+  // Linking to existing job system
+  relatedJobId  String?  @map("related_job_id") // Link messages to jobs they triggered
+  relatedJob    Job?     @relation(fields: [relatedJobId], references: [id])
+
+  // Relations
+  conversationId String      @map("conversation_id")
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  userId         String      @map("user_id")
+  user           User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@map("messages")
+}
+
+// AI context management for maintaining project understanding
+model ConversationContext {
+  id              String   @id @default(cuid())
+  contextType     String   @map("context_type") // "project_summary", "file_knowledge", "user_preferences"
+  contextData     Json     @map("context_data") // Vector embeddings, summaries, preferences
+  lastUpdated     DateTime @default(now()) @map("last_updated")
+  
+  // Linking
+  conversationId  String      @map("conversation_id")
+  conversation    Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  projectId       String?     @map("project_id")
+  project         Project?    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  
+  @@map("conversation_contexts")
+}
+
+// Enhanced GitHub integration data (extends existing project repoProvider/repoOwner/repoName)
+model GitHubIntegration {
+  id            String   @id @default(cuid())
+  accessToken   String   @map("access_token") // Encrypted GitHub access token
+  refreshToken  String?  @map("refresh_token") // For token refresh
+  scope         String[] // GitHub OAuth scopes
+  installationId String? @map("installation_id") // GitHub App installation ID
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+  
+  // Link to existing user system
+  userId        String   @unique @map("user_id")
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@map("github_integrations")
+}
+
+// Track external service integrations
+model ServiceIntegration {
+  id          String   @id @default(cuid())
+  service     String   // "openai", "anthropic", "vercel", etc.
+  config      Json     // Service-specific configuration
+  status      String   @default("ACTIVE") // ACTIVE, DISABLED, ERROR
+  lastSync    DateTime? @map("last_sync")
+  createdAt   DateTime @default(now()) @map("created_at")
+  
+  // Link to user
+  userId      String   @map("user_id") 
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@map("service_integrations")
+}
+```
+
+### Database Schema Rationale
+
+**Building on existing patterns:**
+- **Audit fields** match existing `creator`, `updater`, `deleter`, `deletedAt` pattern
+- **User/Project relationships** follow existing foreign key conventions  
+- **Job integration** links messages to existing job system for workflow continuity
+
+**Conversation design:**
+- **Flexible context linking** - conversations can be project-specific or global
+- **Message threading** supports complex multi-turn conversations
+- **Job integration** connects conversations to existing workflow system
+- **Context management** enables AI memory across sessions
+
+**Integration strategy:**
+- **GitHub tokens** stored securely for API access
+- **Service integrations** extensible for future OpenAI/Anthropic/Vercel connections
+- **Metadata JSON fields** provide flexibility for evolving requirements
+
+### Testing Requirements
+- Unit tests for new conversation models and relationships
+- Integration tests for conversation → job workflow
+- Database migration testing for schema additions
+- Existing test suite must continue passing
+
+### Additional Technical Assumptions
+- **Prisma migrations** will handle schema updates without breaking existing data
+- **Supabase RLS policies** need updates for conversation data access control  
+- **Existing API endpoints** remain unchanged while new conversation endpoints are added
+- **BullMQ job system** integrations require conversation context passing
+
+---
+
 *PRD in progress - additional sections to be added as we continue...*

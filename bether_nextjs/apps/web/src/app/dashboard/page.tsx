@@ -103,9 +103,6 @@ export default function DashboardPage() {
         userId: user?.id
       };
 
-      console.log('Original project data:', projectData);
-      console.log('Sending project data to orchestrator:', transformedData);
-
       const response = await fetch('http://localhost:4000/projects', {
         method: 'POST',
         headers: {

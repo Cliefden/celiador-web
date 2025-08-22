@@ -28,6 +28,40 @@ struct SideBar: View {
                     editView: { AnyView(ProfileAddOrEdit(itemToEdit: $0)) }
                 )
             }
+            
+            // Conversation-related tables
+            NavigationLink("Conversations") {
+                NamedEntityList(
+                    detailView: { AnyView(ConversationDetail(item: $0)) },
+                    editView: { AnyView(ConversationAddOrEdit(itemToEdit: $0)) }
+                )
+            }
+            NavigationLink("Messages") {
+                NamedEntityList(
+                    detailView: { AnyView(MessageDetail(item: $0)) },
+                    editView: { AnyView(MessageAddOrEdit(itemToEdit: $0)) }
+                )
+            }
+            NavigationLink("Conversation Contexts") {
+                NamedEntityList(
+                    detailView: { AnyView(ConversationContextDetail(item: $0)) },
+                    editView: { AnyView(ConversationContextAddOrEdit(itemToEdit: $0)) }
+                )
+            }
+            
+            // Integration tables
+            NavigationLink("GitHub Integrations") {
+                NamedEntityList(
+                    detailView: { AnyView(GitHubIntegrationDetail(item: $0)) },
+                    editView: { AnyView(GitHubIntegrationAddOrEdit(itemToEdit: $0)) }
+                )
+            }
+            NavigationLink("Service Integrations") {
+                NamedEntityList(
+                    detailView: { AnyView(ServiceIntegrationDetail(item: $0)) },
+                    editView: { AnyView(ServiceIntegrationAddOrEdit(itemToEdit: $0)) }
+                )
+            }
         }
     }
 }

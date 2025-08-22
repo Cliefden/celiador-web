@@ -6,6 +6,7 @@ import { FileExplorer } from '../file-tree/FileExplorer';
 import { FileEditor } from '../file-tree/FileEditor';
 import { JobLogs } from '../jobs/job-logs';
 import { ProjectInfo } from './ProjectInfo';
+import { ConversationPanel } from '../conversation/ConversationPanel';
 import { Button } from '../ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { 
@@ -595,6 +596,15 @@ export function ProjectView({ project, userId, onProjectDeleted }: ProjectViewPr
           </div>
         </div>
       )}
+
+      {/* Conversation Panel */}
+      <ConversationPanel 
+        projectId={project.id} 
+        onToggle={(isOpen) => {
+          // Optional: handle conversation panel state changes
+          console.log('Conversation panel toggled:', isOpen);
+        }}
+      />
     </div>
   );
 }
