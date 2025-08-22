@@ -1,0 +1,316 @@
+import OpenAI from 'openai';
+import Anthropic from '@anthropic-ai/sdk';
+import dotenv from 'dotenv';
+
+// Load environment variables
+dotenv.config();
+
+// AI Service Configuration
+interface AIConfig {
+  provider: 'openai' | 'anthropic';
+  model?: string;
+}
+
+interface AIMessage {
+  role: 'system' | 'user' | 'assistant';
+  content: string;
+}
+
+interface AIResponse {
+  content: string;
+  provider: string;
+  model: string;
+  usage?: {
+    prompt_tokens: number;
+    completion_tokens: number;
+    total_tokens: number;
+  };
+}
+
+export class AIService {
+  private openai: OpenAI | null = null;
+  private anthropic: Anthropic | null = null;
+
+  constructor() {
+    console.log('[AI Service] Initializing with env vars...');
+    console.log('[AI Service] OPENAI_API_KEY present:', !!process.env.OPENAI_API_KEY);
+    console.log('[AI Service] ANTHROPIC_API_KEY present:', !!process.env.ANTHROPIC_API_KEY);
+    
+    // Initialize OpenAI if API key is available
+    if (process.env.OPENAI_API_KEY && process.env.OPENAI_API_KEY.trim()) {
+      this.openai = new OpenAI({
+        apiKey: process.env.OPENAI_API_KEY,
+      });
+      console.log('[AI Service] OpenAI initialized');
+    }
+
+    // Initialize Anthropic if API key is available
+    if (process.env.ANTHROPIC_API_KEY && process.env.ANTHROPIC_API_KEY.trim()) {
+      this.anthropic = new Anthropic({
+        apiKey: process.env.ANTHROPIC_API_KEY,
+      });
+      console.log('[AI Service] Anthropic initialized');
+    }
+  }
+
+  /**
+   * Generate AI response using the configured provider
+   */
+  async generateResponse(
+    messages: AIMessage[],
+    config: AIConfig = { provider: 'openai' }
+  ): Promise<AIResponse> {
+    if (config.provider === 'openai') {
+      return this.generateOpenAIResponse(messages, config.model);
+    } else if (config.provider === 'anthropic') {
+      return this.generateAnthropicResponse(messages, config.model);
+    }
+    
+    throw new Error(`Unsupported AI provider: ${config.provider}`);
+  }
+
+  /**
+   * Generate response using OpenAI
+   */
+  private async generateOpenAIResponse(
+    messages: AIMessage[],
+    model = 'gpt-4o-mini'
+  ): Promise<AIResponse> {
+    if (!this.openai) {
+      throw new Error('OpenAI API key not configured');
+    }
+
+    try {
+      const completion = await this.openai.chat.completions.create({
+        model,
+        messages,
+        temperature: 0.7,
+        max_tokens: 1000,
+      });
+
+      const choice = completion.choices[0];
+      if (!choice?.message?.content) {
+        throw new Error('No response content from OpenAI');
+      }
+
+      return {
+        content: choice.message.content,
+        provider: 'openai',
+        model,
+        usage: completion.usage ? {
+          prompt_tokens: completion.usage.prompt_tokens,
+          completion_tokens: completion.usage.completion_tokens,
+          total_tokens: completion.usage.total_tokens,
+        } : undefined,
+      };
+    } catch (error) {
+      console.error('OpenAI API error:', error);
+      throw new Error(`OpenAI API error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
+   * Generate response using Anthropic Claude
+   */
+  private async generateAnthropicResponse(
+    messages: AIMessage[],
+    model = 'claude-3-haiku-20240307'
+  ): Promise<AIResponse> {
+    if (!this.anthropic) {
+      throw new Error('Anthropic API key not configured');
+    }
+
+    try {
+      // Convert messages to Anthropic format
+      const systemMessage = messages.find(m => m.role === 'system');
+      const conversationMessages = messages.filter(m => m.role !== 'system');
+
+      const response = await this.anthropic.messages.create({
+        model,
+        max_tokens: 1000,
+        temperature: 0.7,
+        system: systemMessage?.content,
+        messages: conversationMessages.map(m => ({
+          role: m.role as 'user' | 'assistant',
+          content: m.content,
+        })),
+      });
+
+      const textContent = response.content.find(c => c.type === 'text');
+      if (!textContent) {
+        throw new Error('No text content from Anthropic');
+      }
+
+      return {
+        content: textContent.text,
+        provider: 'anthropic',
+        model,
+        usage: response.usage ? {
+          prompt_tokens: response.usage.input_tokens,
+          completion_tokens: response.usage.output_tokens,
+          total_tokens: response.usage.input_tokens + response.usage.output_tokens,
+        } : undefined,
+      };
+    } catch (error) {
+      console.error('Anthropic API error:', error);
+      throw new Error(`Anthropic API error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
+   * Create a system prompt for development assistance
+   */
+  createDevelopmentSystemPrompt(projectContext?: {
+    name?: string;
+    description?: string;
+    tech_stack?: string[];
+    current_files?: string[];
+    file_contents?: { [key: string]: string };
+  }): string {
+    let prompt = `You are an AI development assistant helping a developer with their project. 
+
+Your role:
+- Provide helpful, accurate technical guidance
+- Suggest best practices and solutions
+- Help debug issues and explain concepts
+- Create, modify, and manage project files
+- Be concise but thorough in your responses
+
+Guidelines:
+- Always consider the existing codebase and tech stack
+- Suggest incremental improvements over major rewrites
+- Ask clarifying questions when needed
+- Provide code examples when helpful
+
+File Operations:
+You can create, update, or delete files in the project. Use this special format for file operations:
+
+\`\`\`action:create_file:path/to/newfile.ext
+file content here
+\`\`\`
+
+\`\`\`action:update_file:path/to/existing.ext
+updated file content here
+\`\`\`
+
+\`\`\`action:delete_file:path/to/unwanted.ext\`\`\`
+
+When you create or suggest files, use this format and I'll automatically create them in the project.`;
+
+    if (projectContext) {
+      prompt += `\n\nCurrent Project Context:`;
+      
+      if (projectContext.name) {
+        prompt += `\n- Project: ${projectContext.name}`;
+      }
+      
+      if (projectContext.description) {
+        prompt += `\n- Description: ${projectContext.description}`;
+      }
+      
+      if (projectContext.tech_stack && projectContext.tech_stack.length > 0) {
+        prompt += `\n- Tech Stack: ${projectContext.tech_stack.join(', ')}`;
+      }
+      
+      if (projectContext.current_files && projectContext.current_files.length > 0) {
+        prompt += `\n- Key Files: ${projectContext.current_files.slice(0, 10).join(', ')}`;
+      }
+
+      if (projectContext.file_contents && Object.keys(projectContext.file_contents).length > 0) {
+        prompt += `\n\nCurrent Project Files:`;
+        for (const [filePath, content] of Object.entries(projectContext.file_contents)) {
+          prompt += `\n\n--- ${filePath} ---\n${content}`;
+        }
+      }
+    }
+
+    return prompt;
+  }
+
+  /**
+   * Parse AI response for actionable intents
+   */
+  parseActionsFromResponse(response: string): {
+    actions: Array<{
+      type: 'create_file' | 'update_file' | 'delete_file';
+      path: string;
+      content?: string;
+    }>;
+    hasActions: boolean;
+  } {
+    const actions: any[] = [];
+    
+    // Look for action blocks in the AI response
+    // Format: ```action:create_file:path/to/file.ext
+    const actionBlockRegex = /```action:(create_file|update_file|delete_file):([^\n]+)\n([\s\S]*?)```/g;
+    
+    let match;
+    while ((match = actionBlockRegex.exec(response)) !== null) {
+      const [, actionType, filePath, fileContent] = match;
+      
+      actions.push({
+        type: actionType as 'create_file' | 'update_file' | 'delete_file',
+        path: filePath.trim(),
+        content: actionType === 'delete_file' ? undefined : fileContent?.trim()
+      });
+    }
+
+    // Also look for more natural language patterns
+    const naturalPatterns = [
+      // "Create a file called X with content Y"
+      /create (?:a )?file (?:called |named )?["`']?([^"`'\s]+)["`']?/gi,
+      // "Add file X"
+      /add (?:a )?file ["`']?([^"`'\s]+)["`']?/gi,
+      // "Make a new file X"
+      /(?:make|build|generate) (?:a )?(?:new )?file ["`']?([^"`'\s]+)["`']?/gi
+    ];
+
+    for (const pattern of naturalPatterns) {
+      let naturalMatch;
+      while ((naturalMatch = pattern.exec(response)) !== null) {
+        const filePath = naturalMatch[1];
+        
+        // Try to extract content from context around the match
+        const beforeMatch = response.substring(0, naturalMatch.index);
+        const afterMatch = response.substring(naturalMatch.index + naturalMatch[0].length);
+        
+        // Look for code blocks near the file creation
+        const codeBlockRegex = /```(?:\w+)?\n?([\s\S]*?)```/g;
+        const codeMatch = codeBlockRegex.exec(afterMatch);
+        
+        if (codeMatch && codeMatch.index < 500) { // Code block within 500 chars
+          actions.push({
+            type: 'create_file',
+            path: filePath,
+            content: codeMatch[1].trim()
+          });
+        }
+      }
+    }
+
+    return {
+      actions,
+      hasActions: actions.length > 0
+    };
+  }
+
+  /**
+   * Check if any AI provider is available
+   */
+  isAvailable(): boolean {
+    return this.openai !== null || this.anthropic !== null;
+  }
+
+  /**
+   * Get available providers
+   */
+  getAvailableProviders(): string[] {
+    const providers: string[] = [];
+    if (this.openai) providers.push('openai');
+    if (this.anthropic) providers.push('anthropic');
+    return providers;
+  }
+}
+
+// Singleton instance
+export const aiService = new AIService();

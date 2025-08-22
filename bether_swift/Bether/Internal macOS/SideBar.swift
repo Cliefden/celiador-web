@@ -29,6 +29,17 @@ struct SideBar: View {
                 )
             }
             
+            // File Storage
+            NavigationLink("Project Files") {
+                FileBrowser()
+            }
+            NavigationLink("File Storage") {
+                NamedEntityList(
+                    detailView: { AnyView(FileStorageDetail(item: $0)) },
+                    editView: { AnyView(FileStorageAddOrEdit(itemToEdit: $0)) }
+                )
+            }
+            
             // Conversation-related tables
             NavigationLink("Conversations") {
                 NamedEntityList(

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { 
   FolderOpen, 
   Plus, 
@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
+import { supabase } from '../../lib/supabase';
 
 interface User {
   id: string;
@@ -160,13 +161,7 @@ export function Sidebar({ projects, selectedProject, onProjectSelect, onCreatePr
         )}
 
         {activeTab === 'jobs' && (
-          <div className="space-y-4">
-            <h2 className="text-lg font-semibold">Recent Jobs</h2>
-            <div className="text-center py-8 text-muted-foreground">
-              <Play className="w-12 h-12 mx-auto mb-2 opacity-50" />
-              <p>Job history coming soon</p>
-            </div>
-          </div>
+          <RecentJobs user={user} />
         )}
 
         {activeTab === 'settings' && (
@@ -205,6 +200,125 @@ export function Sidebar({ projects, selectedProject, onProjectSelect, onCreatePr
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+interface Job {
+  id: string;
+  projectid: string;
+  type: 'SCAFFOLD' | 'EDIT' | 'TEST' | 'DEPLOY' | 'AI_ACTION';
+  status: 'PENDING' | 'RUNNING' | 'COMPLETED' | 'FAILED' | 'CANCELLED';
+  prompt?: string;
+  createdat: string;
+  updatedat: string;
+}
+
+function RecentJobs({ user }: { user: User }) {
+  const [jobs, setJobs] = useState<Job[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchRecentJobs();
+  }, []);
+
+  const fetchRecentJobs = async () => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+
+      // Fetch recent jobs from the database directly
+      const { data, error } = await supabase
+        .from('jobs')
+        .select('*')
+        .eq('userid', user.id)
+        .is('deletedat', null)
+        .order('createdat', { ascending: false })
+        .limit(10);
+
+      if (error) {
+        console.error('Error fetching jobs:', error);
+      } else {
+        setJobs(data || []);
+      }
+    } catch (error) {
+      console.error('Error fetching jobs:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const getStatusIcon = (status: Job['status']) => {
+    switch (status) {
+      case 'COMPLETED': return <div className="w-2 h-2 rounded-full bg-green-500" />;
+      case 'RUNNING': return <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />;
+      case 'FAILED': return <div className="w-2 h-2 rounded-full bg-red-500" />;
+      case 'CANCELLED': return <div className="w-2 h-2 rounded-full bg-gray-500" />;
+      default: return <div className="w-2 h-2 rounded-full bg-yellow-500" />;
+    }
+  };
+
+  const getTypeIcon = (type: Job['type']) => {
+    switch (type) {
+      case 'SCAFFOLD': return <FolderOpen className="w-4 h-4" />;
+      case 'EDIT': return <FileText className="w-4 h-4" />;
+      case 'TEST': return <Terminal className="w-4 h-4" />;
+      case 'DEPLOY': return <GitBranch className="w-4 h-4" />;
+      case 'AI_ACTION': return <Code className="w-4 h-4" />;
+      default: return <Play className="w-4 h-4" />;
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="space-y-4">
+        <h2 className="text-lg font-semibold">Recent Jobs</h2>
+        <div className="text-center py-8 text-muted-foreground">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <h2 className="text-lg font-semibold">Recent Jobs</h2>
+      
+      {jobs.length === 0 ? (
+        <div className="text-center py-8 text-muted-foreground">
+          <Play className="w-12 h-12 mx-auto mb-2 opacity-50" />
+          <p>No jobs yet</p>
+          <p className="text-sm">Create a project and start working</p>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {jobs.map((job) => (
+            <Card key={job.id} className="cursor-pointer hover:bg-muted/50 transition-colors">
+              <CardContent className="p-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-2">
+                    {getTypeIcon(job.type)}
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center space-x-2">
+                        <span className="text-sm font-medium">{job.type}</span>
+                        {getStatusIcon(job.status)}
+                      </div>
+                      {job.prompt && (
+                        <p className="text-xs text-muted-foreground truncate mt-1">
+                          {job.prompt}
+                        </p>
+                      )}
+                      <p className="text-xs text-muted-foreground">
+                        {new Date(job.createdat).toLocaleDateString()} {new Date(job.createdat).toLocaleTimeString()}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

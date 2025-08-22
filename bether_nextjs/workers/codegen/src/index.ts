@@ -34,6 +34,9 @@ const worker = new Worker('codegen-jobs', async (job) => {
       case 'DEPLOY':
         await handleDeployJob(jobData, result);
         break;
+      case 'AI_ACTION':
+        await handleAIActionJob(jobData, result);
+        break;
       default:
         throw new Error(`Unknown job type: ${jobData.type}`);
     }
@@ -350,6 +353,82 @@ async function handleDeployJob(jobData: JobData, result: JobResult) {
   // TODO: Implement actual deployment logic
   result.output = 'Deploy request processed (not yet implemented)';
   result.metadata = { deployed: false };
+}
+
+// Handle AI action jobs (AI-driven file operations)
+async function handleAIActionJob(jobData: JobData, result: JobResult) {
+  console.log(`[codegen] Processing AI action for project ${jobData.projectId}`);
+  
+  if (!jobData.metadata || !jobData.metadata.actions) {
+    throw new Error('AI action metadata is required');
+  }
+
+  const storageService = new FileStorageService();
+  const actions = jobData.metadata.actions as any[];
+  const completedActions: string[] = [];
+  const errors: string[] = [];
+
+  for (const action of actions) {
+    try {
+      console.log(`[codegen] Executing action:`, action);
+      
+      switch (action.type) {
+        case 'create_file':
+          await storageService.saveFile(
+            jobData.projectId, 
+            jobData.userId, 
+            action.path, 
+            action.content
+          );
+          completedActions.push(`Created file: ${action.path}`);
+          break;
+          
+        case 'update_file':
+          await storageService.updateFile(
+            jobData.projectId, 
+            jobData.userId, 
+            action.path, 
+            action.content
+          );
+          completedActions.push(`Updated file: ${action.path}`);
+          break;
+          
+        case 'delete_file':
+          await storageService.deleteFile(
+            jobData.projectId, 
+            jobData.userId, 
+            action.path
+          );
+          completedActions.push(`Deleted file: ${action.path}`);
+          break;
+          
+        default:
+          errors.push(`Unknown action type: ${action.type}`);
+      }
+    } catch (error) {
+      const errorMsg = `Failed to ${action.type} ${action.path}: ${error instanceof Error ? error.message : 'Unknown error'}`;
+      console.error(`[codegen] ${errorMsg}`);
+      errors.push(errorMsg);
+    }
+  }
+
+  if (errors.length > 0 && completedActions.length === 0) {
+    throw new Error(`All actions failed: ${errors.join(', ')}`);
+  }
+
+  result.output = `AI actions completed. ${completedActions.length} successful, ${errors.length} failed.`;
+  if (completedActions.length > 0) {
+    result.output += `\n\nCompleted actions:\n${completedActions.map(a => `• ${a}`).join('\n')}`;
+  }
+  if (errors.length > 0) {
+    result.output += `\n\nErrors:\n${errors.map(e => `• ${e}`).join('\n')}`;
+  }
+  
+  result.metadata = {
+    actionsCompleted: completedActions,
+    errors: errors,
+    totalActions: actions.length
+  };
 }
 
 // Handle worker events

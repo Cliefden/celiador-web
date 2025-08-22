@@ -209,44 +209,102 @@ conversationid: activeConversation.id,
           : msg
       ));
 
-      // TODO: Add AI response logic here
-      // For now, add a placeholder response
-      setTimeout(async () => {
-        try {
-const assistantResponse = {
-            conversationid: activeConversation.id,
-            content: "I understand your request. This is a placeholder response while we integrate with the AI service.",
-            role: 'assistant',
-            messagetype: 'text',
-            userid: user.id,
-            creator: user.id
-          };
+      // Get AI response from orchestrator
+      try {
+        // Call orchestrator AI endpoint
+        const authToken = (await supabase.auth.getSession()).data.session?.access_token;
+        if (!authToken) {
+          throw new Error('No auth token available');
+        }
 
-          const { data: savedAssistantMessage, error: assistantMessageError } = await supabase
+        const aiResponse = await fetch(`http://localhost:4000/projects/${activeConversation.projectid}/chat`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${authToken}`
+          },
+          body: JSON.stringify({
+            message: content,
+            provider: 'openai' // Default to OpenAI, could be made configurable
+          })
+        });
+
+        if (!aiResponse.ok) {
+          const errorData = await aiResponse.json();
+          throw new Error(errorData.error || 'AI service unavailable');
+        }
+
+        const { response: aiContent, actions } = await aiResponse.json();
+
+        // Save AI response to database
+        const assistantResponse = {
+          conversationid: activeConversation.id,
+          content: aiContent,
+          role: 'assistant',
+          messagetype: actions ? 'command' : 'text', // Mark as command if actions detected
+          userid: user.id,
+          creator: user.id,
+          relatedjobid: actions?.jobId || null,
+          metadata: actions ? { actionsDetected: actions.detected } : null
+        };
+
+        const { data: savedAssistantMessage, error: assistantMessageError } = await supabase
+          .from('messages')
+          .insert([assistantResponse])
+          .select()
+          .single();
+
+        if (assistantMessageError) {
+          throw assistantMessageError;
+        }
+
+        setMessages(prev => [...prev, {
+          id: savedAssistantMessage.id,
+          content: savedAssistantMessage.content,
+          role: 'assistant' as const,
+          messageType: 'text' as const,
+          createdAt: savedAssistantMessage.createdat,
+          metadata: savedAssistantMessage.metadata,
+          relatedJobId: savedAssistantMessage.relatedjobid
+        }]);
+
+      } catch (err) {
+        console.error('Error getting AI response:', err);
+        
+        // Fall back to placeholder response if AI fails
+        const fallbackResponse = {
+          conversationid: activeConversation.id,
+          content: `I'm having trouble connecting to the AI service right now. Error: ${err instanceof Error ? err.message : 'Unknown error'}. Please check that your API keys are configured.`,
+          role: 'assistant',
+          messagetype: 'text',
+          userid: user.id,
+          creator: user.id
+        };
+
+        try {
+          const { data: savedFallbackMessage, error: fallbackError } = await supabase
             .from('messages')
-            .insert([assistantResponse])
+            .insert([fallbackResponse])
             .select()
             .single();
 
-          if (assistantMessageError) {
-            throw assistantMessageError;
+          if (!fallbackError) {
+            setMessages(prev => [...prev, {
+              id: savedFallbackMessage.id,
+              content: savedFallbackMessage.content,
+              role: 'assistant' as const,
+              messageType: 'text' as const,
+              createdAt: savedFallbackMessage.createdat,
+              metadata: savedFallbackMessage.metadata,
+              relatedJobId: savedFallbackMessage.relatedjobid
+            }]);
           }
-
-setMessages(prev => [...prev, {
-            id: savedAssistantMessage.id,
-            content: savedAssistantMessage.content,
-            role: 'assistant' as const,
-            messageType: 'text' as const,
-            createdAt: savedAssistantMessage.createdat,
-            metadata: savedAssistantMessage.metadata,
-            relatedJobId: savedAssistantMessage.relatedjobid
-          }]);
-
-        } catch (err) {
-          console.error('Error adding assistant response:', err);
-          setError(err instanceof Error ? err.message : 'Failed to get AI response');
+        } catch (fallbackErr) {
+          console.error('Error saving fallback message:', fallbackErr);
         }
-      }, 1000);
+
+        setError(err instanceof Error ? err.message : 'Failed to get AI response');
+      }
 
     } catch (err) {
       console.error('Error sending message:', err);

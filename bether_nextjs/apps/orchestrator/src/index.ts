@@ -5,6 +5,7 @@ import morgan from 'morgan';
 import { Queue } from 'bullmq';
 import { createClient } from '@supabase/supabase-js';
 import { FileStorageService } from '@mvp/shared';
+import { aiService } from './services/ai-service.js';
 import dotenv from 'dotenv';
 
 // Load environment variables from .env file
@@ -774,6 +775,179 @@ app.post('/projects/:id/files/upload', authenticateUser, async (req, res) => {
     console.error('Failed to upload file:', error);
     res.status(500).json({ error: 'Failed to upload file' });
   }
+});
+
+// AI Chat endpoints for conversation functionality
+app.post('/projects/:id/chat', authenticateUser, async (req, res) => {
+  try {
+    const user = (req as any).user;
+    const { id } = req.params;
+    const { message, provider = 'openai', model } = req.body;
+
+    if (!message || !message.trim()) {
+      return res.status(400).json({ error: 'Message is required' });
+    }
+
+    console.log(`[orchestrator] AI chat request for project ${id}, user ${user.id}`);
+
+    // Verify project ownership
+    const project = await db.getProjectById(id);
+    if (!project) {
+      console.log(`[orchestrator] Project ${id} not found`);
+      return res.status(404).json({ error: 'Project not found' });
+    }
+    if (project.userid !== user.id) {
+      console.log(`[orchestrator] Access denied: project.userid=${project.userid}, user.id=${user.id}`);
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    // Check if AI service is available
+    if (!aiService.isAvailable()) {
+      return res.status(503).json({ 
+        error: 'AI service not available. Please configure API keys.',
+        availableProviders: aiService.getAvailableProviders()
+      });
+    }
+
+    // Get project context for enhanced prompting
+    let projectFiles: string[] = [];
+    let projectFileContents: { [key: string]: string } = {};
+    
+    try {
+      const storageService = new FileStorageService();
+      const fileTree = await storageService.getProjectFileTree(id, user.id);
+      
+      // Extract file paths from tree structure
+      const extractFilePaths = (items: any[]): string[] => {
+        let paths: string[] = [];
+        for (const item of items) {
+          if (item.type === 'file') {
+            paths.push(item.path);
+          } else if (item.type === 'directory' && item.children) {
+            paths.push(...extractFilePaths(item.children));
+          }
+        }
+        return paths;
+      };
+      
+      if (fileTree && Array.isArray(fileTree)) {
+        projectFiles = extractFilePaths(fileTree);
+      }
+
+      // Get content for important files (package.json, README.md, and other key config files)
+      const importantFiles = projectFiles.filter(file => 
+        file.match(/\.(json|md|js|ts|tsx|jsx|yaml|yml|toml)$/i) && 
+        file.split('/').length <= 2 && // Only root and one level deep
+        !file.includes('node_modules') &&
+        !file.includes('dist') &&
+        !file.includes('build') &&
+        !file.includes('pnpm-lock.yaml') // Skip large lock files
+      );
+
+      console.log(`[orchestrator] Loading content for ${importantFiles.length} important files:`, importantFiles);
+
+      for (const filePath of importantFiles.slice(0, 5)) { // Limit to 5 files to avoid token limits
+        try {
+          const fileData = await storageService.getFile(id, user.id, filePath);
+          if (fileData && fileData.content && typeof fileData.content === 'string') {
+            // Truncate very long files
+            const content = fileData.content.length > 2000 
+              ? fileData.content.substring(0, 2000) + '\n... (truncated)'
+              : fileData.content;
+            projectFileContents[filePath] = content;
+          }
+        } catch (error) {
+          console.log(`[orchestrator] Warning: Could not load ${filePath}:`, error);
+        }
+      }
+    } catch (error) {
+      console.log(`[orchestrator] Warning: Could not load project files for context:`, error);
+    }
+
+    // Build conversation context
+    const systemPrompt = aiService.createDevelopmentSystemPrompt({
+      name: project.name,
+      tech_stack: ['Next.js', 'TypeScript', 'Prisma', 'Supabase'], // Inferred from template
+      current_files: projectFiles,
+      file_contents: projectFileContents
+    });
+
+    console.log(`[orchestrator] System prompt length: ${systemPrompt.length}`);
+    console.log(`[orchestrator] Project files found: ${projectFiles.length}`);
+    console.log(`[orchestrator] First 200 chars of system prompt:`, systemPrompt.substring(0, 200));
+
+    // Generate AI response
+    const aiResponse = await aiService.generateResponse([
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: message.trim() }
+    ], { provider, model });
+
+    console.log(`[orchestrator] AI response generated using ${aiResponse.provider}:${aiResponse.model}`);
+    
+    // Parse AI response for actionable intents
+    const actionsParsed = aiService.parseActionsFromResponse(aiResponse.content);
+    console.log(`[orchestrator] Actions detected:`, actionsParsed.hasActions ? actionsParsed.actions.length : 0);
+    
+    let jobId = null;
+    if (actionsParsed.hasActions) {
+      try {
+        // Create AI_ACTION job
+        const job = await db.createJob({
+          type: 'AI_ACTION',
+          prompt: message.trim(),
+          projectId: id,
+          userId: user.id
+        });
+        
+        jobId = job.id;
+        console.log(`[orchestrator] Created AI_ACTION job ${jobId} with ${actionsParsed.actions.length} actions`);
+        
+        // Add job to queue with action metadata
+        await jobQueue.add('codegen-jobs', {
+          jobId: job.id,
+          projectId: id,
+          userId: user.id,
+          type: 'AI_ACTION',
+          prompt: message.trim(),
+          metadata: {
+            actions: actionsParsed.actions,
+            aiResponse: aiResponse.content
+          }
+        });
+        
+        console.log(`[orchestrator] AI_ACTION job ${jobId} added to queue`);
+      } catch (error) {
+        console.error(`[orchestrator] Failed to create AI_ACTION job:`, error);
+      }
+    }
+    
+    res.json({
+      response: aiResponse.content,
+      provider: aiResponse.provider,
+      model: aiResponse.model,
+      usage: aiResponse.usage,
+      actions: actionsParsed.hasActions ? {
+        detected: actionsParsed.actions.length,
+        jobId: jobId
+      } : undefined
+    });
+
+  } catch (error) {
+    console.error('Failed to generate AI response:', error);
+    res.status(500).json({ 
+      error: 'Failed to generate AI response', 
+      details: error instanceof Error ? error.message : 'Unknown error' 
+    });
+  }
+});
+
+// Health check for AI services
+app.get('/ai/health', (req, res) => {
+  res.json({
+    available: aiService.isAvailable(),
+    providers: aiService.getAvailableProviders(),
+    status: 'ok'
+  });
 });
 
 // Start server
