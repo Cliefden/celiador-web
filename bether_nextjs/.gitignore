@@ -3,11 +3,19 @@ node_modules/
 .pnpm-store/
 
 # Environment variables
-.env
 .env.local
 .env.development.local
 .env.test.local
 .env.production.local
+.env.*.local
+
+# Legacy .env files (should be removed after consolidation)
+apps/*/.env
+apps/*/.env.local
+workers/*/.env
+workers/*/.env.local
+packages/*/.env
+packages/*/.env.local
 
 # Build outputs
 dist/

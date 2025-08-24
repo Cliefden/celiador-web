@@ -3,12 +3,18 @@
   "private": true,
   "packageManager": "pnpm@9.0.0",
   "devDependencies": {
+    "concurrently": "^9.2.0",
     "tsx": "^4.7.0",
     "typescript": "^5.4.0"
   },
   "scripts": {
     "build": "echo Build root (per-package builds only)",
-    "test": "echo Tests run per package"
+    "test": "echo Tests run per package",
+    "dev": "concurrently --names \"web,orchestrator\" --colors \"npm run dev:web\" \"npm run dev:orchestrator\"",
+    "dev:web": "cd apps/web && npm run dev",
+    "dev:orchestrator": "cd apps/orchestrator && npm run dev", 
+    "dev:worker": "cd workers/codegen && npm run dev",
+    "dev:all": "concurrently --names \"web,orchestrator,worker\" --colors \"npm run dev:web\" \"npm run dev:orchestrator\" \"npm run dev:worker\""
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.54.0"

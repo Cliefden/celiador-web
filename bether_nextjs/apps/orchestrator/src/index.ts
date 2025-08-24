@@ -7,9 +7,10 @@ import { createClient } from '@supabase/supabase-js';
 import { FileStorageService } from '@mvp/shared';
 import { aiService } from './services/ai-service.js';
 import dotenv from 'dotenv';
+import path from 'path';
 
-// Load environment variables from .env file
-dotenv.config();
+// Load environment variables from root .env file
+dotenv.config({ path: path.resolve(process.cwd(), '../../.env') });
 
 const supabaseUrl = process.env.SUPABASE_URL || 'https://placeholder.supabase.co';
 const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || 'placeholder_key';
