@@ -1083,6 +1083,124 @@ app.get('/ai/health', (req, res) => {
   });
 });
 
+// Preview service proxy endpoints
+app.post('/projects/:id/preview/start', authenticateUser, async (req, res) => {
+  try {
+    const user = (req as any).user;
+    const { id } = req.params;
+    const { name, type = 'nextjs' } = req.body;
+
+    // Verify project ownership
+    const project = await db.getProjectById(id);
+    if (!project) {
+      return res.status(404).json({ error: 'Project not found' });
+    }
+    if (project.userid !== user.id) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    // Forward to preview service
+    const previewServiceUrl = process.env.PREVIEW_SERVICE_URL || 'http://localhost:4001';
+    const response = await fetch(`${previewServiceUrl}/preview/start`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        projectId: id,
+        name: name || project.name,
+        type: type
+      })
+    });
+
+    const data = await response.json();
+    res.status(response.status).json(data);
+  } catch (error) {
+    console.error('Failed to start preview:', error);
+    res.status(500).json({ error: 'Failed to start preview' });
+  }
+});
+
+app.get('/projects/:id/preview/:instanceId/status', authenticateUser, async (req, res) => {
+  try {
+    const user = (req as any).user;
+    const { id, instanceId } = req.params;
+
+    // Verify project ownership
+    const project = await db.getProjectById(id);
+    if (!project) {
+      return res.status(404).json({ error: 'Project not found' });
+    }
+    if (project.userid !== user.id) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    // Forward to preview service
+    const previewServiceUrl = process.env.PREVIEW_SERVICE_URL || 'http://localhost:4001';
+    const response = await fetch(`${previewServiceUrl}/preview/${instanceId}/status`);
+
+    const data = await response.json();
+    res.status(response.status).json(data);
+  } catch (error) {
+    console.error('Failed to get preview status:', error);
+    res.status(500).json({ error: 'Failed to get preview status' });
+  }
+});
+
+app.delete('/projects/:id/preview/:instanceId', authenticateUser, async (req, res) => {
+  try {
+    const user = (req as any).user;
+    const { id, instanceId } = req.params;
+
+    // Verify project ownership
+    const project = await db.getProjectById(id);
+    if (!project) {
+      return res.status(404).json({ error: 'Project not found' });
+    }
+    if (project.userid !== user.id) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    // Forward to preview service
+    const previewServiceUrl = process.env.PREVIEW_SERVICE_URL || 'http://localhost:4001';
+    const response = await fetch(`${previewServiceUrl}/preview/${instanceId}`, {
+      method: 'DELETE'
+    });
+
+    const data = await response.json();
+    res.status(response.status).json(data);
+  } catch (error) {
+    console.error('Failed to stop preview:', error);
+    res.status(500).json({ error: 'Failed to stop preview' });
+  }
+});
+
+app.get('/projects/:id/preview/list', authenticateUser, async (req, res) => {
+  try {
+    const user = (req as any).user;
+    const { id } = req.params;
+
+    // Verify project ownership
+    const project = await db.getProjectById(id);
+    if (!project) {
+      return res.status(404).json({ error: 'Project not found' });
+    }
+    if (project.userid !== user.id) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    // Forward to preview service
+    const previewServiceUrl = process.env.PREVIEW_SERVICE_URL || 'http://localhost:4001';
+    const response = await fetch(`${previewServiceUrl}/preview/list?projectId=${id}`);
+
+    const data = await response.json();
+    res.status(response.status).json(data);
+  } catch (error) {
+    console.error('Failed to list previews:', error);
+    res.status(500).json({ error: 'Failed to list previews' });
+  }
+});
+
 // Start server
 app.listen(port, () => {
   console.log(`[orchestrator] listening on http://localhost:${port}`);

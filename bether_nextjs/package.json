@@ -13,8 +13,10 @@
     "dev": "concurrently --names \"web,orchestrator\" --colors \"npm run dev:web\" \"npm run dev:orchestrator\"",
     "dev:web": "cd apps/web && npm run dev",
     "dev:orchestrator": "cd apps/orchestrator && npm run dev", 
+    "dev:preview": "cd apps/preview-service && npm run dev",
     "dev:worker": "cd workers/codegen && npm run dev",
-    "dev:all": "concurrently --names \"web,orchestrator,worker\" --colors \"npm run dev:web\" \"npm run dev:orchestrator\" \"npm run dev:worker\""
+    "dev:all": "concurrently --names \"web,orchestrator,worker\" --colors \"npm run dev:web\" \"npm run dev:orchestrator\" \"npm run dev:worker\"",
+    "dev:full": "concurrently --names \"web,orchestrator,preview,worker\" --prefix name --kill-others-on-fail \"npm run dev:web\" \"npm run dev:orchestrator\" \"npm run dev:preview\" \"npm run dev:worker\""
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.54.0"
