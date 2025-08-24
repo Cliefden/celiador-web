@@ -64,19 +64,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const initializeAuth = async () => {
       try {
+        console.log('AuthContext: Starting auth initialization...');
+        
         // Get initial session
-        const { data: { session } } = await supabase.auth.getSession();
+        const { data: { session }, error } = await supabase.auth.getSession();
+        console.log('AuthContext: Got session:', !!session, 'Error:', error);
+        
+        if (error) {
+          console.error('AuthContext: Session error:', error);
+        }
+        
         setSession(session);
         setUser(session?.user ?? null);
 
         if (session?.user) {
+          console.log('AuthContext: Fetching profile for user:', session.user.id);
           const userProfile = await fetchProfile(session.user.id);
           setProfile(userProfile);
+          console.log('AuthContext: Profile loaded:', !!userProfile);
         }
 
         // Listen for auth changes
+        console.log('AuthContext: Setting up auth state listener...');
         const { data: { subscription } } = supabase.auth.onAuthStateChange(
           async (event, session) => {
+            console.log('AuthContext: Auth state changed:', event, !!session);
             setSession(session);
             setUser(session?.user ?? null);
 
@@ -91,13 +103,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         return () => subscription.unsubscribe();
       } catch (error) {
-        console.error('Error initializing auth:', error);
+        console.error('AuthContext: Error initializing auth:', error);
       } finally {
+        console.log('AuthContext: Auth initialization complete, setting loading to false');
         setIsLoading(false);
       }
     };
 
-    initializeAuth();
+    // Add timeout fallback to prevent infinite loading
+    const timeoutId = setTimeout(() => {
+      console.log('AuthContext: Timeout reached, forcing loading to false');
+      setIsLoading(false);
+    }, 5000);
+
+    initializeAuth().finally(() => {
+      clearTimeout(timeoutId);
+    });
   }, []);
 
   // Sign in function

@@ -31,38 +31,72 @@ export function useConversation(projectId?: string): UseConversationReturn {
 
   // Load existing conversation for project
   const loadProjectConversation = useCallback(async () => {
-    if (!projectId) return;
+    if (!projectId) {
+      console.log('[useConversation] No projectId provided');
+      return;
+    }
 
     try {
+      console.log('[useConversation] Loading conversation for project:', projectId);
       setLoading(true);
       setError(null);
 
       // Get current user
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
+        console.log('[useConversation] No user authenticated');
         throw new Error('User not authenticated');
       }
 
+      console.log('[useConversation] User authenticated:', user.id);
+
       // Find active conversation for this project
-      const { data: conversations, error: convError } = await supabase
+      // First try to get conversations with messages (prefer conversations with content)
+      const { data: conversationsWithMessages, error: convError1 } = await supabase
         .from('conversations')
-        .select('*')
-.eq('projectid', projectId)
-.eq('userid', user.id)
+        .select('*, messages!inner(id)')
+        .eq('projectid', projectId)
+        .eq('userid', user.id)
         .eq('status', 'ACTIVE')
-.order('updatedat', { ascending: false })
+        .order('updatedat', { ascending: false })
         .limit(1);
 
-      if (convError) {
-        throw convError;
+      let conversations = conversationsWithMessages;
+
+      // If no conversations with messages, fall back to any conversation
+      if (!conversations || conversations.length === 0) {
+        const { data: allConversations, error: convError2 } = await supabase
+          .from('conversations')
+          .select('*')
+          .eq('projectid', projectId)
+          .eq('userid', user.id)
+          .eq('status', 'ACTIVE')
+          .order('updatedat', { ascending: false })
+          .limit(1);
+        
+        conversations = allConversations;
+        if (convError2) {
+          throw convError2;
+        }
       }
 
+      if (convError1 && !conversations) {
+        throw convError1;
+      }
+
+      console.log('[useConversation] Found conversations:', conversations?.length || 0);
+
       if (conversations && conversations.length > 0) {
+        console.log('[useConversation] Setting conversation:', conversations[0].id);
         setConversation(conversations[0]);
         await loadMessages(conversations[0].id);
+      } else {
+        console.log('[useConversation] No conversations found for project');
+        setConversation(null);
+        setMessages([]);
       }
     } catch (err) {
-      console.error('Error loading project conversation:', err);
+      console.error('[useConversation] Error loading project conversation:', err);
       setError(err instanceof Error ? err.message : 'Failed to load conversation');
     } finally {
       setLoading(false);
@@ -72,18 +106,23 @@ export function useConversation(projectId?: string): UseConversationReturn {
   // Load messages for a conversation
   const loadMessages = async (conversationId: string) => {
     try {
+      console.log('[useConversation] Loading messages for conversation:', conversationId);
+      
       const { data: messagesData, error: messagesError } = await supabase
         .from('messages')
         .select('*')
-.eq('conversationid', conversationId)
+        .eq('conversationid', conversationId)
         .order('createdat', { ascending: true });
 
       if (messagesError) {
+        console.error('[useConversation] Error querying messages:', messagesError);
         throw messagesError;
       }
 
+      console.log('[useConversation] Found messages:', messagesData?.length || 0);
+
       const formattedMessages: Message[] = (messagesData || []).map(msg => ({
-id: msg.id,
+        id: msg.id,
         content: msg.content,
         role: msg.role,
         messageType: msg.messagetype,
@@ -92,9 +131,10 @@ id: msg.id,
         relatedJobId: msg.relatedjobid
       }));
 
+      console.log('[useConversation] Setting', formattedMessages.length, 'messages');
       setMessages(formattedMessages);
     } catch (err) {
-      console.error('Error loading messages:', err);
+      console.error('[useConversation] Error loading messages:', err);
       setError(err instanceof Error ? err.message : 'Failed to load messages');
     }
   };
@@ -180,7 +220,7 @@ id: msg.id,
       const { data: savedUserMessage, error: userMessageError } = await supabase
         .from('messages')
         .insert([{
-conversationid: activeConversation.id,
+          conversationid: activeConversation.id,
           content,
           role: 'user',
           messagetype: messageType,
@@ -217,6 +257,12 @@ conversationid: activeConversation.id,
           throw new Error('No auth token available');
         }
 
+        // Include conversation history for context
+        const conversationHistory = messages.map(msg => ({
+          role: msg.role,
+          content: msg.content
+        }));
+
         const aiResponse = await fetch(`http://localhost:4000/projects/${activeConversation.projectid}/chat`, {
           method: 'POST',
           headers: {
@@ -225,6 +271,8 @@ conversationid: activeConversation.id,
           },
           body: JSON.stringify({
             message: content,
+            conversationId: activeConversation.id,
+            history: conversationHistory, // Include conversation history
             provider: 'openai' // Default to OpenAI, could be made configurable
           })
         });
@@ -352,22 +400,14 @@ conversationid: activeConversation.id,
   // Load project conversation when projectId changes
   useEffect(() => {
     if (projectId) {
+      console.log('[useConversation] Loading conversation for project:', projectId);
       loadProjectConversation();
     } else {
       // Clear conversation if no project selected
+      console.log('[useConversation] Clearing conversation (no project)');
       clearConversation();
     }
   }, [projectId, loadProjectConversation]);
-
-  // Clear conversation when projectId changes
-  useEffect(() => {
-    return () => {
-      // Cleanup when component unmounts or projectId changes
-      setConversation(null);
-      setMessages([]);
-      setError(null);
-    };
-  }, [projectId]);
 
   return {
     conversation,

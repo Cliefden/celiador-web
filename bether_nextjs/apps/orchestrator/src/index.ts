@@ -201,6 +201,12 @@ app.use(cors());
 app.use(morgan('combined'));
 app.use(express.json());
 
+// Add request logging middleware
+app.use((req, res, next) => {
+  console.log(`[orchestrator] ${req.method} ${req.path} - ${new Date().toISOString()}`);
+  next();
+});
+
 // Redis connection
 const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379';
 
@@ -711,6 +717,113 @@ app.put('/projects/:id/files/save', authenticateUser, async (req, res) => {
   }
 });
 
+// Create file or directory
+app.post('/projects/:id/files/create', authenticateUser, async (req, res) => {
+  console.log(`[orchestrator] POST /projects/:id/files/create endpoint hit`);
+  try {
+    const user = (req as any).user;
+    const { id } = req.params;
+    const { filePath, content = '', type = 'file' } = req.body;
+
+    console.log(`[orchestrator] File/folder create request for project ${id}, path ${filePath}, type ${type}, user ${user.id}`);
+
+    // Verify project ownership
+    const project = await db.getProjectById(id);
+    if (!project) {
+      console.log(`[orchestrator] Project ${id} not found`);
+      return res.status(404).json({ error: 'Project not found' });
+    }
+    if (project.userid !== user.id) {
+      console.log(`[orchestrator] Access denied: project.userid=${project.userid}, user.id=${user.id}`);
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    const storageService = new FileStorageService();
+    
+    if (type === 'directory') {
+      console.log(`[orchestrator] Creating directory for project ${id}, path ${filePath}, user ${user.id}`);
+      // In Supabase Storage, directories are created implicitly when you save a file
+      // Create a .gitkeep file to ensure the directory exists
+      await storageService.saveFile(id, user.id, `${filePath}/.gitkeep`, '');
+    } else {
+      console.log(`[orchestrator] Creating file for project ${id}, path ${filePath}, user ${user.id}`);
+      await storageService.saveFile(id, user.id, filePath, content);
+    }
+    
+    console.log(`[orchestrator] ${type === 'directory' ? 'Directory' : 'File'} created successfully`);
+    res.json({ success: true, message: `${type === 'directory' ? 'Directory' : 'File'} created successfully` });
+  } catch (error) {
+    console.error('Failed to create file/directory:', error);
+    res.status(500).json({ error: 'Failed to create file/directory' });
+  }
+});
+
+// Delete folder and all its contents
+app.post('/projects/:id/files/delete-folder', authenticateUser, async (req, res) => {
+  try {
+    const user = (req as any).user;
+    const { id } = req.params;
+    const { folderPath } = req.body;
+
+    console.log(`[orchestrator] Folder delete request for project ${id}, path ${folderPath}, user ${user.id}`);
+
+    // Verify project ownership
+    const project = await db.getProjectById(id);
+    if (!project) {
+      console.log(`[orchestrator] Project ${id} not found`);
+      return res.status(404).json({ error: 'Project not found' });
+    }
+    if (project.userid !== user.id) {
+      console.log(`[orchestrator] Access denied: project.userid=${project.userid}, user.id=${user.id}`);
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    const storageService = new FileStorageService();
+    
+    // Get all files in the project
+    const fileTree = await storageService.getProjectFileTree(id, user.id);
+    
+    // Find all files that start with the folder path
+    const filesToDelete = [];
+    const collectFiles = (nodes: any[], currentPath = '') => {
+      for (const node of nodes) {
+        const nodePath = currentPath ? `${currentPath}/${node.name}` : node.name;
+        
+        if (nodePath.startsWith(folderPath)) {
+          if (node.type === 'file') {
+            filesToDelete.push(nodePath);
+          }
+          if (node.children) {
+            collectFiles(node.children, nodePath);
+          }
+        } else if (node.children) {
+          collectFiles(node.children, nodePath);
+        }
+      }
+    };
+    
+    collectFiles(fileTree);
+    
+    console.log(`[orchestrator] Found ${filesToDelete.length} files to delete in folder ${folderPath}`);
+    
+    // Delete all files in the folder
+    for (const filePath of filesToDelete) {
+      try {
+        await storageService.deleteFile(id, user.id, filePath);
+        console.log(`[orchestrator] Deleted file: ${filePath}`);
+      } catch (error) {
+        console.error(`[orchestrator] Failed to delete file ${filePath}:`, error);
+      }
+    }
+    
+    console.log(`[orchestrator] Folder ${folderPath} and its contents deleted successfully`);
+    res.json({ success: true, message: 'Folder deleted successfully', filesDeleted: filesToDelete.length });
+  } catch (error) {
+    console.error('Failed to delete folder:', error);
+    res.status(500).json({ error: 'Failed to delete folder' });
+  }
+});
+
 // Delete file
 app.delete('/projects/:id/files/*', authenticateUser, async (req, res) => {
   try {
@@ -782,13 +895,14 @@ app.post('/projects/:id/chat', authenticateUser, async (req, res) => {
   try {
     const user = (req as any).user;
     const { id } = req.params;
-    const { message, provider = 'openai', model } = req.body;
+    const { message, conversationId, history = [], provider = 'openai', model } = req.body;
 
     if (!message || !message.trim()) {
       return res.status(400).json({ error: 'Message is required' });
     }
 
     console.log(`[orchestrator] AI chat request for project ${id}, user ${user.id}`);
+    console.log(`[orchestrator] Conversation history provided: ${history.length} messages`);
 
     // Verify project ownership
     const project = await db.getProjectById(id);
@@ -876,11 +990,29 @@ app.post('/projects/:id/chat', authenticateUser, async (req, res) => {
     console.log(`[orchestrator] Project files found: ${projectFiles.length}`);
     console.log(`[orchestrator] First 200 chars of system prompt:`, systemPrompt.substring(0, 200));
 
+    // Build full conversation with history
+    const messages: any[] = [
+      { role: 'system', content: systemPrompt }
+    ];
+
+    // Add conversation history (limit to last 20 messages to avoid token limits)
+    const recentHistory = history.slice(-20);
+    for (const msg of recentHistory) {
+      if (msg.role === 'user' || msg.role === 'assistant') {
+        messages.push({
+          role: msg.role,
+          content: msg.content
+        });
+      }
+    }
+
+    // Add current message
+    messages.push({ role: 'user', content: message.trim() });
+
+    console.log(`[orchestrator] Sending ${messages.length} messages to AI (including ${recentHistory.length} history messages)`);
+
     // Generate AI response
-    const aiResponse = await aiService.generateResponse([
-      { role: 'system', content: systemPrompt },
-      { role: 'user', content: message.trim() }
-    ], { provider, model });
+    const aiResponse = await aiService.generateResponse(messages, { provider, model });
 
     console.log(`[orchestrator] AI response generated using ${aiResponse.provider}:${aiResponse.model}`);
     

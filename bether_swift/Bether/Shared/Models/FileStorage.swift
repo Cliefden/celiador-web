@@ -1,52 +1,36 @@
 import Foundation
-import Supabasable
+import SwiftUI
 
-struct FileStorage: SBTable, SBListable, SBTypeNameable, SBManageable, Hashable, Named {
+// MARK: - FileStorage Model
+struct FileStorage: Identifiable, Hashable, Codable {
     let id: UUID
     let createdAt: Date
-    let creator: reference?
     let name: String
     let path: String
     let size: Int64
-    let mimeType: String
+    let mimeType: String?
     let bucketName: String
-    let userId: reference?
-    let projectId: reference?
+    let userId: UUID?
+    let projectId: UUID?
     
     // Computed properties
-    var displayName: String {
-        return name
+    var isDirectory: Bool { return mimeType == nil || mimeType?.isEmpty == true }
+    var isImage: Bool { return mimeType?.starts(with: "image/") == true }
+    var isVideo: Bool { return mimeType?.starts(with: "video/") == true }
+    var isAudio: Bool { return mimeType?.starts(with: "audio/") == true }
+    var isDocument: Bool { return mimeType?.starts(with: "application/pdf") == true || mimeType?.starts(with: "text/") == true }
+    var isCode: Bool { 
+        let codeTypes = ["application/javascript", "application/json", "text/html", "text/css", "text/markdown", "application/typescript"]
+        return codeTypes.contains(mimeType ?? "")
     }
+    var isArchive: Bool { return mimeType?.starts(with: "application/zip") == true || mimeType?.starts(with: "application/x-rar") == true }
     
     var fileExtension: String {
-        return (name as NSString).pathExtension.lowercased()
-    }
-    
-    var isImage: Bool {
-        return ["jpg", "jpeg", "png", "gif", "webp", "svg"].contains(fileExtension)
-    }
-    
-    var isVideo: Bool {
-        return ["mp4", "avi", "mov", "wmv", "flv", "webm"].contains(fileExtension)
-    }
-    
-    var isAudio: Bool {
-        return ["mp3", "wav", "aac", "flac", "ogg"].contains(fileExtension)
-    }
-    
-    var isDocument: Bool {
-        return ["pdf", "doc", "docx", "txt", "rtf"].contains(fileExtension)
-    }
-    
-    var isCode: Bool {
-        return ["js", "ts", "jsx", "tsx", "py", "java", "cpp", "c", "h", "swift", "kt", "rs", "go", "php", "rb", "cs", "html", "css", "scss", "sass", "json", "xml", "yaml", "yml", "md", "sql"].contains(fileExtension)
-    }
-    
-    var isArchive: Bool {
-        return ["zip", "rar", "7z", "tar", "gz"].contains(fileExtension)
+        return URL(fileURLWithPath: name).pathExtension.lowercased()
     }
     
     var fileTypeIcon: String {
+        if isDirectory { return "folder" }
         if isImage { return "photo" }
         if isVideo { return "video" }
         if isAudio { return "music.note" }
@@ -56,7 +40,19 @@ struct FileStorage: SBTable, SBListable, SBTypeNameable, SBManageable, Hashable,
         return "doc"
     }
     
+    var fileTypeDescription: String {
+        if isImage { return "Image File" }
+        if isVideo { return "Video File" }
+        if isAudio { return "Audio File" }
+        if isDocument { return "Document" }
+        if isCode { return "Source Code" }
+        if isArchive { return "Archive" }
+        if isDirectory { return "Directory" }
+        return "Unknown File Type"
+    }
+    
     var formattedSize: String {
+        if isDirectory { return "" }
         let formatter = ByteCountFormatter()
         formatter.allowedUnits = [.useKB, .useMB, .useGB]
         formatter.countStyle = .file
@@ -72,28 +68,176 @@ struct FileStorage: SBTable, SBListable, SBTypeNameable, SBManageable, Hashable,
 }
 
 // MARK: - FileStorageManager
-extension SBTableManager where T == FileStorage {
-    static func fetchFilesByProject(_ projectId: UUID) async -> [FileStorage] {
-        // This would need to be implemented to fetch files from Supabase storage
-        // For now, returning empty array as placeholder
+class FileStorageManager: ObservableObject {
+    static let shared = FileStorageManager()
+    
+    @Published var files: [FileStorage] = []
+    @Published var isLoading = false
+    @Published var currentPath = ""
+    
+    private let supabaseURL = SupabaseConfig.url
+    private let supabaseKey = SupabaseConfig.serviceKey // Use service key for server operations
+    private let bucketName = SupabaseConfig.bucketName
+    
+    private init() {}
+    
+    // MARK: - File Operations
+    func loadFiles() {
+        isLoading = true
+        
+        Task {
+            await fetchFilesByProject()
+            await MainActor.run {
+                isLoading = false
+            }
+        }
+    }
+    
+    func fetchFilesByProject(projectId: UUID? = nil) async {
+        // For now, return mock data since we need proper auth setup
+        await MainActor.run {
+            self.files = [
+                FileStorage(
+                    id: UUID(),
+                    createdAt: Date(),
+                    name: "example.js",
+                    path: "src/example.js",
+                    size: 1024,
+                    mimeType: "application/javascript",
+                    bucketName: bucketName,
+                    userId: UUID(),
+                    projectId: projectId
+                ),
+                FileStorage(
+                    id: UUID(),
+                    createdAt: Date(),
+                    name: "README.md",
+                    path: "README.md",
+                    size: 512,
+                    mimeType: "text/markdown",
+                    bucketName: bucketName,
+                    userId: UUID(),
+                    projectId: projectId
+                ),
+                FileStorage(
+                    id: UUID(),
+                    createdAt: Date(),
+                    name: "src",
+                    path: "src",
+                    size: 0,
+                    mimeType: nil, // Directory
+                    bucketName: bucketName,
+                    userId: UUID(),
+                    projectId: projectId
+                ),
+                FileStorage(
+                    id: UUID(),
+                    createdAt: Date(),
+                    name: "package.json",
+                    path: "package.json",
+                    size: 2048,
+                    mimeType: "application/json",
+                    bucketName: bucketName,
+                    userId: UUID(),
+                    projectId: projectId
+                ),
+                FileStorage(
+                    id: UUID(),
+                    createdAt: Date(),
+                    name: "screenshot.png",
+                    path: "assets/screenshot.png",
+                    size: 15360,
+                    mimeType: "image/png",
+                    bucketName: bucketName,
+                    userId: UUID(),
+                    projectId: projectId
+                )
+            ]
+        }
+    }
+    
+    func fetchFilesByUser(userId: UUID) async -> [FileStorage] {
+        // Mock implementation for now
         return []
     }
     
-    static func fetchFilesByUser(_ userId: UUID) async -> [FileStorage] {
-        // This would need to be implemented to fetch files from Supabase storage
-        // For now, returning empty array as placeholder
-        return []
+    func uploadFile(fileURL: URL, name: String, path: String, projectId: UUID?) async -> FileStorage? {
+        // Mock implementation for now
+        let newFile = FileStorage(
+            id: UUID(),
+            createdAt: Date(),
+            name: name,
+            path: path,
+            size: 0,
+            mimeType: "application/octet-stream",
+            bucketName: bucketName,
+            userId: UUID(),
+            projectId: projectId
+        )
+        
+        await MainActor.run {
+            self.files.append(newFile)
+        }
+        
+        return newFile
     }
     
-    static func uploadFile(_ fileData: Data, fileName: String, projectId: UUID, userId: UUID) async -> FileStorage? {
-        // This would need to be implemented to upload files to Supabase storage
-        // For now, returning nil as placeholder
-        return nil
+    func deleteFile(fileId: UUID) async -> Bool {
+        // Mock implementation for now
+        await MainActor.run {
+            self.files.removeAll { $0.id == fileId }
+        }
+        return true
     }
     
-    static func deleteFile(_ fileId: UUID) async -> Bool {
-        // This would need to be implemented to delete files from Supabase storage
-        // For now, returning false as placeholder
-        return false
+    // MARK: - Navigation
+    func navigateToDirectory(_ path: String) {
+        currentPath = path
+        loadFiles()
+    }
+    
+    func navigateUp() {
+        if !currentPath.isEmpty {
+            let components = currentPath.components(separatedBy: "/")
+            if components.count > 1 {
+                currentPath = components.dropLast().joined(separator: "/")
+            } else {
+                currentPath = ""
+            }
+            loadFiles()
+        }
+    }
+}
+
+// MARK: - Supabase Response Models
+
+struct SupabaseFileObject: Codable {
+    let name: String
+    let bucket_id: String?
+    let owner: String?
+    let id: String?
+    let updated_at: String?
+    let created_at: String?
+    let last_accessed_at: String?
+    let metadata: FileMetadata?
+}
+
+struct FileMetadata: Codable {
+    let eTag: String?
+    let size: Int?
+    let mimetype: String?
+    let cacheControl: String?
+    let lastModified: String?
+    let contentLength: Int?
+    let httpStatusCode: Int?
+    
+    enum CodingKeys: String, CodingKey {
+        case eTag = "eTag"
+        case size = "size"
+        case mimetype = "mimetype"
+        case cacheControl = "cacheControl"
+        case lastModified = "lastModified"
+        case contentLength = "contentLength"
+        case httpStatusCode = "httpStatusCode"
     }
 }

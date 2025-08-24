@@ -1,49 +1,47 @@
 import SwiftUI
-import Supabasable
-import OptionalHelpers
 
 struct FileBrowser: View {
-    @State private var files: [FileStorage] = []
-    @State private var isLoading = false
+    @StateObject private var fileManager = FileStorageManager.shared
     @State private var searchText = ""
     @State private var selectedProject: Project?
     @State private var projects: [Project] = []
-    @State private var currentPath = ""
     @State private var showingUploadSheet = false
+    @State private var showingFileDetail = false
+    @State private var selectedFile: FileStorage?
+    @State private var showingEditSheet = false
+    @State private var fileToEdit: FileStorage?
     
     var filteredFiles: [FileStorage] {
         if searchText.isEmpty {
-            return files
+            return fileManager.files
         } else {
-            return files.filter { file in
+            return fileManager.files.filter { file in
                 file.name.localizedCaseInsensitiveContains(searchText) ||
                 file.path.localizedCaseInsensitiveContains(searchText)
             }
         }
     }
     
+    var pathComponents: [String] {
+        let components = fileManager.currentPath.split(separator: "/").map(String.init)
+        return components.filter { !$0.isEmpty }
+    }
+    
     var body: some View {
         VStack(spacing: 0) {
-            // Header with controls
+            // Header
             VStack(spacing: 12) {
                 HStack {
-                    Text("Project Files Browser")
+                    Text("Project Files")
                         .font(.title2)
                         .fontWeight(.bold)
                     
                     Spacer()
                     
-                    Button(action: { showingUploadSheet = true }) {
-                        HStack {
-                            Image(systemName: "plus")
-                            Text("Upload File")
-                        }
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 6)
-                        .background(Color.blue)
-                        .foregroundColor(.white)
-                        .cornerRadius(6)
+                    Button(action: loadFiles) {
+                        Image(systemName: "arrow.clockwise")
                     }
+                    .disabled(fileManager.isLoading)
                 }
                 
                 // Project selector
@@ -54,7 +52,7 @@ struct FileBrowser: View {
                     Picker("Project", selection: $selectedProject) {
                         Text("All Projects").tag(nil as Project?)
                         ForEach(projects, id: \.id) { project in
-                            Text(project.displayName).tag(project as Project?)
+                            Text(project.name ?? "Unnamed Project").tag(project as Project?)
                         }
                     }
                     .onChange(of: selectedProject) { _ in
@@ -66,7 +64,7 @@ struct FileBrowser: View {
                     Button(action: loadFiles) {
                         Image(systemName: "arrow.clockwise")
                     }
-                    .disabled(isLoading)
+                    .disabled(fileManager.isLoading)
                 }
                 
                 // Search bar
@@ -79,7 +77,7 @@ struct FileBrowser: View {
                 }
                 
                 // Breadcrumb
-                if !currentPath.isEmpty {
+                if !fileManager.currentPath.isEmpty {
                     HStack {
                         Text("Path:")
                             .fontWeight(.medium)
@@ -87,7 +85,7 @@ struct FileBrowser: View {
                         ScrollView(.horizontal, showsIndicators: false) {
                             HStack {
                                 Button("Root") {
-                                    currentPath = ""
+                                    fileManager.navigateToDirectory("")
                                     loadFiles()
                                 }
                                 .foregroundColor(.blue)
@@ -111,7 +109,7 @@ struct FileBrowser: View {
             .background(Color.gray.opacity(0.1))
             
             // File list
-            if isLoading {
+            if fileManager.isLoading {
                 VStack {
                     Spacer()
                     ProgressView("Loading files...")
@@ -138,19 +136,62 @@ struct FileBrowser: View {
                     Spacer()
                 }
             } else {
-                List(filteredFiles, id: \.id) { file in
-                    FileRow(file: file) {
-                        if file.isDirectory {
-                            navigateToFile(file)
-                        } else {
-                            // Handle file selection
+                ScrollView {
+                    LazyVStack(spacing: 12) {
+                        ForEach(filteredFiles, id: \.id) { file in
+                            FileStorageCard(
+                                file: file,
+                                onEdit: {
+                                    fileToEdit = file
+                                    showingEditSheet = true
+                                },
+                                onDelete: {
+                                    loadFiles()
+                                }
+                            )
+                            .onTapGesture {
+                                handleFileSelection(file)
+                            }
                         }
                     }
+                    .padding()
                 }
             }
         }
         .sheet(isPresented: $showingUploadSheet) {
             FileStorageAddOrEdit(itemToEdit: nil)
+        }
+        .sheet(isPresented: $showingEditSheet) {
+            if let fileToEdit = fileToEdit {
+                FileStorageAddOrEdit(itemToEdit: fileToEdit)
+            }
+        }
+        .overlay {
+            if showingFileDetail, let selectedFile = selectedFile {
+                VStack {
+                    HStack {
+                        Text(selectedFile.name)
+                            .font(.headline)
+                            .fontWeight(.semibold)
+                        
+                        Spacer()
+                        
+                        Button("Done") {
+                            self.selectedFile = nil
+                        }
+                        .buttonStyle(.bordered)
+                    }
+                    .padding()
+                    .background(Color.gray.opacity(0.1))
+                    
+                    FileStorageDetail(file: selectedFile)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
+                .frame(width: 600, height: 500)
+                .background(Color.white)
+                .cornerRadius(12)
+                .shadow(radius: 10)
+            }
         }
         .onAppear {
             loadProjects()
@@ -158,92 +199,81 @@ struct FileBrowser: View {
         }
     }
     
-    private var pathComponents: [String] {
-        currentPath.split(separator: "/").map(String.init)
-    }
-    
-    private func loadProjects() {
+    private func loadFiles() {
         Task {
-            // Load projects for the picker
-            // This would need to be implemented based on your Supabase setup
+            await fileManager.loadFiles()
         }
     }
     
-    private func loadFiles() {
-        isLoading = true
-        
-        Task {
-            if let project = selectedProject {
-                let projectFiles = await SBTableManager<FileStorage>.fetchFilesByProject(project.id.uW)
-                await MainActor.run {
-                    files = projectFiles
-                    isLoading = false
-                }
-            } else {
-                // Load all files or files from current path
-                // This would need to be implemented based on your Supabase setup
-                await MainActor.run {
-                    files = []
-                    isLoading = false
-                }
-            }
+    private func handleFileSelection(_ file: FileStorage) {
+        if file.isDirectory {
+            fileManager.navigateToDirectory(file.path)
+            loadFiles()
+        } else {
+            selectedFile = file
+            showingFileDetail = true
         }
     }
     
     private func navigateToPath(_ component: String) {
-        // Navigate to specific path
-        // This would need to be implemented based on your Supabase setup
-    }
-    
-    private func navigateToFile(_ file: FileStorage) {
-        // Navigate into directory
-        // This would need to be implemented based on your Supabase setup
-    }
-}
-
-struct FileRow: View {
-    let file: FileStorage
-    let onTap: () -> Void
-    
-    var body: some View {
-        Button(action: onTap) {
-            HStack {
-                Image(systemName: file.fileTypeIcon)
-                    .foregroundColor(.blue)
-                    .frame(width: 20)
-                
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(file.name)
-                        .fontWeight(.medium)
-                    
-                    Text(file.path)
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
-                
-                Spacer()
-                
-                VStack(alignment: .trailing, spacing: 2) {
-                    Text(file.formattedSize)
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                    
-                    Text(file.formattedDate)
-                        .font(.caption2)
-                        .foregroundColor(.secondary)
-                }
-            }
-            .padding(.vertical, 4)
+        // Navigate to the specific path component
+        let currentComponents = pathComponents
+        if let index = currentComponents.firstIndex(of: component) {
+            let newPath = currentComponents.prefix(index + 1).joined(separator: "/")
+            fileManager.navigateToDirectory(newPath)
+            loadFiles()
         }
-        .buttonStyle(PlainButtonStyle())
     }
-}
-
-extension FileStorage {
-    var isDirectory: Bool {
-        // This would need to be implemented based on your file structure
-        // For now, assuming files with no extension are directories
-        return fileExtension.isEmpty
+    
+    private func loadProjects() {
+        Task {
+            // Fetch projects from Supabase
+            guard let url = URL(string: "\(SupabaseConfig.url)/rest/v1/projects?select=*") else {
+                print("Invalid URL")
+                return
+            }
+            
+            var request = URLRequest(url: url)
+            request.httpMethod = "GET"
+            request.setValue("Bearer \(Secrets.adminAPIKey)", forHTTPHeaderField: "Authorization")
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            request.setValue("*", forHTTPHeaderField: "Prefer")
+            request.setValue("return=representation", forHTTPHeaderField: "Prefer")
+            
+            do {
+                let (data, response) = try await URLSession.shared.data(for: request)
+                
+                guard let httpResponse = response as? HTTPURLResponse else {
+                    print("Invalid response type")
+                    return
+                }
+                
+                print("Response status: \(httpResponse.statusCode)")
+                print("Response headers: \(httpResponse.allHeaderFields)")
+                
+                if httpResponse.statusCode == 200 {
+                    do {
+                        let fetchedProjects = try JSONDecoder().decode([Project].self, from: data)
+                        await MainActor.run {
+                            self.projects = fetchedProjects
+                            print("Loaded \(fetchedProjects.count) projects")
+                        }
+                    } catch {
+                        print("Failed to decode projects: \(error)")
+                        if let responseString = String(data: data, encoding: .utf8) {
+                            print("Response data: \(responseString)")
+                        }
+                    }
+                } else {
+                    print("HTTP Error: \(httpResponse.statusCode)")
+                    if let responseString = String(data: data, encoding: .utf8) {
+                        print("Error response: \(responseString)")
+                    }
+                }
+            } catch {
+                print("Failed to fetch projects: \(error)")
+            }
+        }
     }
 }
 

@@ -1,118 +1,154 @@
 import SwiftUI
-import Supabasable
-import OptionalHelpers
 
 struct FileStorageDetail: View {
-    var item: FileStorage
-    @State var user: Profile?
-    @State var creator: Profile?
-    @State var project: Project?
+    let file: FileStorage
     
     var body: some View {
-        VStack(alignment: .leading) {
-            FileStorageCard(item: item)
-            
-            ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    // File Information Section
-                    VStack(alignment: .leading) {
-                        Text("File Information")
-                            .font(.headline)
-                        
-                        VStack(alignment: .leading, spacing: 8) {
-                            InfoRow(label: "Name", value: item.name)
-                            InfoRow(label: "Path", value: item.path)
-                            InfoRow(label: "Size", value: item.formattedSize)
-                            InfoRow(label: "Type", value: item.mimeType)
-                            InfoRow(label: "Extension", value: item.fileExtension)
-                            InfoRow(label: "Created", value: item.formattedDate)
-                            InfoRow(label: "Bucket", value: item.bucketName)
-                        }
-                        .padding()
-                        .background(Color.gray.opacity(0.1))
-                        .cornerRadius(8)
+        ScrollView {
+            VStack(spacing: 16) {
+                // Main file card
+                FileStorageCard(
+                    file: file,
+                    onEdit: {
+                        // Edit functionality would be handled by parent
+                    },
+                    onDelete: {
+                        // Delete functionality would be handled by parent
                     }
+                )
+                
+                // File Information Section
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("File Information")
+                        .font(.headline)
+                        .fontWeight(.semibold)
                     
-                    // File Type Information
-                    VStack(alignment: .leading) {
-                        Text("File Type")
-                            .font(.headline)
-                        
-                        HStack {
-                            Image(systemName: item.fileTypeIcon)
-                                .foregroundColor(.blue)
-                            Text(fileTypeDescription)
-                                .foregroundColor(.secondary)
+                    VStack(spacing: 8) {
+                        InfoRow(label: "File Name", value: file.name)
+                        InfoRow(label: "Path", value: file.path)
+                        InfoRow(label: "Size", value: file.formattedSize)
+                        InfoRow(label: "Type", value: file.fileTypeDescription)
+                        if let mimeType = file.mimeType {
+                            InfoRow(label: "MIME Type", value: mimeType)
                         }
-                        .padding()
-                        .background(Color.blue.opacity(0.1))
-                        .cornerRadius(8)
-                    }
-                    
-                    // Related Entities
-                    if let user = user {
-                        VStack(alignment: .leading) {
-                            Text("Owner")
-                                .font(.headline)
-                            
-                            ProfileCard(item: user)
-                        }
-                    }
-                    
-                    if let creator = creator {
-                        VStack(alignment: .leading) {
-                            Text("Creator")
-                                .font(.headline)
-                            
-                            ProfileCard(item: creator)
-                        }
-                    }
-                    
-                    if let project = project {
-                        VStack(alignment: .leading) {
-                            Text("Project")
-                                .font(.headline)
-                            
-                            ProjectCard(item: project)
-                        }
+                        InfoRow(label: "Bucket", value: file.bucketName)
+                        InfoRow(label: "Created", value: file.formattedDate)
                     }
                 }
                 .padding()
-            }
-        }
-        .padding()
-        .onFirstAppear {
-            if let userId = item.userId {
-                Task {
-                    let profiles = await SBTableManager<Profile>.fetchWithReference(idName: "id", id: userId)
-                    user = profiles.first
+                .background(Color.gray.opacity(0.05))
+                .cornerRadius(8)
+                
+                // File Type Section
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("File Type")
+                        .font(.headline)
+                        .fontWeight(.semibold)
+                    
+                    HStack {
+                        Image(systemName: file.fileTypeIcon)
+                            .foregroundColor(file.isDirectory ? .orange : .blue)
+                            .font(.title2)
+                        
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(file.fileTypeDescription)
+                                .font(.subheadline)
+                                .fontWeight(.medium)
+                            
+                            Text("Extension: .\(file.fileExtension)")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                        
+                        Spacer()
+                    }
+                    .padding()
+                    .background(Color.gray.opacity(0.05))
+                    .cornerRadius(8)
+                }
+                
+                // Actions Section
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Actions")
+                        .font(.headline)
+                        .fontWeight(.semibold)
+                    
+                    HStack(spacing: 12) {
+                        Button(action: downloadFile) {
+                            HStack {
+                                Image(systemName: "arrow.down.circle")
+                                Text("Download")
+                            }
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 8)
+                            .background(Color.blue.opacity(0.1))
+                            .foregroundColor(.blue)
+                            .cornerRadius(6)
+                        }
+                        
+                        Button(action: shareFile) {
+                            HStack {
+                                Image(systemName: "square.and.arrow.up")
+                                Text("Share")
+                            }
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 8)
+                            .background(Color.green.opacity(0.1))
+                            .foregroundColor(.green)
+                            .cornerRadius(6)
+                        }
+                        
+                        Spacer()
+                    }
+                }
+                
+                // Related Project Section (if applicable)
+                if let projectId = file.projectId {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("Related Project")
+                            .font(.headline)
+                            .fontWeight(.semibold)
+                        
+                        HStack {
+                            Image(systemName: "folder")
+                                .foregroundColor(.blue)
+                                .font(.title2)
+                            
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Project ID: \(projectId.uuidString.prefix(8))...")
+                                    .font(.subheadline)
+                                    .fontWeight(.medium)
+                                
+                                Text("Click to view project details")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                            
+                            Spacer()
+                            
+                            Button("View") {
+                                // Navigate to project details
+                            }
+                            .buttonStyle(.bordered)
+                        }
+                        .padding()
+                        .background(Color.gray.opacity(0.05))
+                        .cornerRadius(8)
+                    }
                 }
             }
-            
-            if let creatorId = item.creator {
-                Task {
-                    let profiles = await SBTableManager<Profile>.fetchWithReference(idName: "id", id: creatorId)
-                    creator = profiles.first
-                }
-            }
-            
-            if let projectId = item.projectId {
-                Task {
-                    let projects = await SBTableManager<Project>.fetchWithReference(idName: "id", id: projectId)
-                    project = projects.first
-                }
-            }
+            .padding()
         }
     }
     
-    private var fileTypeDescription: String {
-        if item.isImage { return "Image File" }
-        if item.isVideo { return "Video File" }
-        if item.isAudio { return "Audio File" }
-        if item.isDocument { return "Document" }
-        if item.isCode { return "Source Code" }
-        if item.isArchive { return "Archive" }
-        return "Unknown File Type"
+    private func downloadFile() {
+        // Implement file download functionality
+        print("Downloading file: \(file.name)")
+    }
+    
+    private func shareFile() {
+        // Implement file sharing functionality
+        print("Sharing file: \(file.name)")
     }
 }
 
@@ -123,26 +159,32 @@ struct InfoRow: View {
     var body: some View {
         HStack {
             Text(label)
+                .font(.subheadline)
                 .fontWeight(.medium)
-                .frame(width: 80, alignment: .leading)
-            Text(value)
                 .foregroundColor(.secondary)
+                .frame(width: 80, alignment: .leading)
+            
+            Text(value)
+                .font(.subheadline)
+                .foregroundColor(.primary)
+            
             Spacer()
         }
     }
 }
 
 #Preview {
-    FileStorageDetail(item: FileStorage(
-        id: UUID(),
-        createdAt: Date(),
-        creator: nil,
-        name: "example.js",
-        path: "projects/123/example.js",
-        size: 1024,
-        mimeType: "application/javascript",
-        bucketName: "project-files",
-        userId: nil,
-        projectId: nil
-    ))
+    FileStorageDetail(
+        file: FileStorage(
+            id: UUID(),
+            createdAt: Date(),
+            name: "example.js",
+            path: "projects/123/example.js",
+            size: 1024,
+            mimeType: "application/javascript",
+            bucketName: "project-files",
+            userId: nil,
+            projectId: UUID()
+        )
+    )
 }

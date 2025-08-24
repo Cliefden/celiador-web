@@ -15,13 +15,19 @@ export default function HomePage() {
   const router = useRouter();
 
   useEffect(() => {
+    console.log('HomePage: Auth state changed', { user: !!user, isLoading });
+    
     // If user is authenticated, redirect to dashboard
     if (!isLoading && user) {
+      console.log('HomePage: Redirecting to dashboard');
       router.push('/dashboard');
     }
   }, [user, isLoading, router]);
 
-  // Show loading state while checking authentication
+  // Debug: show current state
+  console.log('HomePage render: isLoading:', isLoading, 'user:', !!user);
+
+  // Show loading state while checking authentication (with timeout)
   if (isLoading) {
     return (
       <div className="min-h-screen bg-white flex items-center justify-center">
@@ -30,14 +36,24 @@ export default function HomePage() {
             <span className="text-white font-bold text-lg">B</span>
           </div>
           <p className="text-gray-600">Loading...</p>
+          <p className="text-xs text-gray-400 mt-2">Checking authentication...</p>
         </div>
       </div>
     );
   }
 
-  // Don't render landing page if user is authenticated
+  // If user is authenticated, show redirect message
   if (user) {
-    return null;
+    return (
+      <div className="min-h-screen bg-white flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-12 h-12 bg-gradient-to-br from-blue-600 to-purple-600 rounded-xl flex items-center justify-center mx-auto mb-4">
+            <span className="text-white font-bold text-lg">B</span>
+          </div>
+          <p className="text-gray-600">Redirecting to dashboard...</p>
+        </div>
+      </div>
+    );
   }
 
   return (

@@ -1,9 +1,9 @@
 import SwiftUI
-import Supabasable
+import UniformTypeIdentifiers
 import OptionalHelpers
 
 struct FileStorageAddOrEdit: View {
-    var itemToEdit: FileStorage?
+    let itemToEdit: FileStorage?
     @Environment(\.dismiss) private var dismiss
     
     @State private var name: String = ""
@@ -13,9 +13,33 @@ struct FileStorageAddOrEdit: View {
     @State private var selectedProject: Project?
     @State private var projects: [Project] = []
     @State private var isUploading = false
+    @State private var selectedFileURL: URL?
+    @State private var showingFilePicker = false
     
     var body: some View {
-        NavigationView {
+        VStack {
+            // Header
+            HStack {
+                Text(itemToEdit == nil ? "Add File" : "Edit File")
+                    .font(.headline)
+                    .fontWeight(.semibold)
+                
+                Spacer()
+                
+                Button("Cancel") {
+                    dismiss()
+                }
+                .buttonStyle(.bordered)
+                
+                Button("Save") {
+                    saveFile()
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(name.isEmpty || path.isEmpty || isUploading)
+            }
+            .padding()
+            
+            // Form content
             Form {
                 Section("File Information") {
                     TextField("File Name", text: $name)
@@ -28,7 +52,7 @@ struct FileStorageAddOrEdit: View {
                     Picker("Project", selection: $selectedProject) {
                         Text("No Project").tag(nil as Project?)
                         ForEach(projects, id: \.id) { project in
-                            Text(project.displayName).tag(project as Project?)
+                            Text(project.name ?? "Unnamed Project").tag(project as Project?)
                         }
                     }
                 }
@@ -37,10 +61,22 @@ struct FileStorageAddOrEdit: View {
                     Button(action: selectFile) {
                         HStack {
                             Image(systemName: "doc.badge.plus")
-                            Text("Select File to Upload")
+                            Text(selectedFileURL != nil ? "File Selected: \(selectedFileURL?.lastPathComponent ?? "")" : "Select File to Upload")
                         }
                     }
                     .disabled(isUploading)
+                    
+                    if let selectedFileURL = selectedFileURL {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Selected File:")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            Text(selectedFileURL.lastPathComponent)
+                                .font(.caption)
+                                .foregroundColor(.primary)
+                        }
+                        .padding(.vertical, 4)
+                    }
                     
                     if isUploading {
                         HStack {
@@ -52,25 +88,26 @@ struct FileStorageAddOrEdit: View {
                     }
                 }
             }
-            .navigationTitle(itemToEdit == nil ? "Add File" : "Edit File")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") {
-                        dismiss()
-                    }
-                }
-                
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") {
-                        saveFile()
-                    }
-                    .disabled(name.isEmpty || path.isEmpty)
-                }
-            }
         }
         .onAppear {
             loadData()
+        }
+        .fileImporter(
+            isPresented: $showingFilePicker,
+            allowedContentTypes: [.data],
+            allowsMultipleSelection: false
+        ) { result in
+            switch result {
+            case .success(let urls):
+                if let url = urls.first {
+                    selectedFileURL = url
+                    name = url.lastPathComponent
+                    path = "\(selectedProject?.id.uW.uuidString ?? "unknown")/\(url.lastPathComponent)"
+                    mimeType = getMimeType(for: url)
+                }
+            case .failure(let error):
+                print("File selection failed: \(error)")
+            }
         }
     }
     
@@ -78,7 +115,7 @@ struct FileStorageAddOrEdit: View {
         if let item = itemToEdit {
             name = item.name
             path = item.path
-            mimeType = item.mimeType
+            mimeType = item.mimeType ?? ""
             bucketName = item.bucketName
         }
         
@@ -88,66 +125,95 @@ struct FileStorageAddOrEdit: View {
     }
     
     private func loadProjects() async {
-        // Load projects for the picker
-        // This would need to be implemented based on your Supabase setup
-    }
-    
-    private func selectFile() {
-        let panel = NSOpenPanel()
-        panel.allowsMultipleSelection = false
-        panel.canChooseDirectories = false
-        panel.canChooseFiles = true
-        panel.allowedContentTypes = [.data]
+        // Fetch projects from Supabase
+        guard let url = URL(string: "\(SupabaseConfig.url)/rest/v1/projects?select=*") else {
+            print("Invalid URL")
+            return
+        }
         
-        if panel.runModal() == .OK {
-            guard let url = panel.url else { return }
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.setValue("Bearer \(Secrets.adminAPIKey)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("*", forHTTPHeaderField: "Prefer")
+        request.setValue("return=representation", forHTTPHeaderField: "Prefer")
+        
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
             
-            name = url.lastPathComponent
-            path = "projects/\(selectedProject?.id.uW ?? UUID())/\(name)"
-            mimeType = url.mimeType ?? "application/octet-stream"
+            guard let httpResponse = response as? HTTPURLResponse else {
+                print("Invalid response type")
+                return
+            }
             
-            uploadFile(from: url)
+            print("Response status: \(httpResponse.statusCode)")
+            print("Response headers: \(httpResponse.allHeaderFields)")
+            
+            if httpResponse.statusCode == 200 {
+                do {
+                    let projects = try JSONDecoder().decode([Project].self, from: data)
+                    await MainActor.run {
+                        self.projects = projects
+                        print("Loaded \(projects.count) projects")
+                    }
+                } catch {
+                    print("Failed to decode projects: \(error)")
+                    if let responseString = String(data: data, encoding: .utf8) {
+                        print("Response data: \(responseString)")
+                    }
+                }
+            } else {
+                print("HTTP Error: \(httpResponse.statusCode)")
+                if let responseString = String(data: data, encoding: .utf8) {
+                    print("Error response: \(responseString)")
+                }
+            }
+        } catch {
+            print("Failed to fetch projects: \(error)")
         }
     }
     
-    private func uploadFile(from url: URL) {
+    private func selectFile() {
+        showingFilePicker = true
+    }
+    
+    private func uploadFile(from url: URL) async -> FileStorage? {
+        do {
+            let uploadedFile = await FileStorageManager.shared.uploadFile(
+                fileURL: url,
+                name: name,
+                path: path,
+                projectId: selectedProject?.id
+            )
+            return uploadedFile
+        } catch {
+            print("Error uploading file: \(error)")
+            return nil
+        }
+    }
+    
+    private func saveFile() {
+        guard let selectedFileURL = selectedFileURL else {
+            // Handle case where no file is selected
+            return
+        }
+        
         isUploading = true
         
         Task {
-            do {
-                let fileData = try Data(contentsOf: url)
-                let uploadedFile = await SBTableManager<FileStorage>.uploadFile(
-                    fileData,
-                    fileName: name,
-                    projectId: selectedProject?.id.uW ?? UUID(),
-                    userId: UUID() // This should be the current user's ID
-                )
-                
-                await MainActor.run {
-                    isUploading = false
-                    if uploadedFile != nil {
-                        dismiss()
-                    }
-                }
-            } catch {
-                await MainActor.run {
-                    isUploading = false
-                    // Handle error
+            let uploadedFile = await uploadFile(from: selectedFileURL)
+            
+            await MainActor.run {
+                isUploading = false
+                if uploadedFile != nil {
+                    dismiss()
                 }
             }
         }
     }
     
-    private func saveFile() {
-        // Save the file metadata
-        // This would need to be implemented based on your Supabase setup
-        dismiss()
-    }
-}
-
-extension URL {
-    var mimeType: String? {
-        let pathExtension = self.pathExtension.lowercased()
+    private func getMimeType(for url: URL) -> String {
+        let pathExtension = url.pathExtension.lowercased()
         
         let mimeTypes: [String: String] = [
             "jpg": "image/jpeg",
@@ -167,10 +233,11 @@ extension URL {
             "mp3": "audio/mpeg"
         ]
         
-        return mimeTypes[pathExtension]
+        return mimeTypes[pathExtension] ?? "application/octet-stream"
     }
 }
 
 #Preview {
     FileStorageAddOrEdit(itemToEdit: nil)
 }
+

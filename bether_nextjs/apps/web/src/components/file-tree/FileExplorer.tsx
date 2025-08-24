@@ -44,14 +44,14 @@ interface FileNode {
 }
 
 interface FileExplorerProps {
-  files: FileNode[];
-  onFileSelect: (file: FileNode) => void;
+  files?: FileNode[];
+  projectId?: string;
+  onFileSelect: (file: FileNode | string) => void;
   onFileEdit?: (file: FileNode) => void;
   onFileDelete?: (file: FileNode) => void;
   onFileUpload?: (file: File) => void;
   onFileDownload?: (file: FileNode) => void;
   selectedFile?: string;
-  projectId: string;
   className?: string;
 }
 
@@ -70,8 +70,12 @@ export function FileExplorer({
   
   // Gentle debugging
   useEffect(() => {
-    console.log('[FileExplorer] Received files:', files);
+    console.log('[FileExplorer] Received files:', files?.length || 0, 'files');
     console.log('[FileExplorer] Selected file:', selectedFile);
+    console.log('[FileExplorer] Files array is valid:', Array.isArray(files));
+    if (files && files.length > 0) {
+      console.log('[FileExplorer] Sample file:', files[0]);
+    }
   }, [files, selectedFile]);
   const [searchTerm, setSearchTerm] = useState('');
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
@@ -322,8 +326,16 @@ export function FileExplorer({
 }
 
 // Helper functions
-function filterFiles(files: FileNode[], searchTerm: string, showHidden: boolean): FileNode[] {
+function filterFiles(files: FileNode[] | null | undefined, searchTerm: string, showHidden: boolean): FileNode[] {
+  if (!files || !Array.isArray(files)) {
+    return [];
+  }
+
   const filterRecursive = (nodes: FileNode[]): FileNode[] => {
+    if (!nodes || !Array.isArray(nodes)) {
+      return [];
+    }
+    
     return nodes
       .filter(node => {
         // Filter hidden files
@@ -356,8 +368,16 @@ function filterFiles(files: FileNode[], searchTerm: string, showHidden: boolean)
   return filterRecursive(files);
 }
 
-function sortFiles(files: FileNode[], sortBy: string, sortOrder: 'asc' | 'desc'): FileNode[] {
+function sortFiles(files: FileNode[] | null | undefined, sortBy: string, sortOrder: 'asc' | 'desc'): FileNode[] {
+  if (!files || !Array.isArray(files)) {
+    return [];
+  }
+
   const sortRecursive = (nodes: FileNode[]): FileNode[] => {
+    if (!nodes || !Array.isArray(nodes)) {
+      return [];
+    }
+    
     return nodes
       .map(node => ({
         ...node,

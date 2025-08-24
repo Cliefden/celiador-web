@@ -29,15 +29,9 @@ struct SideBar: View {
                 )
             }
             
-            // File Storage
+            // File Storage - using custom FileBrowser instead of NamedEntityList
             NavigationLink("Project Files") {
                 FileBrowser()
-            }
-            NavigationLink("File Storage") {
-                NamedEntityList(
-                    detailView: { AnyView(FileStorageDetail(item: $0)) },
-                    editView: { AnyView(FileStorageAddOrEdit(itemToEdit: $0)) }
-                )
             }
             
             // Conversation-related tables
