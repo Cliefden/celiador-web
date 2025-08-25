@@ -2,7 +2,7 @@
 import { z } from 'zod';
 
 // Job types
-export const JobType = z.enum(['SCAFFOLD', 'EDIT', 'TEST', 'DEPLOY']);
+export const JobType = z.enum(['SCAFFOLD', 'EDIT', 'TEST', 'DEPLOY', 'AI_ACTION']);
 export type JobType = z.infer<typeof JobType>;
 
 export const JobStatus = z.enum(['PENDING', 'RUNNING', 'COMPLETED', 'FAILED', 'CANCELLED']);
@@ -21,7 +21,8 @@ export const JobData = z.object({
     owner: z.string(),
     name: z.string()
   }),
-  env: z.record(z.string()).optional()
+  env: z.record(z.string()).optional(),
+  metadata: z.any().optional() // For AI_ACTION jobs and other custom data
 });
 
 export type JobData = z.infer<typeof JobData>;

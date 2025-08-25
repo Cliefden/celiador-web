@@ -16,8 +16,6 @@ import {
   FileImage,
   FileVideo,
   FileAudio,
-  FilePdf,
-  FileZip,
   File,
   X,
   Maximize2,
@@ -155,11 +153,11 @@ export function FileEditor({
       case 'wav':
         return <FileAudio className="w-5 h-5 text-green-500" />;
       case 'pdf':
-        return <FilePdf className="w-5 h-5 text-red-500" />;
+        return <File className="w-5 h-5 text-red-500" />;
       case 'zip':
       case 'tar':
       case 'gz':
-        return <FileZip className="w-5 h-5 text-orange-500" />;
+        return <File className="w-5 h-5 text-orange-500" />;
       default:
         return <File className="w-5 h-5 text-gray-500" />;
     }

@@ -9,16 +9,17 @@ export const previewRouter = Router();
  */
 previewRouter.post('/start', async (req, res) => {
   try {
-    const { projectId, name, type = 'nextjs', rootPath } = req.body;
+    const { projectId, userId, name, type = 'nextjs', rootPath } = req.body;
 
-    if (!projectId || !name) {
+    if (!projectId || !userId || !name) {
       return res.status(400).json({ 
-        error: 'Missing required fields: projectId, name' 
+        error: 'Missing required fields: projectId, userId, name' 
       });
     }
 
     const projectConfig: ProjectConfig = {
       id: projectId,
+      userId,
       name,
       type,
       rootPath: rootPath || '.'
@@ -31,9 +32,12 @@ previewRouter.post('/start', async (req, res) => {
       preview: {
         id: instance.id,
         projectId: instance.projectId,
+        userId: instance.userId,
         url: instance.url,
         port: instance.port,
         status: instance.status,
+        localPath: instance.localPath,
+        syncResult: instance.syncResult,
         startTime: instance.startTime
       }
     });
@@ -89,9 +93,12 @@ previewRouter.get('/:instanceId/status', (req, res) => {
       preview: {
         id: instance.id,
         projectId: instance.projectId,
+        userId: instance.userId,
         url: instance.url,
         port: instance.port,
         status: instance.status,
+        localPath: instance.localPath,
+        syncResult: instance.syncResult,
         startTime: instance.startTime,
         lastAccessed: instance.lastAccessed
       }
@@ -125,9 +132,11 @@ previewRouter.get('/list', (req, res) => {
       previews: instances.map(instance => ({
         id: instance.id,
         projectId: instance.projectId,
+        userId: instance.userId,
         url: instance.url,
         port: instance.port,
         status: instance.status,
+        localPath: instance.localPath,
         startTime: instance.startTime,
         lastAccessed: instance.lastAccessed
       }))
@@ -162,8 +171,9 @@ previewRouter.post('/:instanceId/restart', async (req, res) => {
     // Start a new instance with the same project config
     const projectConfig: ProjectConfig = {
       id: instance.projectId,
+      userId: instance.userId,
       name: `Project ${instance.projectId}`,
-      type: 'nextjs', // TODO: Store and retrieve actual project type
+      type: 'nextjs', // Will be auto-detected
       rootPath: '.'
     };
 
@@ -174,9 +184,12 @@ previewRouter.post('/:instanceId/restart', async (req, res) => {
       preview: {
         id: newInstance.id,
         projectId: newInstance.projectId,
+        userId: newInstance.userId,
         url: newInstance.url,
         port: newInstance.port,
         status: newInstance.status,
+        localPath: newInstance.localPath,
+        syncResult: newInstance.syncResult,
         startTime: newInstance.startTime
       }
     });

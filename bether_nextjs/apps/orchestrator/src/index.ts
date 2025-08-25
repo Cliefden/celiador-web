@@ -20,6 +20,63 @@ const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || 'placeholder
 const supabase = createClient(supabaseUrl, supabaseAnonKey);
 const supabaseService = createClient(supabaseUrl, supabaseServiceKey);
 
+/**
+ * Update files in the preview temp directory for real-time sync
+ */
+async function updatePreviewTempFile(
+  projectId: string, 
+  userId: string, 
+  filePath: string, 
+  content: string | null, 
+  operation: 'create' | 'update' | 'delete'
+) {
+  try {
+    const previewTempPath = `/tmp/bether-previews/${userId}-${projectId}`;
+    const fullFilePath = path.join(previewTempPath, filePath);
+    
+    // Check if preview temp directory exists
+    const fs = await import('fs/promises');
+    try {
+      await fs.access(previewTempPath);
+    } catch {
+      // Preview temp directory doesn't exist, skip
+      console.log(`[orchestrator] Preview temp directory not found: ${previewTempPath} - skipping real-time sync`);
+      return;
+    }
+    
+    switch (operation) {
+      case 'create':
+      case 'update':
+        if (!content) {
+          console.warn(`[orchestrator] No content provided for ${operation} operation on ${filePath}`);
+          return;
+        }
+        
+        // Ensure directory exists for the file
+        const fileDir = path.dirname(fullFilePath);
+        await fs.mkdir(fileDir, { recursive: true });
+        
+        // Write the file
+        await fs.writeFile(fullFilePath, content, 'utf8');
+        console.log(`[orchestrator] Real-time sync: ${operation}d file ${filePath} in preview temp directory`);
+        break;
+        
+      case 'delete':
+        try {
+          await fs.unlink(fullFilePath);
+          console.log(`[orchestrator] Real-time sync: deleted file ${filePath} from preview temp directory`);
+        } catch (error) {
+          // File might not exist, that's ok
+          console.log(`[orchestrator] File ${filePath} not found in preview temp directory for deletion (this is ok)`);
+        }
+        break;
+    }
+  } catch (error) {
+    // Don't fail the main operation if preview sync fails
+    console.warn(`[orchestrator] Failed to sync ${filePath} to preview temp directory:`, error instanceof Error ? error.message : error);
+  }
+}
+
 // Supabase database service
 const db = {
   getProjectsByUserId: async (userId: string) => {
@@ -253,6 +310,49 @@ const authenticateUser = async (req: express.Request, res: express.Response, nex
 // Health check
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
+// Test endpoint for dual-write functionality (no auth required)
+app.put('/test/files/save', async (req, res) => {
+  try {
+    const { projectId, userId, filePath, content } = req.body;
+
+    console.log(`[orchestrator] TEST: Saving file ${filePath} for project ${projectId}`);
+    const storageService = new FileStorageService();
+    
+    // Dual-write: Save to both Supabase Storage and preview temp directory
+    await storageService.saveFile(projectId, userId, filePath, content);
+    await updatePreviewTempFile(projectId, userId, filePath, content, 'update');
+    
+    console.log(`[orchestrator] TEST: File content saved successfully to both locations`);
+    res.json({ success: true, message: 'File saved successfully (TEST)' });
+  } catch (error) {
+    console.error('TEST: Failed to save file:', error);
+    res.status(500).json({ error: 'Failed to save file (TEST)' });
+  }
+});
+
+// Test endpoint for file fetching (no auth required) 
+app.get('/test/files/:projectId/:userId/*', async (req, res) => {
+  try {
+    const { projectId, userId } = req.params;
+    const filePath = req.params[0];
+
+    console.log(`[orchestrator] TEST: Getting file ${filePath} for project ${projectId}, user ${userId}`);
+    const storageService = new FileStorageService();
+    const file = await storageService.getFile(projectId, userId, filePath);
+    
+    if (!file) {
+      console.log(`[orchestrator] TEST: File ${filePath} not found`);
+      return res.status(404).json({ error: 'File not found (TEST)' });
+    }
+    
+    console.log(`[orchestrator] TEST: File content retrieved successfully, size: ${file.content.length} bytes`);
+    res.json({ file });
+  } catch (error) {
+    console.error('TEST: Failed to get file:', error);
+    res.status(500).json({ error: 'Failed to get file (TEST)' });
+  }
 });
 
 // Authentication endpoints
@@ -708,9 +808,12 @@ app.put('/projects/:id/files/save', authenticateUser, async (req, res) => {
 
     console.log(`[orchestrator] Saving file content for project ${id}, file ${filePath}, user ${user.id}`);
     const storageService = new FileStorageService();
-    await storageService.saveFile(id, user.id, filePath, content);
     
-    console.log(`[orchestrator] File content saved successfully`);
+    // Dual-write: Save to both Supabase Storage and preview temp directory
+    await storageService.saveFile(id, user.id, filePath, content);
+    await updatePreviewTempFile(id, user.id, filePath, content, 'update');
+    
+    console.log(`[orchestrator] File content saved successfully to both Supabase Storage and preview temp directory`);
     res.json({ success: true, message: 'File saved successfully' });
   } catch (error) {
     console.error('Failed to save file:', error);
@@ -746,9 +849,12 @@ app.post('/projects/:id/files/create', authenticateUser, async (req, res) => {
       // In Supabase Storage, directories are created implicitly when you save a file
       // Create a .gitkeep file to ensure the directory exists
       await storageService.saveFile(id, user.id, `${filePath}/.gitkeep`, '');
+      await updatePreviewTempFile(id, user.id, `${filePath}/.gitkeep`, '', 'create');
     } else {
       console.log(`[orchestrator] Creating file for project ${id}, path ${filePath}, user ${user.id}`);
+      // Dual-write: Save to both Supabase Storage and preview temp directory
       await storageService.saveFile(id, user.id, filePath, content);
+      await updatePreviewTempFile(id, user.id, filePath, content, 'create');
     }
     
     console.log(`[orchestrator] ${type === 'directory' ? 'Directory' : 'File'} created successfully`);
@@ -1108,6 +1214,7 @@ app.post('/projects/:id/preview/start', authenticateUser, async (req, res) => {
       },
       body: JSON.stringify({
         projectId: id,
+        userId: user.id,
         name: name || project.name,
         type: type
       })

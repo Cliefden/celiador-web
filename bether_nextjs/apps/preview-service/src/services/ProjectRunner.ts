@@ -2,9 +2,11 @@ import { spawn, ChildProcess } from 'child_process';
 import { promises as fs } from 'fs';
 import path from 'path';
 import { portManager } from './PortManager';
+import { fileSyncManager, SyncResult } from './FileSyncManager';
 
 export interface ProjectConfig {
   id: string;
+  userId: string;
   name: string;
   type: 'nextjs' | 'react' | 'vue' | 'static';
   rootPath: string;
@@ -13,10 +15,13 @@ export interface ProjectConfig {
 export interface PreviewInstance {
   id: string;
   projectId: string;
+  userId: string;
   port: number;
   url: string;
-  status: 'starting' | 'running' | 'error' | 'stopped';
+  status: 'syncing' | 'starting' | 'running' | 'error' | 'stopped';
   process?: ChildProcess;
+  localPath?: string;
+  syncResult?: SyncResult;
   startTime: Date;
   lastAccessed: Date;
 }
@@ -39,9 +44,10 @@ export class ProjectRunner {
     const instance: PreviewInstance = {
       id: instanceId,
       projectId: projectConfig.id,
+      userId: projectConfig.userId,
       port,
       url: `http://localhost:${port}`,
-      status: 'starting',
+      status: 'syncing',
       startTime: new Date(),
       lastAccessed: new Date()
     };
@@ -49,14 +55,44 @@ export class ProjectRunner {
     this.instances.set(instanceId, instance);
 
     try {
-      // Ensure the project directory exists
-      const projectDir = path.join(this.basePreviewDir, projectConfig.id);
-      await fs.mkdir(projectDir, { recursive: true });
+      console.log(`[ProjectRunner] Starting preview for ${projectConfig.name} - syncing files...`);
+      
+      // Sync project files from Supabase Storage to local directory
+      const syncResult = await fileSyncManager.syncProjectToLocal(
+        projectConfig.id, 
+        projectConfig.userId,
+        { autoInstallDeps: true, cleanFirst: true }
+      );
+
+      instance.syncResult = syncResult;
+      instance.localPath = syncResult.localPath;
+
+      if (!syncResult.success) {
+        instance.status = 'error';
+        portManager.releasePort(port);
+        const errorMsg = `File sync failed: ${syncResult.errors.join(', ')}`;
+        console.error(`[ProjectRunner] ${errorMsg}`);
+        throw new Error(errorMsg);
+      }
+
+      console.log(`[ProjectRunner] Files synced successfully. Downloaded ${syncResult.filesDownloaded} files to ${syncResult.localPath}`);
+      
+      // Update status and start the development server
+      instance.status = 'starting';
+      
+      // Detect project type from synced files if not specified
+      const detectedType = await this.detectProjectType(syncResult.localPath);
+      const projectType = projectConfig.type || detectedType;
+
+      console.log(`[ProjectRunner] Detected project type: ${projectType}`);
 
       // Start the appropriate development server
-      const process = await this.spawnDevServer(projectConfig, projectDir, port);
+      const devProcess = await this.spawnDevServer({
+        ...projectConfig,
+        type: projectType
+      }, syncResult.localPath, port);
       
-      instance.process = process;
+      instance.process = devProcess;
       instance.status = 'running';
 
       // Setup process event handlers
@@ -95,6 +131,16 @@ export class ProjectRunner {
     // Kill any remaining process on the port
     await portManager.killProcessOnPort(instance.port);
     portManager.releasePort(instance.port);
+
+    // Clean up local project files
+    if (instance.localPath) {
+      try {
+        await fileSyncManager.removeProjectSync(instance.projectId);
+        console.log(`[ProjectRunner] Cleaned up local files for ${instanceId}`);
+      } catch (error) {
+        console.error(`[ProjectRunner] Failed to clean up local files for ${instanceId}:`, error);
+      }
+    }
 
     instance.status = 'stopped';
     this.instances.delete(instanceId);
@@ -162,7 +208,7 @@ export class ProjectRunner {
 
     console.log(`[ProjectRunner] Spawning: ${command} ${args.join(' ')} in ${projectDir}`);
 
-    const process = spawn(command, args, {
+    const childProcess = spawn(command, args, {
       cwd: projectDir,
       env: { 
         ...process.env, 
@@ -172,7 +218,7 @@ export class ProjectRunner {
       stdio: ['ignore', 'pipe', 'pipe']
     });
 
-    return process;
+    return childProcess;
   }
 
   /**
@@ -214,6 +260,65 @@ export class ProjectRunner {
         console.log(`[ProjectRunner] Cleaning up stale preview ${instance.id}`);
         await this.stopPreview(instance.id);
       }
+    }
+  }
+
+  /**
+   * Detect project type based on files in directory
+   */
+  private async detectProjectType(projectDir: string): Promise<'nextjs' | 'react' | 'vue' | 'static'> {
+    try {
+      // Check for Next.js
+      const nextConfigExists = await this.fileExists(path.join(projectDir, 'next.config.js')) ||
+                              await this.fileExists(path.join(projectDir, 'next.config.mjs')) ||
+                              await this.fileExists(path.join(projectDir, 'next.config.ts'));
+      
+      if (nextConfigExists) {
+        return 'nextjs';
+      }
+
+      // Check package.json for framework dependencies
+      const packageJsonPath = path.join(projectDir, 'package.json');
+      if (await this.fileExists(packageJsonPath)) {
+        try {
+          const packageContent = await fs.readFile(packageJsonPath, 'utf8');
+          const packageJson = JSON.parse(packageContent);
+          const dependencies = { ...packageJson.dependencies, ...packageJson.devDependencies };
+
+          if (dependencies.next) {
+            return 'nextjs';
+          } else if (dependencies.vue || dependencies['@vue/cli']) {
+            return 'vue';
+          } else if (dependencies.react || dependencies['create-react-app']) {
+            return 'react';
+          }
+        } catch (error) {
+          console.warn(`[ProjectRunner] Failed to parse package.json: ${error}`);
+        }
+      }
+
+      // Check for index.html (static site)
+      if (await this.fileExists(path.join(projectDir, 'index.html'))) {
+        return 'static';
+      }
+
+      // Default to static
+      return 'static';
+    } catch (error) {
+      console.warn(`[ProjectRunner] Error detecting project type: ${error}`);
+      return 'static';
+    }
+  }
+
+  /**
+   * Check if file exists
+   */
+  private async fileExists(filePath: string): Promise<boolean> {
+    try {
+      await fs.access(filePath);
+      return true;
+    } catch {
+      return false;
     }
   }
 }

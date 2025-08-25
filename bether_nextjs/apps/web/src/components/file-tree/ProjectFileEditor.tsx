@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { FileEditor } from './FileEditor';
 import { supabase } from '../../lib/supabase';
+import { useAuth } from '../../contexts/AuthContext';
 
 interface ProjectFileEditorProps {
   projectId: string;
@@ -17,25 +18,36 @@ export function ProjectFileEditor({
   onClose,
   className 
 }: ProjectFileEditorProps) {
+  const { session, isLoading: authLoading } = useAuth();
   const [fileContent, setFileContent] = useState<string>('');
   const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
     if (!projectId || !filePath) {
+      console.log(`[ProjectFileEditor] Missing required props - projectId: ${projectId}, filePath: ${filePath}`);
+      setIsLoading(false);
+      setFileContent('');
+      return;
+    }
+
+    if (authLoading) {
+      console.log('[ProjectFileEditor] Waiting for authentication to complete...');
       return;
     }
     
     const fetchFileContent = async () => {
       try {
+        console.log(`[ProjectFileEditor] Starting fetch for projectId: ${projectId}, filePath: ${filePath}`);
         setIsLoading(true);
-        const { data: { session } } = await supabase.auth.getSession();
+        
         if (!session) {
-          console.log('[ProjectFileEditor] No session available');
+          console.log('[ProjectFileEditor] No session available from AuthContext');
+          setFileContent('Error: No authentication session available');
           return;
         }
 
         console.log(`[ProjectFileEditor] Fetching content for file: ${filePath}`);
-        const response = await fetch(`http://localhost:4000/projects/${projectId}/files/${encodeURIComponent(filePath)}`, {
+        const response = await fetch(`http://localhost:4000/projects/${projectId}/files/${filePath}`, {
           headers: {
             'Authorization': `Bearer ${session.access_token}`
           }
@@ -46,8 +58,9 @@ export function ProjectFileEditor({
           console.log(`[ProjectFileEditor] File content received, size: ${data.file?.content?.length || 0} bytes`);
           setFileContent(data.file?.content || '');
         } else {
-          console.error(`[ProjectFileEditor] Failed to fetch file content: ${response.status}`);
-          setFileContent('Error loading file content');
+          const errorText = await response.text();
+          console.error(`[ProjectFileEditor] Failed to fetch file content: ${response.status} - ${errorText}`);
+          setFileContent(`Error loading file content: ${response.status} - ${errorText}`);
         }
       } catch (error) {
         console.error('[ProjectFileEditor] Error fetching file content:', error);
@@ -58,12 +71,14 @@ export function ProjectFileEditor({
     };
 
     fetchFileContent();
-  }, [projectId, filePath]);
+  }, [projectId, filePath, session, authLoading]);
 
   const handleSave = async (content: string) => {
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) return;
+      if (!session) {
+        console.error('[ProjectFileEditor] No session available for save operation');
+        throw new Error('No authentication session available');
+      }
 
       console.log(`[ProjectFileEditor] Saving file ${filePath} for project ${projectId}`);
       const response = await fetch(`http://localhost:4000/projects/${projectId}/files/save`, {
@@ -105,7 +120,7 @@ export function ProjectFileEditor({
     URL.revokeObjectURL(url);
   };
 
-  if (isLoading) {
+  if (authLoading || isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>

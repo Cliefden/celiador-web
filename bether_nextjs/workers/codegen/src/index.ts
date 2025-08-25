@@ -1,9 +1,24 @@
 
-import 'dotenv/config';
+import dotenv from 'dotenv';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+// Get __dirname equivalent in ES module
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Load environment variables from the project root
+dotenv.config({ path: path.resolve(__dirname, '../../../.env') });
 import { Worker } from 'bullmq';
 import { tools } from '@mvp/agent-tools';
 import { JobData, EnhancedJobResult as JobResult, JobStatus, FileStorageService, FileData } from '@mvp/shared';
 import { LLMService, CodeGenerationContext } from './llm-service.js';
+
+// Debug environment variables
+console.log('[codegen] Environment check:');
+console.log('[codegen] SUPABASE_URL:', process.env.SUPABASE_URL ? 'present' : 'missing');
+console.log('[codegen] SUPABASE_SERVICE_ROLE_KEY:', process.env.SUPABASE_SERVICE_ROLE_KEY ? 'present' : 'missing');
+console.log('[codegen] Working directory:', process.cwd());
 
 // Redis connection
 const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379';
@@ -355,6 +370,63 @@ async function handleDeployJob(jobData: JobData, result: JobResult) {
   result.metadata = { deployed: false };
 }
 
+/**
+ * Update files in the preview temp directory for real-time sync
+ */
+async function updatePreviewTempFile(
+  projectId: string, 
+  userId: string, 
+  filePath: string, 
+  content: string | null, 
+  operation: 'create' | 'update' | 'delete'
+) {
+  try {
+    const previewTempPath = `/tmp/bether-previews/${userId}-${projectId}`;
+    const fullFilePath = path.join(previewTempPath, filePath);
+    
+    // Check if preview temp directory exists
+    const fsPromises = await import('fs/promises');
+    try {
+      await fsPromises.access(previewTempPath);
+    } catch {
+      // Preview temp directory doesn't exist, skip
+      console.log(`[codegen] Preview temp directory not found: ${previewTempPath} - skipping real-time sync`);
+      return;
+    }
+    
+    switch (operation) {
+      case 'create':
+      case 'update':
+        if (!content) {
+          console.warn(`[codegen] No content provided for ${operation} operation on ${filePath}`);
+          return;
+        }
+        
+        // Ensure directory exists for the file
+        const fileDir = path.dirname(fullFilePath);
+        await fsPromises.mkdir(fileDir, { recursive: true });
+        
+        // Write the file
+        await fsPromises.writeFile(fullFilePath, content, 'utf8');
+        console.log(`[codegen] Real-time sync: ${operation}d file ${filePath} in preview temp directory`);
+        break;
+        
+      case 'delete':
+        try {
+          await fsPromises.unlink(fullFilePath);
+          console.log(`[codegen] Real-time sync: deleted file ${filePath} from preview temp directory`);
+        } catch (error) {
+          // File might not exist, that's ok
+          console.log(`[codegen] File ${filePath} not found in preview temp directory for deletion (this is ok)`);
+        }
+        break;
+    }
+  } catch (error) {
+    // Don't fail the main operation if preview sync fails
+    console.warn(`[codegen] Failed to sync ${filePath} to preview temp directory:`, error instanceof Error ? error.message : error);
+  }
+}
+
 // Handle AI action jobs (AI-driven file operations)
 async function handleAIActionJob(jobData: JobData, result: JobResult) {
   console.log(`[codegen] Processing AI action for project ${jobData.projectId}`);
@@ -380,6 +452,8 @@ async function handleAIActionJob(jobData: JobData, result: JobResult) {
             action.path, 
             action.content
           );
+          // Also update the preview temp directory if it exists
+          await updatePreviewTempFile(jobData.projectId, jobData.userId, action.path, action.content, 'create');
           completedActions.push(`Created file: ${action.path}`);
           break;
           
@@ -390,6 +464,8 @@ async function handleAIActionJob(jobData: JobData, result: JobResult) {
             action.path, 
             action.content
           );
+          // Also update the preview temp directory if it exists
+          await updatePreviewTempFile(jobData.projectId, jobData.userId, action.path, action.content, 'update');
           completedActions.push(`Updated file: ${action.path}`);
           break;
           
@@ -399,6 +475,8 @@ async function handleAIActionJob(jobData: JobData, result: JobResult) {
             jobData.userId, 
             action.path
           );
+          // Also delete from preview temp directory if it exists
+          await updatePreviewTempFile(jobData.projectId, jobData.userId, action.path, null, 'delete');
           completedActions.push(`Deleted file: ${action.path}`);
           break;
           
