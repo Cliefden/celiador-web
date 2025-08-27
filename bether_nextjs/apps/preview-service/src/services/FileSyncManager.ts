@@ -44,7 +44,7 @@ export class FileSyncManager {
     userId: string,
     options: { autoInstallDeps?: boolean; cleanFirst?: boolean } = {}
   ): Promise<SyncResult> {
-    const { autoInstallDeps = true, cleanFirst = true } = options;
+    const { autoInstallDeps = true, cleanFirst = false } = options;
     
     console.log(`[FileSyncManager] Syncing project ${projectId} for user ${userId}`);
     

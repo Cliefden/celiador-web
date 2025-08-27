@@ -75,11 +75,17 @@ export function ProjectFileEditor({
 
   const handleSave = async (content: string) => {
     try {
+      console.log(`[ProjectFileEditor] Save attempt started - session available: ${!!session}`);
+      console.log(`[ProjectFileEditor] Auth loading state: ${authLoading}`);
+      console.log(`[ProjectFileEditor] Project ID: ${projectId}, File Path: ${filePath}`);
+      
       if (!session) {
         console.error('[ProjectFileEditor] No session available for save operation');
+        console.error('[ProjectFileEditor] Session state:', session);
         throw new Error('No authentication session available');
       }
 
+      console.log(`[ProjectFileEditor] Session token length: ${session.access_token.length}`);
       console.log(`[ProjectFileEditor] Saving file ${filePath} for project ${projectId}`);
       const response = await fetch(`http://localhost:4000/projects/${projectId}/files/save`, {
         method: 'PUT',

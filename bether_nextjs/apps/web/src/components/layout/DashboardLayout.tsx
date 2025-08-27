@@ -144,6 +144,48 @@ export function DashboardLayout({ initialUser, onLogout }: DashboardLayoutProps)
     setShowCreateProject(false);
   };
 
+  const handleDeleteProject = async (project: Project) => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        console.error('[dashboard] No session available for delete operation');
+        return;
+      }
+
+      console.log('[dashboard] Deleting project:', project.name);
+      
+      const response = await fetch(`http://localhost:4000/projects/${project.id}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`
+        }
+      });
+
+      if (response.ok) {
+        console.log('[dashboard] Project deleted successfully');
+        
+        // Remove project from state
+        setProjects(prev => prev.filter(p => p.id !== project.id));
+        
+        // If this was the selected project, clear selection
+        if (selectedProject?.id === project.id) {
+          setSelectedProject(null);
+        }
+        
+        // Show success message (optional)
+        // You could add a toast notification here
+        
+      } else {
+        const errorData = await response.text();
+        console.error('[dashboard] Failed to delete project:', response.status, errorData);
+        alert('Failed to delete project. Please try again.');
+      }
+    } catch (error) {
+      console.error('[dashboard] Error deleting project:', error);
+      alert('An error occurred while deleting the project.');
+    }
+  };
+
   const handleSearch = (query: string) => {
     setSearchQuery(query);
     // TODO: Implement search functionality across files and conversations
@@ -238,6 +280,7 @@ export function DashboardLayout({ initialUser, onLogout }: DashboardLayoutProps)
           selectedProject={selectedProject}
           onProjectSelect={handleProjectSelect}
           onCreateProject={handleCreateProject}
+          onDeleteProject={handleDeleteProject}
           user={user}
           onLogout={onLogout}
         />
@@ -263,7 +306,7 @@ export function DashboardLayout({ initialUser, onLogout }: DashboardLayoutProps)
               {/* Activity Stream */}
               <ActivityStream 
                 selectedProject={selectedProject} 
-                className="h-48 overflow-hidden"
+                className="flex-1 min-h-0"
               />
             </>
           ) : (

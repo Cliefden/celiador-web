@@ -58,10 +58,28 @@ export class ProjectRunner {
       console.log(`[ProjectRunner] Starting preview for ${projectConfig.name} - syncing files...`);
       
       // Sync project files from Supabase Storage to local directory
+      // Only clean on first sync - check if directory already exists with recent files
+      const localPath = `/tmp/bether-previews/${projectConfig.userId}-${projectConfig.id}`;
+      let shouldClean = true;
+      
+      try {
+        const fs = await import('fs/promises');
+        const stat = await fs.stat(localPath);
+        const fiveMinutesAgo = Date.now() - (5 * 60 * 1000);
+        
+        // If directory exists and was modified recently, don't clean
+        if (stat.mtime.getTime() > fiveMinutesAgo) {
+          shouldClean = false;
+          console.log(`[ProjectRunner] Directory recently modified, preserving existing files`);
+        }
+      } catch {
+        // Directory doesn't exist, clean sync is appropriate
+      }
+      
       const syncResult = await fileSyncManager.syncProjectToLocal(
         projectConfig.id, 
         projectConfig.userId,
-        { autoInstallDeps: true, cleanFirst: true }
+        { autoInstallDeps: true, cleanFirst: shouldClean }
       );
 
       instance.syncResult = syncResult;

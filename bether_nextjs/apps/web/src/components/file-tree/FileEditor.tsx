@@ -79,7 +79,15 @@ export function FileEditor({
   };
 
   const handleSave = async () => {
-    if (!onSave || !hasChanges) return;
+    console.log('[FileEditor] handleSave called');
+    console.log('[FileEditor] onSave function available:', !!onSave);
+    console.log('[FileEditor] hasChanges:', hasChanges);
+    console.log('[FileEditor] isSaving:', isSaving);
+    
+    if (!onSave || !hasChanges) {
+      console.log('[FileEditor] Save aborted - no onSave function or no changes');
+      return;
+    }
     
     try {
       console.log('[FileEditor] Starting save operation...');

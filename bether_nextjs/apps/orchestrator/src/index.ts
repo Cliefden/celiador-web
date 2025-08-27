@@ -440,6 +440,8 @@ app.post('/projects', authenticateUser, async (req, res) => {
       return res.status(400).json({ error: 'Name and repository information are required' });
     }
 
+    console.log(`[orchestrator] Creating project with templateKey: ${templateKey}`);
+    
     const project = await db.createProject({
       name,
       templateKey: templateKey || 'next-prisma-supabase',
@@ -448,6 +450,47 @@ app.post('/projects', authenticateUser, async (req, res) => {
       repoName: repo.name,
       userId: user.id
     });
+
+    console.log(`[orchestrator] Project created: ${project.id}, checking if scaffold job needed...`);
+    console.log(`[orchestrator] Template check: templateKey="${templateKey}", condition met: ${templateKey && templateKey !== 'next-prisma-supabase'}`);
+
+    // If a template is provided, automatically enqueue a scaffold job
+    if (templateKey && templateKey !== 'next-prisma-supabase') {
+      try {
+        console.log(`[orchestrator] Auto-enqueueing scaffold job for project ${project.id} with template ${templateKey}`);
+        
+        // Create scaffold job in database
+        const job = await db.createJob({
+          projectId: project.id,
+          userId: user.id,
+          type: 'SCAFFOLD',
+          prompt: `Initialize project with ${templateKey} template`
+        });
+
+        // Enqueue job for processing
+        const jobData = {
+          jobId: job.id,
+          projectId: project.id,
+          userId: user.id,
+          type: 'SCAFFOLD' as const,
+          templateKey: templateKey,
+          repo: repo
+        };
+
+        await jobQueue.add('scaffold-job', jobData, {
+          attempts: 3,
+          backoff: {
+            type: 'exponential',
+            delay: 2000,
+          },
+        });
+
+        console.log(`[orchestrator] Scaffold job ${job.id} enqueued successfully`);
+      } catch (scaffoldError) {
+        console.error('[orchestrator] Failed to enqueue scaffold job:', scaffoldError);
+        // Don't fail project creation if scaffold job fails
+      }
+    }
 
     res.status(201).json(project);
   } catch (error) {
@@ -483,13 +526,34 @@ app.delete('/projects/:id', authenticateUser, async (req, res) => {
     const user = (req as any).user;
     const { id } = req.params;
 
-    const project = await db.deleteProject(id, user.id);
-    
-    if (!project) {
+    console.log(`[orchestrator] Deleting project ${id} and all associated files`);
+
+    // First verify project exists and user owns it
+    const project = await db.getProjectById(id);
+    if (!project || project.userid !== user.id) {
       return res.status(404).json({ error: 'Project not found or access denied' });
     }
 
-    res.json({ message: 'Project deleted successfully' });
+    // Delete all project files from Supabase storage
+    try {
+      const storageService = new FileStorageService();
+      console.log(`[orchestrator] Deleting all files for project ${id}`);
+      await storageService.deleteAllProjectFiles(id, user.id);
+      console.log(`[orchestrator] Files deleted successfully for project ${id}`);
+    } catch (storageError) {
+      console.error(`[orchestrator] Failed to delete project files:`, storageError);
+      // Continue with project deletion even if file cleanup fails
+    }
+
+    // Delete the project record (soft delete)
+    const deletedProject = await db.deleteProject(id, user.id);
+    
+    if (!deletedProject) {
+      return res.status(404).json({ error: 'Project not found or access denied' });
+    }
+
+    console.log(`[orchestrator] Project ${id} deleted successfully`);
+    res.json({ message: 'Project and all files deleted successfully' });
   } catch (error) {
     console.error('Failed to delete project:', error);
     res.status(500).json({ error: 'Failed to delete project' });
@@ -606,8 +670,26 @@ app.get('/projects/:id/jobs', authenticateUser, async (req, res) => {
       return res.status(403).json({ error: 'Access denied' });
     }
 
-    const jobs = await db.getJobsByProjectId(id);
-    res.json(jobs);
+    let jobs = await db.getJobsByProjectId(id);
+    
+    // Filter by type if provided
+    if (req.query.type) {
+      jobs = jobs.filter(job => job.type === req.query.type);
+    }
+    
+    // Filter by status if provided (can be comma-separated)
+    if (req.query.status) {
+      const statuses = (req.query.status as string).split(',');
+      jobs = jobs.filter(job => statuses.includes(job.status));
+    }
+    
+    // If query parameters are provided, return object with jobs array
+    // Otherwise return jobs array directly for backward compatibility
+    if (req.query.type || req.query.status) {
+      res.json({ jobs });
+    } else {
+      res.json(jobs);
+    }
   } catch (error) {
     console.error('Failed to fetch jobs:', error);
     res.status(500).json({ error: 'Failed to fetch jobs' });

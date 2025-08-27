@@ -35,6 +35,27 @@ const worker = new Worker('codegen-jobs', async (job) => {
     metadata: {}
   };
 
+  // Mark job as RUNNING at the start
+  try {
+    const runningResponse = await fetch(`http://localhost:4000/jobs/${jobData.jobId}`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        status: 'RUNNING'
+      })
+    });
+    
+    if (runningResponse.ok) {
+      console.log(`[codegen] Job ${job.id} marked as RUNNING`);
+    } else {
+      console.warn(`[codegen] Failed to mark job as RUNNING: ${runningResponse.status}`);
+    }
+  } catch (error) {
+    console.warn(`[codegen] Failed to update job status to RUNNING:`, error);
+  }
+
   try {
     switch (jobData.type) {
       case 'SCAFFOLD':
@@ -135,25 +156,59 @@ async function handleScaffoldJob(jobData: JobData, result: JobResult) {
   await tools.runCmd('mkdir', ['-p', tempDir]);
   
   try {
-    // Copy template to temp directory
-    const templateDir = `../../packages/templates/${jobData.templateKey}`;
-    console.log(`[codegen] Copying template from: ${templateDir} to: ${tempDir}`);
+    // Download template from Supabase storage
+    console.log(`[codegen] Downloading template '${jobData.templateKey}' from Supabase...`);
     
-    // Check if template directory exists
-    try {
-      const templateStats = await fsPromises.stat(templateDir);
-      console.log(`[codegen] Template directory exists: ${templateStats.isDirectory()}`);
-    } catch (error) {
-      console.error(`[codegen] Template directory not found: ${templateDir}`);
-      throw new Error(`Template directory not found: ${templateDir}`);
+    // Get template file tree from Supabase
+    const templateUserId = 'template-system';
+    const templateFileTree = await storageService.getProjectFileTree(jobData.templateKey, templateUserId);
+    
+    if (!templateFileTree || templateFileTree.length === 0) {
+      throw new Error(`Template '${jobData.templateKey}' not found in Supabase storage`);
     }
     
-    const copyResult = await tools.runCmd('cp', ['-r', `${templateDir}/*`, tempDir]);
-    console.log(`[codegen] Copy result:`, copyResult);
+    console.log(`[codegen] Found ${templateFileTree.length} template items (including directories)`);
     
-    // Check what was copied
+    // Recursively collect all files from the template tree
+    const getAllTemplateFiles = (items) => {
+      const files = [];
+      for (const item of items) {
+        if (item.type === 'file') {
+          files.push(item);
+        } else if (item.type === 'directory' && item.children) {
+          files.push(...getAllTemplateFiles(item.children));
+        }
+      }
+      return files;
+    };
+    
+    const allTemplateFiles = getAllTemplateFiles(templateFileTree);
+    console.log(`[codegen] Found ${allTemplateFiles.length} template files (recursively)`);
+    
+    // Download and write each template file
+    for (const fileItem of allTemplateFiles) {
+      console.log(`[codegen] Downloading template file: ${fileItem.path}`);
+      const fileContent = await storageService.getFile(jobData.templateKey, templateUserId, fileItem.path);
+      
+      if (fileContent) {
+        // Create directory structure if needed
+        const filePath = `${tempDir}/${fileItem.path}`;
+        const dirPath = filePath.substring(0, filePath.lastIndexOf('/'));
+        if (dirPath && dirPath !== tempDir) {
+          await tools.runCmd('mkdir', ['-p', dirPath]);
+        }
+        
+        // Write file content
+        await fsPromises.writeFile(filePath, fileContent.content, 'utf8');
+        console.log(`[codegen] Created file: ${fileItem.path} (${fileContent.content.length} bytes)`);
+      } else {
+        console.warn(`[codegen] Could not download template file: ${fileItem.path}`);
+      }
+    }
+    
+    // Check what was created
     const tempFiles = await fsPromises.readdir(tempDir);
-    console.log(`[codegen] Files in temp directory after copy:`, tempFiles);
+    console.log(`[codegen] Files in temp directory after download:`, tempFiles);
     
     // Initialize git repository
     await tools.runCmd('git', ['init'], { cwd: tempDir });
@@ -197,31 +252,57 @@ async function handleScaffoldJob(jobData: JobData, result: JobResult) {
     // Install dependencies
     await tools.runCmd('pnpm', ['install'], { cwd: tempDir });
     
-    // Read all files and upload to Supabase Storage
+    // Read all files recursively and upload to Supabase Storage
     console.log(`[codegen] Reading files from ${tempDir}`);
     
-    // Use fs.readdir directly to list files in the temp directory
-    const files = await fsPromises.readdir(tempDir, { withFileTypes: true });
-    const fileNames = files
-      .filter(file => file.isFile()) // Only include files, not directories
-      .map(file => file.name);
+    // Recursively get all files from all directories, excluding node_modules
+    const getAllFiles = async (dir: string, baseDir: string = tempDir): Promise<string[]> => {
+      const files = await fsPromises.readdir(dir, { withFileTypes: true });
+      const allFiles: string[] = [];
+      
+      for (const file of files) {
+        const fullPath = path.join(dir, file.name);
+        
+        // Skip node_modules and other common build/cache directories
+        const relativePath = path.relative(baseDir, fullPath);
+        if (relativePath.startsWith('node_modules') || 
+            relativePath.startsWith('.git') || 
+            relativePath.startsWith('.next') ||
+            relativePath.startsWith('dist') ||
+            relativePath.startsWith('build')) {
+          continue;
+        }
+        
+        if (file.isDirectory()) {
+          // Recursively get files from subdirectories
+          const subFiles = await getAllFiles(fullPath, baseDir);
+          allFiles.push(...subFiles);
+        } else {
+          allFiles.push(relativePath);
+        }
+      }
+      
+      return allFiles;
+    };
     
-    console.log(`[codegen] Found ${fileNames.length} files:`, fileNames);
+    const allFilePaths = await getAllFiles(tempDir);
+    console.log(`[codegen] Found ${allFilePaths.length} files (including subdirectories):`, allFilePaths);
     
     const fileData: FileData[] = [];
     
-    for (const file of fileNames) {
-      console.log(`[codegen] Reading file: ${file}`);
-      const contentResult = await tools.readFile(`${tempDir}/${file}`);
+    for (const filePath of allFilePaths) {
+      console.log(`[codegen] Reading file: ${filePath}`);
+      const fullPath = path.join(tempDir, filePath);
+      const contentResult = await tools.readFile(fullPath);
       if (contentResult.content) {
         fileData.push({
-          path: file,
+          path: filePath, // Use relative path for storage
           content: contentResult.content,
           contentType: 'text/plain'
         });
-        console.log(`[codegen] Added file: ${file} (${contentResult.content.length} bytes)`);
+        console.log(`[codegen] Added file: ${filePath} (${contentResult.content.length} bytes)`);
       } else {
-        console.warn(`[codegen] Failed to read file: ${file} - ${contentResult.error}`);
+        console.warn(`[codegen] Failed to read file: ${filePath} - ${contentResult.error}`);
       }
     }
     

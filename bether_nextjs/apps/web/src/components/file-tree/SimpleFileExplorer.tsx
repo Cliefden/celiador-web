@@ -14,7 +14,8 @@ import {
   Plus,
   FolderPlus,
   Trash2,
-  FilePlus
+  FilePlus,
+  Code
 } from 'lucide-react';
 import { Button } from '../ui/button';
 
@@ -37,6 +38,7 @@ interface SimpleFileExplorerProps {
   onDeleteFolder?: (folderPath: string) => void;
   selectedFile?: string;
   className?: string;
+  isScaffolding?: boolean;
 }
 
 export function SimpleFileExplorer({ 
@@ -47,7 +49,8 @@ export function SimpleFileExplorer({
   onDeleteFile,
   onDeleteFolder,
   selectedFile,
-  className = ""
+  className = "",
+  isScaffolding = false
 }: SimpleFileExplorerProps) {
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set(['/']));
 
@@ -125,8 +128,22 @@ export function SimpleFileExplorer({
         {files.length === 0 ? (
           <div className="flex items-center justify-center h-32 text-gray-500">
             <div className="text-center">
-              <Folder className="w-8 h-8 mx-auto mb-2 opacity-50" />
-              <p className="text-sm">No files</p>
+              {isScaffolding ? (
+                <>
+                  <div className="w-8 h-8 mx-auto mb-2 animate-pulse">
+                    <div className="w-full h-full bg-gradient-to-r from-blue-500 to-purple-500 rounded-lg flex items-center justify-center">
+                      <Code className="w-5 h-5 text-white animate-bounce" />
+                    </div>
+                  </div>
+                  <p className="text-sm text-blue-600 font-medium">Creating project files...</p>
+                  <p className="text-xs text-blue-400 mt-1">Files will appear as they are generated</p>
+                </>
+              ) : (
+                <>
+                  <Folder className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                  <p className="text-sm">No files</p>
+                </>
+              )}
             </div>
           </div>
         ) : (

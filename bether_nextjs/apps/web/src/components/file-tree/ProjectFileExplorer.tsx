@@ -29,10 +29,31 @@ export function ProjectFileExplorer({
 }: ProjectFileExplorerProps) {
   const [files, setFiles] = useState<FileNode[]>([]);
   const [loading, setLoading] = useState(false);
+  const [isScaffolding, setIsScaffolding] = useState(false);
 
   useEffect(() => {
     fetchFiles();
+    checkScaffoldingStatus();
   }, [projectId]);
+
+  // Poll for files during scaffolding
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    
+    if (isScaffolding) {
+      console.log('[ProjectFileExplorer] Starting progressive file polling during scaffolding');
+      interval = setInterval(() => {
+        fetchFiles(true); // Silent fetch during polling
+        checkScaffoldingStatus();
+      }, 2000); // Check every 2 seconds
+    }
+    
+    return () => {
+      if (interval) {
+        clearInterval(interval);
+      }
+    };
+  }, [isScaffolding, projectId]);
 
   const handleFileSelect = (file: any) => {
     if (typeof file === 'string') {
@@ -156,23 +177,53 @@ export function ProjectFileExplorer({
     }
   };
 
-  const fetchFiles = async () => {
+  const checkScaffoldingStatus = async () => {
+    if (!projectId) return;
+    
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+
+      // Check for active scaffold jobs
+      const response = await fetch(`http://localhost:4000/projects/${projectId}/jobs?type=SCAFFOLD&status=PENDING,RUNNING`, {
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`
+        }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const hasActiveScaffold = data.jobs && data.jobs.length > 0;
+        setIsScaffolding(hasActiveScaffold);
+        
+        if (hasActiveScaffold) {
+          console.log('[ProjectFileExplorer] Active scaffold job detected - enabling progressive file loading');
+        }
+      }
+    } catch (error) {
+      console.error('[ProjectFileExplorer] Error checking scaffolding status:', error);
+    }
+  };
+
+  const fetchFiles = async (silent = false) => {
     if (!projectId) {
       console.log('[ProjectFileExplorer] No projectId provided');
       return;
     }
     
-    console.log('[ProjectFileExplorer] Fetching files for project:', projectId);
+    if (!silent) {
+      console.log('[ProjectFileExplorer] Fetching files for project:', projectId);
+    }
     
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) {
-        console.log('[ProjectFileExplorer] No session available');
+        if (!silent) console.log('[ProjectFileExplorer] No session available');
         return;
       }
 
-      console.log('[ProjectFileExplorer] Making API request for files...');
+      if (!silent) console.log('[ProjectFileExplorer] Making API request for files...');
       const response = await fetch(`http://localhost:4000/projects/${projectId}/files/tree`, {
         headers: {
           'Authorization': `Bearer ${session.access_token}`
@@ -181,21 +232,31 @@ export function ProjectFileExplorer({
 
       if (response.ok) {
         const data = await response.json();
-        console.log('[ProjectFileExplorer] Received file tree:', data.tree?.length || 0, 'files');
+        const newFileCount = data.tree?.length || 0;
+        const oldFileCount = files.length;
+        
+        if (!silent) {
+          console.log('[ProjectFileExplorer] Received file tree:', newFileCount, 'files');
+        } else if (newFileCount > oldFileCount) {
+          console.log(`[ProjectFileExplorer] Progressive loading: ${newFileCount - oldFileCount} new files added`);
+        }
+        
         setFiles(data.tree || []);
       } else if (response.status === 404) {
-        console.log('[ProjectFileExplorer] No files found (404)');
+        if (!silent) console.log('[ProjectFileExplorer] No files found (404)');
         setFiles([]);
       } else {
-        console.error('[ProjectFileExplorer] Failed to fetch file tree:', response.status);
+        if (!silent) console.error('[ProjectFileExplorer] Failed to fetch file tree:', response.status);
         setFiles([]);
       }
     } catch (error) {
-      console.error('[ProjectFileExplorer] Error fetching files:', error);
+      if (!silent) console.error('[ProjectFileExplorer] Error fetching files:', error);
       setFiles([]);
     } finally {
-      console.log('[ProjectFileExplorer] Finished loading files');
-      setLoading(false);
+      if (!silent) {
+        console.log('[ProjectFileExplorer] Finished loading files');
+        setLoading(false);
+      }
     }
   };
 
@@ -218,6 +279,7 @@ export function ProjectFileExplorer({
       selectedFile={selectedFile}
       projectId={projectId}
       className={className}
+      isScaffolding={isScaffolding}
     />
   );
 }

@@ -79,8 +79,9 @@ export function ProjectView({ project, userId, onProjectDeleted }: ProjectViewPr
   const [fileTree, setFileTree] = useState<FileTreeItem[]>([]);
   const [isLoadingFiles, setIsLoadingFiles] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isScaffolding, setIsScaffolding] = useState(false);
 
-  // Fetch project jobs
+  // Fetch project jobs and monitor for scaffold job completion
   useEffect(() => {
     const fetchJobs = async () => {
       try {
@@ -94,6 +95,29 @@ export function ProjectView({ project, userId, onProjectDeleted }: ProjectViewPr
         });
         if (response.ok) {
           const data = await response.json();
+          
+          // Check if any SCAFFOLD jobs completed since last check
+          const newCompletedScaffoldJobs = data.filter((job: Job) => 
+            job.type === 'SCAFFOLD' && 
+            job.status === 'COMPLETED' &&
+            !jobs.find(prevJob => prevJob.id === job.id && prevJob.status === 'COMPLETED')
+          );
+          
+          // Check if any SCAFFOLD jobs are running/pending
+          const runningScaffoldJobs = data.filter((job: Job) => 
+            job.type === 'SCAFFOLD' && 
+            (job.status === 'PENDING' || job.status === 'RUNNING')
+          );
+          
+          setIsScaffolding(runningScaffoldJobs.length > 0);
+          
+          // If a scaffold job just completed, refresh the file tree
+          if (newCompletedScaffoldJobs.length > 0) {
+            console.log('[ProjectView] Scaffold job completed, refreshing file tree');
+            setIsScaffolding(false);
+            setTimeout(() => fetchFileTree(), 1000); // Small delay to ensure files are uploaded
+          }
+          
           setJobs(data);
         }
       } catch (error) {
@@ -102,7 +126,11 @@ export function ProjectView({ project, userId, onProjectDeleted }: ProjectViewPr
     };
 
     fetchJobs();
-  }, [project.id]);
+    
+    // Poll for job updates every 3 seconds to catch scaffold completions
+    const interval = setInterval(fetchJobs, 3000);
+    return () => clearInterval(interval);
+  }, [project.id, jobs]); // Include jobs in dependency to detect changes
 
   // Delete project function
   const handleDeleteProject = async (projectId: string) => {
@@ -477,17 +505,27 @@ export function ProjectView({ project, userId, onProjectDeleted }: ProjectViewPr
       <div className="flex-1 flex overflow-hidden">
         {/* File Explorer */}
         <div className="w-80 bg-white/70 backdrop-blur-sm border-r border-gray-200/50">
-          <FileExplorer
-            files={fileTree}
-            onFileSelect={handleFileSelect}
-            onFileEdit={(file) => handleFileSelect(file)}
-            onFileDelete={handleFileDelete}
-            onFileUpload={handleFileUpload}
-            onFileDownload={handleFileDownload}
-            selectedFile={selectedFile}
-            projectId={project.id}
-            className="h-full"
-          />
+          {isLoadingFiles ? (
+            <div className="h-full flex items-center justify-center">
+              <div className="text-center">
+                <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2 text-blue-500" />
+                <p className="text-sm text-muted-foreground">Loading files...</p>
+              </div>
+            </div>
+          ) : (
+            <FileExplorer
+              files={fileTree}
+              onFileSelect={handleFileSelect}
+              onFileEdit={(file) => handleFileSelect(file)}
+              onFileDelete={handleFileDelete}
+              onFileUpload={handleFileUpload}
+              onFileDownload={handleFileDownload}
+              selectedFile={selectedFile}
+              projectId={project.id}
+              isScaffolding={isScaffolding}
+              className="h-full"
+            />
+          )}
         </div>
 
         {/* File Editor */}

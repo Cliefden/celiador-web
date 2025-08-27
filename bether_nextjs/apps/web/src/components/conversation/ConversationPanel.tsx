@@ -43,6 +43,21 @@ export function ConversationPanel({
     loading: conversationLoading
   } = useConversation(selectedProject?.id || projectId);
 
+  // Debug logging
+  useEffect(() => {
+    console.log('[ConversationPanel] Props:', {
+      selectedProject: selectedProject?.id,
+      projectId,
+      embedded
+    });
+    console.log('[ConversationPanel] State:', {
+      conversation: conversation?.id,
+      messagesCount: messages.length,
+      isOpen,
+      conversationLoading
+    });
+  }, [selectedProject, projectId, conversation, messages, isOpen, conversationLoading, embedded]);
+
   // Handle panel toggle
   const handleToggle = () => {
     const newIsOpen = !isOpen;
@@ -61,6 +76,10 @@ export function ConversationPanel({
     if (!message.trim() || isLoading) return;
 
     const messageText = message.trim();
+    console.log('[ConversationPanel] Sending message:', messageText);
+    console.log('[ConversationPanel] Current conversation:', conversation?.id);
+    console.log('[ConversationPanel] Project ID:', selectedProject?.id || projectId);
+    
     setMessage('');
     setIsLoading(true);
 
@@ -69,20 +88,25 @@ export function ConversationPanel({
       
       // Create conversation if none exists
       if (!currentConversation) {
+        console.log('[ConversationPanel] Creating new conversation...');
         currentConversation = await createConversation(
           projectId ? `Project Discussion` : 'General Chat'
         );
+        console.log('[ConversationPanel] Created conversation:', currentConversation?.id);
       }
 
       // Send the message
+      console.log('[ConversationPanel] Sending message to conversation:', currentConversation?.id);
+      console.log('[ConversationPanel] About to call sendMessage function...');
       await sendMessage(messageText, 'text', currentConversation);
+      console.log('[ConversationPanel] Message sent successfully');
       
       // Trigger file refresh after sending message (in case AI actions were executed)
       setTimeout(() => {
         onFileOperation?.();
       }, 2000); // Wait 2 seconds for AI actions to complete
     } catch (error) {
-      console.error('Failed to send message:', error);
+      console.error('[ConversationPanel] Failed to send message:', error);
       // TODO: Add toast notification for errors
     } finally {
       setIsLoading(false);

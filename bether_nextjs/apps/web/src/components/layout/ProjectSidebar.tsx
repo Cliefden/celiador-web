@@ -16,7 +16,8 @@ import {
   LogOut,
   Zap,
   FileText,
-  Cpu
+  Cpu,
+  Trash2
 } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Card, CardContent } from '../ui/card';
@@ -51,6 +52,7 @@ interface ProjectSidebarProps {
   selectedProject: Project | null;
   onProjectSelect: (project: Project) => void;
   onCreateProject: () => void;
+  onDeleteProject: (project: Project) => void;
   user: User;
   onLogout: () => void;
 }
@@ -60,6 +62,7 @@ export function ProjectSidebar({
   selectedProject, 
   onProjectSelect, 
   onCreateProject, 
+  onDeleteProject,
   user, 
   onLogout 
 }: ProjectSidebarProps) {
@@ -283,14 +286,30 @@ export function ProjectSidebar({
                         </div>
                         
                         {isSelected && (
-                          <div className="flex space-x-1">
-                            <Button variant="outline" size="sm" className="text-xs flex-1">
-                              <MessageCircle className="w-3 h-3 mr-1" />
-                              Chat
-                            </Button>
-                            <Button variant="outline" size="sm" className="text-xs flex-1">
-                              <FolderOpen className="w-3 h-3 mr-1" />
-                              Files
+                          <div className="space-y-2">
+                            <div className="flex space-x-1">
+                              <Button variant="outline" size="sm" className="text-xs flex-1">
+                                <MessageCircle className="w-3 h-3 mr-1" />
+                                Chat
+                              </Button>
+                              <Button variant="outline" size="sm" className="text-xs flex-1">
+                                <FolderOpen className="w-3 h-3 mr-1" />
+                                Files
+                              </Button>
+                            </div>
+                            <Button 
+                              variant="destructive" 
+                              size="sm" 
+                              className="text-xs w-full"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (window.confirm(`Are you sure you want to delete "${project.name}"? This will permanently delete the project and all its files. This action cannot be undone.`)) {
+                                  onDeleteProject(project);
+                                }
+                              }}
+                            >
+                              <Trash2 className="w-3 h-3 mr-1" />
+                              Delete Project
                             </Button>
                           </div>
                         )}

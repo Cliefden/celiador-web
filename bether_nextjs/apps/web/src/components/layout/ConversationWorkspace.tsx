@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { ConversationPanel } from '../conversation/ConversationPanel';
 import { ProjectFileExplorer } from '../file-tree/ProjectFileExplorer';
 import { ProjectFileEditor } from '../file-tree/ProjectFileEditor';
+import { FullscreenFileEditor } from '../file-tree/FullscreenFileEditor';
 import { PreviewFrame, PreviewDevice } from '../preview/PreviewFrame';
 import { usePreview } from '../../hooks/usePreview';
 import { 
@@ -14,7 +15,8 @@ import {
   PanelLeftOpen,
   Maximize2,
   Minimize2,
-  Monitor
+  Monitor,
+  X
 } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Card } from '../ui/card';
@@ -44,6 +46,8 @@ export function ConversationWorkspace({ selectedProject }: ConversationWorkspace
   const [isMobile, setIsMobile] = useState(false);
   const [fileRefreshKey, setFileRefreshKey] = useState(0);
   const [previewDevice, setPreviewDevice] = useState<PreviewDevice>('desktop');
+  const [fullscreenEditor, setFullscreenEditor] = useState(false);
+  const [previewCollapsed, setPreviewCollapsed] = useState(false);
 
   // Use preview hook
   const { 
@@ -119,12 +123,40 @@ export function ConversationWorkspace({ selectedProject }: ConversationWorkspace
                 key={`mobile-${fileRefreshKey}`}
               />
               {selectedFile && (
-                <div className="flex-1 border-t">
-                  <ProjectFileEditor
-                    projectId={selectedProject?.id || ''}
-                    filePath={selectedFile}
-                    onClose={() => setSelectedFile(null)}
-                  />
+                <div className="flex-1 border-t flex flex-col">
+                  <div className="flex items-center justify-between p-2 border-b bg-muted/30">
+                    <span className="text-sm font-mono text-muted-foreground">
+                      {selectedFile.split('/').pop()}
+                    </span>
+                    <div className="flex items-center space-x-1">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setFullscreenEditor(true)}
+                        className="p-1"
+                        title="Open in fullscreen"
+                      >
+                        <Maximize2 className="w-4 h-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setSelectedFile(null)}
+                        className="p-1"
+                        title="Close editor"
+                      >
+                        <X className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  </div>
+                  <div className="flex-1">
+                    <ProjectFileEditor
+                      projectId={selectedProject?.id || ''}
+                      filePath={selectedFile}
+                      onClose={() => setSelectedFile(null)}
+                      className="h-full"
+                    />
+                  </div>
                 </div>
               )}
             </div>
@@ -189,7 +221,9 @@ export function ConversationWorkspace({ selectedProject }: ConversationWorkspace
 
       {/* File Explorer & Editor Panel */}
       <div className={`flex flex-col border-r transition-all duration-300 overflow-hidden ${
-        conversationCollapsed ? 'w-1/2' : 'w-1/3'
+        conversationCollapsed && previewCollapsed ? 'flex-1' :
+        conversationCollapsed ? 'w-1/2' : 
+        previewCollapsed ? 'w-1/2' : 'w-1/3'
       }`}>
         <div className="flex items-center justify-between p-3 border-b bg-muted/30">
           {!fileExplorerCollapsed && (
@@ -209,25 +243,38 @@ export function ConversationWorkspace({ selectedProject }: ConversationWorkspace
           )}
           <div className="flex items-center space-x-1">
             {selectedFile && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setSelectedFile(null)}
-                className="p-1"
-              >
-                <Minimize2 className="w-4 h-4" />
-              </Button>
+              <>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setFullscreenEditor(true)}
+                  className="p-1"
+                  title="Open in fullscreen"
+                >
+                  <Maximize2 className="w-4 h-4" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setSelectedFile(null)}
+                  className="p-1"
+                  title="Close editor"
+                >
+                  <Minimize2 className="w-4 h-4" />
+                </Button>
+              </>
             )}
             <Button
               variant="ghost"
               size="sm"
               onClick={() => setFileExplorerCollapsed(!fileExplorerCollapsed)}
               className="p-1"
+              title={fileExplorerCollapsed ? "Expand files panel" : "Collapse files panel"}
             >
               {fileExplorerCollapsed ? (
-                <Maximize2 className="w-4 h-4" />
+                <PanelLeftOpen className="w-4 h-4" />
               ) : (
-                <Minimize2 className="w-4 h-4" />
+                <PanelLeftClose className="w-4 h-4" />
               )}
             </Button>
           </div>
@@ -237,7 +284,9 @@ export function ConversationWorkspace({ selectedProject }: ConversationWorkspace
           <div className="flex-1 flex overflow-hidden">
             {/* File Explorer */}
             <div className={`border-r transition-all duration-300 overflow-auto ${
-              selectedFile ? 'w-80' : 'flex-1'
+              selectedFile ? 
+                (conversationCollapsed && previewCollapsed ? 'w-56' :
+                 previewCollapsed ? 'w-64' : 'w-80') : 'flex-1'
             }`}>
               <ProjectFileExplorer 
                 projectId={selectedProject?.id || ''} 
@@ -275,36 +324,64 @@ export function ConversationWorkspace({ selectedProject }: ConversationWorkspace
 
       {/* Preview Panel */}
       <div className={`flex flex-col transition-all duration-300 overflow-hidden ${
+        previewCollapsed ? 'w-12' :
         conversationCollapsed ? 'w-1/2' : 'w-1/3'
       }`}>
         <div className="flex items-center justify-between p-3 border-b bg-muted/30">
-          <div className="flex items-center space-x-2">
-            <Monitor className="w-4 h-4 text-muted-foreground" />
-            <h2 className="font-semibold">Preview</h2>
-            {preview && (
-              <div className={`w-2 h-2 rounded-full ${
-                preview.status === 'running' ? 'bg-green-500' :
-                preview.status === 'starting' || preview.status === 'syncing' ? 'bg-yellow-500' :
-                preview.status === 'error' ? 'bg-red-500' : 'bg-gray-500'
-              }`} />
+          {!previewCollapsed && (
+            <div className="flex items-center space-x-2">
+              <Monitor className="w-4 h-4 text-muted-foreground" />
+              <h2 className="font-semibold">Preview</h2>
+              {preview && (
+                <div className={`w-2 h-2 rounded-full ${
+                  preview.status === 'running' ? 'bg-green-500' :
+                  preview.status === 'starting' || preview.status === 'syncing' ? 'bg-yellow-500' :
+                  preview.status === 'error' ? 'bg-red-500' : 'bg-gray-500'
+                }`} />
+              )}
+            </div>
+          )}
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setPreviewCollapsed(!previewCollapsed)}
+            className="p-1"
+            title={previewCollapsed ? "Expand preview panel" : "Collapse preview panel"}
+          >
+            {previewCollapsed ? (
+              <PanelLeftOpen className="w-4 h-4" />
+            ) : (
+              <PanelLeftClose className="w-4 h-4" />
             )}
-          </div>
+          </Button>
         </div>
         
-        <div className="flex-1 overflow-hidden">
-          <PreviewFrame
-            projectId={selectedProject?.id || ''}
-            preview={preview}
-            device={previewDevice}
-            onDeviceChange={setPreviewDevice}
-            onStart={startPreview}
-            onStop={stopPreview}
-            onRestart={restartPreview}
-            loading={previewLoading}
-            error={previewError}
-          />
-        </div>
+        {!previewCollapsed && (
+          <div className="flex-1 overflow-hidden">
+            <PreviewFrame
+              projectId={selectedProject?.id || ''}
+              preview={preview}
+              device={previewDevice}
+              onDeviceChange={setPreviewDevice}
+              onStart={startPreview}
+              onStop={stopPreview}
+              onRestart={restartPreview}
+              loading={previewLoading}
+              error={previewError}
+            />
+          </div>
+        )}
       </div>
+
+      {/* Fullscreen File Editor Modal */}
+      {selectedFile && (
+        <FullscreenFileEditor
+          projectId={selectedProject?.id || ''}
+          filePath={selectedFile}
+          isOpen={fullscreenEditor}
+          onClose={() => setFullscreenEditor(false)}
+        />
+      )}
     </div>
   );
 }

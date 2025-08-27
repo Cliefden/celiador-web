@@ -192,12 +192,18 @@ export function useConversation(projectId?: string): UseConversationReturn {
 
 // Send message
   const sendMessage = async (content: string, messageType: Message['messageType'] = 'text', targetConversation?: Conversation) => {
+    console.log('[useConversation] sendMessage called with:', { content, messageType, hasTargetConversation: !!targetConversation });
+    
     const activeConversation = targetConversation || conversation;
+    console.log('[useConversation] Active conversation:', activeConversation?.id);
+    
     if (!activeConversation) {
+      console.error('[useConversation] No active conversation found');
       throw new Error('No active conversation');
     }
 
     try {
+      console.log('[useConversation] Starting message send process...');
       setError(null);
 
       // Get current user
@@ -217,6 +223,16 @@ export function useConversation(projectId?: string): UseConversationReturn {
       setMessages(prev => [...prev, userMessage]);
 
       // Save user message to database
+      console.log('[useConversation] Saving user message to database...');
+      console.log('[useConversation] User message data:', {
+        conversationid: activeConversation.id,
+        content,
+        role: 'user',
+        messagetype: messageType,
+        userid: user.id,
+        creator: user.id
+      });
+
       const { data: savedUserMessage, error: userMessageError } = await supabase
         .from('messages')
         .insert([{
@@ -231,8 +247,11 @@ export function useConversation(projectId?: string): UseConversationReturn {
         .single();
 
       if (userMessageError) {
+        console.error('[useConversation] Error saving user message:', userMessageError);
         throw userMessageError;
       }
+
+      console.log('[useConversation] User message saved successfully:', savedUserMessage.id);
 
 // Replace temp message with saved one
       setMessages(prev => prev.map(msg => 
@@ -252,9 +271,18 @@ export function useConversation(projectId?: string): UseConversationReturn {
       // Get AI response from orchestrator
       try {
         // Call orchestrator AI endpoint
-        const authToken = (await supabase.auth.getSession()).data.session?.access_token;
+        console.log('[useConversation] Getting auth session for AI API call...');
+        const sessionResult = await supabase.auth.getSession();
+        const authToken = sessionResult.data.session?.access_token;
+        
         if (!authToken) {
-          throw new Error('No auth token available');
+          console.error('[useConversation] No auth token available');
+          throw new Error('No auth token available - user may need to log in again');
+        }
+        
+        if (sessionResult.error) {
+          console.error('[useConversation] Session error:', sessionResult.error);
+          throw new Error(`Session error: ${sessionResult.error.message}`);
         }
 
         // Include conversation history for context
@@ -262,6 +290,15 @@ export function useConversation(projectId?: string): UseConversationReturn {
           role: msg.role,
           content: msg.content
         }));
+
+        console.log('[useConversation] Making AI API call to:', `http://localhost:4000/projects/${activeConversation.projectid}/chat`);
+        console.log('[useConversation] Auth token length:', authToken.length);
+        console.log('[useConversation] Request body:', {
+          message: content,
+          conversationId: activeConversation.id,
+          historyLength: conversationHistory.length,
+          provider: 'openai'
+        });
 
         const aiResponse = await fetch(`http://localhost:4000/projects/${activeConversation.projectid}/chat`, {
           method: 'POST',
@@ -277,14 +314,28 @@ export function useConversation(projectId?: string): UseConversationReturn {
           })
         });
 
+        console.log('[useConversation] AI API response status:', aiResponse.status, aiResponse.statusText);
+
         if (!aiResponse.ok) {
-          const errorData = await aiResponse.json();
-          throw new Error(errorData.error || 'AI service unavailable');
+          const errorText = await aiResponse.text();
+          console.error('[useConversation] AI API error response:', errorText);
+          
+          let errorData;
+          try {
+            errorData = JSON.parse(errorText);
+          } catch {
+            errorData = { error: errorText || 'AI service unavailable' };
+          }
+          
+          throw new Error(errorData.error || `AI API error: ${aiResponse.status} ${aiResponse.statusText}`);
         }
 
-        const { response: aiContent, actions } = await aiResponse.json();
+        const responseData = await aiResponse.json();
+        console.log('[useConversation] AI API response data:', responseData);
+        const { response: aiContent, actions } = responseData;
 
         // Save AI response to database
+        console.log('[useConversation] Saving AI response to database...');
         const assistantResponse = {
           conversationid: activeConversation.id,
           content: aiContent,
@@ -296,6 +347,8 @@ export function useConversation(projectId?: string): UseConversationReturn {
           metadata: actions ? { actionsDetected: actions.detected } : null
         };
 
+        console.log('[useConversation] AI response object:', assistantResponse);
+
         const { data: savedAssistantMessage, error: assistantMessageError } = await supabase
           .from('messages')
           .insert([assistantResponse])
@@ -303,8 +356,11 @@ export function useConversation(projectId?: string): UseConversationReturn {
           .single();
 
         if (assistantMessageError) {
+          console.error('[useConversation] Error saving AI message:', assistantMessageError);
           throw assistantMessageError;
         }
+
+        console.log('[useConversation] AI message saved successfully:', savedAssistantMessage.id);
 
         setMessages(prev => [...prev, {
           id: savedAssistantMessage.id,

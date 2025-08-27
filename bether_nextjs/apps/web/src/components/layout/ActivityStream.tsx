@@ -43,18 +43,29 @@ export function ActivityStream({ selectedProject, className = '' }: ActivityStre
   const [activities, setActivities] = useState<ActivityItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAll, setShowAll] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [hasInitialized, setHasInitialized] = useState(false);
 
   useEffect(() => {
+    // Reset initialization flag when project changes
+    setHasInitialized(false);
+    
     const loadActivities = async () => {
       if (!selectedProject) {
         setActivities([]);
         setLoading(false);
+        setHasInitialized(false);
         return;
       }
 
       try {
-        setLoading(true);
-        const activities: ActivityItem[] = [];
+        // Only show loading spinner on initial load, refresh indicator otherwise
+        if (!hasInitialized) {
+          setLoading(true);
+        } else {
+          setIsRefreshing(true);
+        }
+        const newActivities: ActivityItem[] = [];
 
         // Get recent jobs
         const { data: jobs, error: jobsError } = await supabase
@@ -62,13 +73,13 @@ export function ActivityStream({ selectedProject, className = '' }: ActivityStre
           .select('*')
           .eq('projectid', selectedProject.id)
           .order('createdat', { ascending: false })
-          .limit(10);
+          .limit(showAll ? 30 : 10);
 
         if (jobsError) {
           console.error('Error fetching jobs:', jobsError);
         } else if (jobs) {
           jobs.forEach(job => {
-            activities.push({
+            newActivities.push({
               id: `job-${job.id}`,
               type: 'job',
               title: getJobTitle(job.type, job.status),
@@ -86,14 +97,14 @@ export function ActivityStream({ selectedProject, className = '' }: ActivityStre
           .select('*, conversations!inner(projectid)')
           .eq('conversations.projectid', selectedProject.id)
           .order('createdat', { ascending: false })
-          .limit(5);
+          .limit(showAll ? 20 : 5);
 
         if (messagesError) {
           console.error('Error fetching messages:', messagesError);
         } else if (messages) {
           messages.forEach(message => {
             if (message.role === 'assistant' && message.relatedjobid) {
-              activities.push({
+              newActivities.push({
                 id: `message-${message.id}`,
                 type: 'conversation',
                 title: 'AI Response with Actions',
@@ -110,13 +121,15 @@ export function ActivityStream({ selectedProject, className = '' }: ActivityStre
         }
 
         // Sort all activities by timestamp
-        activities.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+        newActivities.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
         
-        setActivities(activities);
+        setActivities(newActivities);
+        setHasInitialized(true);
       } catch (error) {
         console.error('Error loading activities:', error);
       } finally {
         setLoading(false);
+        setIsRefreshing(false);
       }
     };
 
@@ -125,11 +138,22 @@ export function ActivityStream({ selectedProject, className = '' }: ActivityStre
     // Refresh activities every 30 seconds
     const interval = setInterval(loadActivities, 30000);
     return () => clearInterval(interval);
-  }, [selectedProject]);
+  }, [selectedProject, showAll]);
 
   const getJobTitle = (type: string, status: string) => {
+    // Enhanced status messages for scaffold jobs
+    if (type === 'SCAFFOLD') {
+      switch (status) {
+        case 'PENDING': return 'Setting up project template...';
+        case 'RUNNING': return 'Creating project files...';
+        case 'COMPLETED': return 'Project created successfully';
+        case 'FAILED': return 'Project creation failed';
+        case 'CANCELLED': return 'Project creation cancelled';
+        default: return `Project scaffolding ${status.toLowerCase()}`;
+      }
+    }
+    
     const typeMap: { [key: string]: string } = {
-      'SCAFFOLD': 'Project Scaffolded',
       'EDIT': 'Code Edited',
       'TEST': 'Tests Run',
       'DEPLOY': 'Deployed',
@@ -208,6 +232,18 @@ export function ActivityStream({ selectedProject, className = '' }: ActivityStre
     return `${Math.floor(diffMins / 1440)}d ago`;
   };
 
+  const handleViewActivity = (activity: ActivityItem) => {
+    if (activity.metadata?.conversationId) {
+      // Scroll to conversation/message - this could be enhanced with actual navigation
+      console.log('Navigate to conversation:', activity.metadata.conversationId);
+      // TODO: Implement actual navigation to conversation
+    } else if (activity.metadata?.jobId) {
+      // Show job details
+      console.log('View job details:', activity.metadata.jobId);
+      // TODO: Implement job details modal or navigation
+    }
+  };
+
   const displayedActivities = showAll ? activities : activities.slice(0, 5);
 
   if (loading) {
@@ -240,12 +276,15 @@ export function ActivityStream({ selectedProject, className = '' }: ActivityStre
   }
 
   return (
-    <div className={`bg-muted/30 border-t ${className}`}>
-      <div className="p-4">
+    <div className={`bg-muted/30 border-t flex flex-col ${className}`}>
+      <div className="p-4 flex-1 flex flex-col min-h-0">
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center space-x-2">
             <Activity className="w-4 h-4 text-muted-foreground" />
             <h3 className="font-semibold">Recent Activity</h3>
+            {isRefreshing && (
+              <Loader2 className="w-3 h-3 text-muted-foreground animate-spin" />
+            )}
           </div>
           {activities.length > 5 && (
             <Button
@@ -254,7 +293,7 @@ export function ActivityStream({ selectedProject, className = '' }: ActivityStre
               onClick={() => setShowAll(!showAll)}
               className="text-xs"
             >
-              {showAll ? 'Show Less' : 'Show All'}
+              {showAll ? `Show Less (${activities.slice(0, 5).length})` : `Show All (${activities.length})`}
             </Button>
           )}
         </div>
@@ -266,7 +305,7 @@ export function ActivityStream({ selectedProject, className = '' }: ActivityStre
             <p className="text-sm">Start a conversation to see activity here</p>
           </div>
         ) : (
-          <div className="space-y-2 max-h-64 overflow-y-auto">
+          <div className="space-y-2 flex-1 overflow-y-auto pr-2">
             {displayedActivities.map((activity) => (
               <Card key={activity.id} className="border-l-4 border-l-blue-500/20">
                 <CardContent className="p-3">
@@ -288,7 +327,13 @@ export function ActivityStream({ selectedProject, className = '' }: ActivityStre
                     </div>
                     
                     {activity.metadata?.jobId && (
-                      <Button variant="ghost" size="sm" className="p-1">
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        className="p-1"
+                        title="View details"
+                        onClick={() => handleViewActivity(activity)}
+                      >
                         <Eye className="w-3 h-3" />
                       </Button>
                     )}

@@ -68,11 +68,38 @@ export function PreviewFrame({
 }: PreviewFrameProps) {
   const [iframeKey, setIframeKey] = useState(0);
   const [iframeLoading, setIframeLoading] = useState(false);
+  const [urlReady, setUrlReady] = useState(false);
 
   const refreshPreview = () => {
     setIframeKey(prev => prev + 1);
     setIframeLoading(true);
+    setUrlReady(false); // Reset URL readiness to trigger re-check
   };
+
+  // Effect to reset URL readiness when preview changes
+  useEffect(() => {
+    setUrlReady(false);
+  }, [preview?.id]);
+
+  // Effect to handle URL readiness with a delay approach
+  useEffect(() => {
+    let timeoutId: NodeJS.Timeout | null = null;
+
+    if (preview?.status === 'running' && preview.url && !urlReady) {
+      // Give the preview server a few seconds to be fully ready after status becomes "running"
+      console.log('[PreviewFrame] Preview running, waiting for server readiness...');
+      timeoutId = setTimeout(() => {
+        setUrlReady(true);
+        console.log('[PreviewFrame] Server should be ready, showing iframe');
+      }, 3000); // Wait 3 seconds after status becomes "running"
+    }
+
+    return () => {
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+    };
+  }, [preview?.status, preview?.url, urlReady]); // Only depend on status and url changes
 
   const openInNewTab = () => {
     if (preview?.url) {
@@ -274,7 +301,7 @@ export function PreviewFrame({
               </Badge>
             )}
           </div>
-        ) : preview.status === 'running' ? (
+        ) : preview.status === 'running' && urlReady ? (
           /* Preview Iframe */
           <div 
             className="bg-white rounded-lg shadow-lg overflow-hidden transition-all duration-300"
@@ -298,6 +325,17 @@ export function PreviewFrame({
               onError={() => setIframeLoading(false)}
               title={`Preview for ${projectId}`}
             />
+          </div>
+        ) : preview.status === 'running' && !urlReady ? (
+          /* URL Not Ready State */
+          <div className="text-center max-w-md">
+            <Loader2 className="w-12 h-12 animate-spin text-blue-500 mx-auto mb-4" />
+            <h3 className="text-lg font-medium text-gray-700 mb-2">
+              Waiting for Server...
+            </h3>
+            <p className="text-sm text-gray-500">
+              Preview server is starting up, please wait a moment
+            </p>
           </div>
         ) : (
           /* Stopped/Error State */

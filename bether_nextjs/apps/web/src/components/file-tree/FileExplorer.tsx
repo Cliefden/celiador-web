@@ -48,6 +48,7 @@ interface FileExplorerProps {
   projectId?: string;
   onFileSelect: (file: FileNode | string) => void;
   onFileEdit?: (file: FileNode) => void;
+  isScaffolding?: boolean;
   onFileDelete?: (file: FileNode) => void;
   onFileUpload?: (file: File) => void;
   onFileDownload?: (file: FileNode) => void;
@@ -288,11 +289,27 @@ export function FileExplorer({
             {filteredAndSortedFiles.length === 0 ? (
               <div className="flex items-center justify-center h-full">
                 <div className="text-center">
-                  <Folder className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-                  <p className="text-gray-500">No files found</p>
-                  <p className="text-sm text-gray-400">
-                    {searchTerm ? 'Try adjusting your search' : 'Upload files to get started'}
-                  </p>
+                  {isScaffolding ? (
+                    <>
+                      <div className="w-12 h-12 mx-auto mb-4 animate-pulse">
+                        <div className="w-full h-full bg-gradient-to-r from-blue-500 to-purple-500 rounded-lg flex items-center justify-center">
+                          <Code className="w-6 h-6 text-white animate-bounce" />
+                        </div>
+                      </div>
+                      <p className="text-blue-600 font-medium">Setting up your project...</p>
+                      <p className="text-sm text-blue-400">
+                        Downloading template files and dependencies
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      <Folder className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                      <p className="text-gray-500">No files found</p>
+                      <p className="text-sm text-gray-400">
+                        {searchTerm ? 'Try adjusting your search' : 'Upload files to get started'}
+                      </p>
+                    </>
+                  )}
                 </div>
               </div>
             ) : viewMode === 'tree' ? (

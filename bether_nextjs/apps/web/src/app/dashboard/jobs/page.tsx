@@ -287,7 +287,7 @@ export default function JobsPage() {
             <div className="flex items-center space-x-4">
               <div className="text-right hidden md:block">
                 <p className="text-sm font-medium text-gray-900">
-                  {profile?.full_name || profile?.username || user.email}
+                  {profile?.full_name || profile?.username || user?.email || 'User'}
                 </p>
                 <p className="text-xs text-gray-500 capitalize">
                   {profile?.role || 'user'}
@@ -295,7 +295,7 @@ export default function JobsPage() {
               </div>
               <div className="w-8 h-8 bg-gradient-to-br from-blue-600 to-purple-600 rounded-full flex items-center justify-center">
                 <span className="text-white font-bold text-xs">
-                  {(profile?.full_name || profile?.username || user.email || 'U').charAt(0).toUpperCase()}
+                  {(profile?.full_name || profile?.username || user?.email || 'U').charAt(0).toUpperCase()}
                 </span>
               </div>
               <button

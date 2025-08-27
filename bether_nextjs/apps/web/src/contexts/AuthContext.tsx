@@ -62,6 +62,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // Initialize auth state
   useEffect(() => {
+    let isMounted = true;
+    
     const initializeAuth = async () => {
       try {
         console.log('AuthContext: Starting auth initialization...');
@@ -74,14 +76,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           console.error('AuthContext: Session error:', error);
         }
         
+        if (!isMounted) return;
+        
         setSession(session);
         setUser(session?.user ?? null);
 
         if (session?.user) {
           console.log('AuthContext: Fetching profile for user:', session.user.id);
           const userProfile = await fetchProfile(session.user.id);
-          setProfile(userProfile);
-          console.log('AuthContext: Profile loaded:', !!userProfile);
+          if (isMounted) {
+            setProfile(userProfile);
+            console.log('AuthContext: Profile loaded:', !!userProfile);
+          }
         }
 
         // Listen for auth changes
@@ -89,12 +95,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const { data: { subscription } } = supabase.auth.onAuthStateChange(
           async (event, session) => {
             console.log('AuthContext: Auth state changed:', event, !!session);
+            if (!isMounted) return;
+            
             setSession(session);
             setUser(session?.user ?? null);
 
             if (session?.user) {
               const userProfile = await fetchProfile(session.user.id);
-              setProfile(userProfile);
+              if (isMounted) {
+                setProfile(userProfile);
+              }
             } else {
               setProfile(null);
             }
@@ -105,20 +115,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } catch (error) {
         console.error('AuthContext: Error initializing auth:', error);
       } finally {
-        console.log('AuthContext: Auth initialization complete, setting loading to false');
-        setIsLoading(false);
+        if (isMounted) {
+          console.log('AuthContext: Auth initialization complete, setting loading to false');
+          setIsLoading(false);
+        }
       }
     };
 
-    // Add timeout fallback to prevent infinite loading
+    // Add shorter timeout to detect auth issues faster
     const timeoutId = setTimeout(() => {
       console.log('AuthContext: Timeout reached, forcing loading to false');
-      setIsLoading(false);
-    }, 5000);
+      if (isMounted) {
+        setIsLoading(false);
+      }
+    }, 3000); // Reduced from 5000 to 3000
 
     initializeAuth().finally(() => {
       clearTimeout(timeoutId);
     });
+    
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   // Sign in function
