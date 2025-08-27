@@ -10,9 +10,41 @@ const __dirname = path.dirname(__filename);
 // Load environment variables from the project root
 dotenv.config({ path: path.resolve(__dirname, '../../../.env') });
 import { Worker } from 'bullmq';
+
+// Helper function to get content type based on file extension
+function getContentType(filePath: string): string {
+  const ext = filePath.split('.').pop()?.toLowerCase();
+  
+  const mimeTypes: Record<string, string> = {
+    'js': 'text/javascript',
+    'ts': 'text/typescript',
+    'jsx': 'text/javascript',
+    'tsx': 'text/typescript',
+    'css': 'text/css',
+    'html': 'text/html',
+    'htm': 'text/html',
+    'json': 'application/json',
+    'xml': 'application/xml',
+    'md': 'text/markdown',
+    'txt': 'text/plain',
+    'png': 'image/png',
+    'jpg': 'image/jpeg',
+    'jpeg': 'image/jpeg',
+    'gif': 'image/gif',
+    'svg': 'image/svg+xml',
+    'ico': 'image/x-icon',
+    'woff': 'font/woff',
+    'woff2': 'font/woff2',
+    'ttf': 'font/ttf',
+    'eot': 'application/vnd.ms-fontobject'
+  };
+  
+  return mimeTypes[ext || ''] || 'text/plain';
+}
 import { tools } from '@mvp/agent-tools';
 import { JobData, EnhancedJobResult as JobResult, JobStatus, FileStorageService, FileData } from '@mvp/shared';
 import { LLMService, CodeGenerationContext } from './llm-service.js';
+import { promises as fsPromises } from 'fs';
 
 // Debug environment variables
 console.log('[codegen] Environment check:');
@@ -156,41 +188,69 @@ async function handleScaffoldJob(jobData: JobData, result: JobResult) {
   await tools.runCmd('mkdir', ['-p', tempDir]);
   
   try {
-    // Download template from Supabase storage
-    console.log(`[codegen] Downloading template '${jobData.templateKey}' from Supabase...`);
+    // Download template from project-templates bucket
+    console.log(`[codegen] Downloading template '${jobData.templateKey}' from project-templates bucket...`);
     
-    // Get template file tree from Supabase
-    const templateUserId = 'template-system';
-    const templateFileTree = await storageService.getProjectFileTree(jobData.templateKey, templateUserId);
-    
-    if (!templateFileTree || templateFileTree.length === 0) {
-      throw new Error(`Template '${jobData.templateKey}' not found in Supabase storage`);
-    }
-    
-    console.log(`[codegen] Found ${templateFileTree.length} template items (including directories)`);
-    
-    // Recursively collect all files from the template tree
-    const getAllTemplateFiles = (items) => {
-      const files = [];
-      for (const item of items) {
-        if (item.type === 'file') {
-          files.push(item);
-        } else if (item.type === 'directory' && item.children) {
-          files.push(...getAllTemplateFiles(item.children));
+    // Get template files directly from project-templates bucket
+    const getAllTemplateFilesRecursively = async (basePath = '') => {
+      const fullPath = basePath ? `${jobData.templateKey}/${basePath}` : jobData.templateKey;
+      
+      const { data, error } = await storageService.supabase.storage
+        .from('project-templates')
+        .list(fullPath, {
+          limit: 1000,
+          offset: 0
+        });
+        
+      if (error) {
+        console.error(`[codegen] Error listing template files at ${fullPath}:`, error);
+        return [];
+      }
+      
+      let allFiles = [];
+      
+      for (const item of data || []) {
+        if (item.id && item.metadata) {
+          // This is a file
+          const relativePath = basePath ? `${basePath}/${item.name}` : item.name;
+          allFiles.push({
+            name: item.name,
+            path: relativePath,
+            fullPath: `${jobData.templateKey}/${relativePath}`,
+            size: item.metadata.size
+          });
+        } else {
+          // This is a directory, recurse into it
+          const subPath = basePath ? `${basePath}/${item.name}` : item.name;
+          const subFiles = await getAllTemplateFilesRecursively(subPath);
+          allFiles = allFiles.concat(subFiles);
         }
       }
-      return files;
+      
+      return allFiles;
     };
     
-    const allTemplateFiles = getAllTemplateFiles(templateFileTree);
-    console.log(`[codegen] Found ${allTemplateFiles.length} template files (recursively)`);
+    const allTemplateFiles = await getAllTemplateFilesRecursively();
+    console.log(`[codegen] Found ${allTemplateFiles.length} template files`);
+    
+    if (allTemplateFiles.length === 0) {
+      throw new Error(`Template '${jobData.templateKey}' not found or empty in project-templates bucket`);
+    }
     
     // Download and write each template file
     for (const fileItem of allTemplateFiles) {
-      console.log(`[codegen] Downloading template file: ${fileItem.path}`);
-      const fileContent = await storageService.getFile(jobData.templateKey, templateUserId, fileItem.path);
+      console.log(`[codegen] Downloading template file: ${fileItem.path} (${fileItem.size} bytes)`);
       
-      if (fileContent) {
+      const { data: fileData, error: downloadError } = await storageService.supabase.storage
+        .from('project-templates')
+        .download(fileItem.fullPath);
+      
+      if (downloadError) {
+        console.error(`[codegen] Error downloading ${fileItem.path}:`, downloadError);
+        continue;
+      }
+      
+      if (fileData) {
         // Create directory structure if needed
         const filePath = `${tempDir}/${fileItem.path}`;
         const dirPath = filePath.substring(0, filePath.lastIndexOf('/'));
@@ -198,9 +258,22 @@ async function handleScaffoldJob(jobData: JobData, result: JobResult) {
           await tools.runCmd('mkdir', ['-p', dirPath]);
         }
         
-        // Write file content
-        await fsPromises.writeFile(filePath, fileContent.content, 'utf8');
-        console.log(`[codegen] Created file: ${fileItem.path} (${fileContent.content.length} bytes)`);
+        // Handle binary files (like favicon.ico) properly
+        const isBinaryFile = fileItem.path.endsWith('.ico') || fileItem.path.endsWith('.png') || fileItem.path.endsWith('.jpg') || fileItem.path.endsWith('.woff') || fileItem.path.endsWith('.woff2');
+        console.log(`[codegen] Processing file: ${fileItem.path}, isBinary: ${isBinaryFile}`);
+        
+        if (isBinaryFile) {
+          // Binary file - write as buffer
+          const arrayBuffer = await fileData.arrayBuffer();
+          const buffer = Buffer.from(arrayBuffer);
+          await fsPromises.writeFile(filePath, buffer);
+          console.log(`[codegen] Created binary file: ${fileItem.path} (${buffer.length} bytes)`);
+        } else {
+          // Text file - write as string
+          const content = await fileData.text();
+          await fsPromises.writeFile(filePath, content, 'utf8');
+          console.log(`[codegen] Created text file: ${fileItem.path} (${content.length} chars)`);
+        }
       } else {
         console.warn(`[codegen] Could not download template file: ${fileItem.path}`);
       }
@@ -291,18 +364,39 @@ async function handleScaffoldJob(jobData: JobData, result: JobResult) {
     const fileData: FileData[] = [];
     
     for (const filePath of allFilePaths) {
-      console.log(`[codegen] Reading file: ${filePath}`);
+      console.log(`[codegen] Reading file for upload: ${filePath}`);
       const fullPath = path.join(tempDir, filePath);
-      const contentResult = await tools.readFile(fullPath);
-      if (contentResult.content) {
-        fileData.push({
-          path: filePath, // Use relative path for storage
-          content: contentResult.content,
-          contentType: 'text/plain'
-        });
-        console.log(`[codegen] Added file: ${filePath} (${contentResult.content.length} bytes)`);
+      
+      // Check if this is a binary file that needs special handling
+      const isBinaryFile = filePath.endsWith('.ico') || filePath.endsWith('.png') || filePath.endsWith('.jpg') || filePath.endsWith('.jpeg') || filePath.endsWith('.woff') || filePath.endsWith('.woff2');
+      
+      if (isBinaryFile) {
+        // Read binary file as buffer
+        try {
+          const buffer = await fsPromises.readFile(fullPath);
+          const contentType = getContentType(filePath);
+          fileData.push({
+            path: filePath,
+            content: buffer,
+            contentType: contentType
+          });
+          console.log(`[codegen] Added binary file: ${filePath} (${buffer.length} bytes, ${contentType})`);
+        } catch (error) {
+          console.warn(`[codegen] Failed to read binary file: ${filePath} - ${error}`);
+        }
       } else {
-        console.warn(`[codegen] Failed to read file: ${filePath} - ${contentResult.error}`);
+        // Read text file normally
+        const contentResult = await tools.readFile(fullPath);
+        if (contentResult.content) {
+          fileData.push({
+            path: filePath, // Use relative path for storage
+            content: contentResult.content,
+            contentType: 'text/plain'
+          });
+          console.log(`[codegen] Added text file: ${filePath} (${contentResult.content.length} chars)`);
+        } else {
+          console.warn(`[codegen] Failed to read text file: ${filePath} - ${contentResult.error}`);
+        }
       }
     }
     

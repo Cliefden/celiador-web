@@ -6,8 +6,8 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider = "sqlite"
+  url      = "file:./dev.db"
 }
 
 model User {
@@ -226,4 +226,28 @@ model ServiceIntegration {
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   
   @@map("service_integrations")
+}
+
+// Template metadata for dynamic template system
+model Template {
+  id          String   @id @default(cuid())
+  key         String   @unique // Unique identifier used for storage
+  name        String   // Display name
+  description String   // Template description
+  icon        String?  // Icon identifier or emoji
+  color       String?  // CSS gradient classes for styling
+  category    String   @default("general") // Category grouping
+  features    String   // Comma-separated feature tags (SQLite compatible)
+  version     String   @default("1.0.0")
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  
+  // Audit fields
+  creator     String?
+  updater     String?
+  deleter     String?
+  deletedAt   DateTime? @map("deleted_at")
+
+  @@map("templates")
 }

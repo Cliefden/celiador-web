@@ -295,7 +295,7 @@ export function DashboardLayout({ initialUser, onLogout }: DashboardLayoutProps)
           />
 
           {/* Main Workspace */}
-          <div className="flex-1 flex flex-col overflow-hidden">
+          <div className="flex-1 flex overflow-hidden">
           {selectedProject ? (
             <>
               {/* Conversation & File Workspace */}
@@ -303,11 +303,13 @@ export function DashboardLayout({ initialUser, onLogout }: DashboardLayoutProps)
                 <ConversationWorkspace selectedProject={selectedProject} />
               </div>
 
-              {/* Activity Stream */}
-              <ActivityStream 
-                selectedProject={selectedProject} 
-                className="flex-1 min-h-0"
-              />
+              {/* Activity Stream - Fixed width sidebar on the right */}
+              <div className="w-80 flex flex-col">
+                <ActivityStream 
+                  selectedProject={selectedProject} 
+                  className="flex-1 min-h-0"
+                />
+              </div>
             </>
           ) : (
             /* No Project Selected State */

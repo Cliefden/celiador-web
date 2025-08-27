@@ -308,9 +308,9 @@ export function ActivityStream({ selectedProject, className = '' }: ActivityStre
           <div className="space-y-2 flex-1 overflow-y-auto pr-2">
             {displayedActivities.map((activity) => (
               <Card key={activity.id} className="border-l-4 border-l-blue-500/20">
-                <CardContent className="p-3">
-                  <div className="flex items-start justify-between">
-                    <div className="flex items-start space-x-2 min-w-0 flex-1">
+                <CardContent className="!p-6">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-3 min-w-0 flex-1">
                       {getActivityIcon(activity)}
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center space-x-2 mb-1">

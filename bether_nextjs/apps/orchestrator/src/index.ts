@@ -312,6 +312,105 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
+// Templates endpoint - fetch available templates from Supabase Storage
+app.get('/templates', async (req, res) => {
+  try {
+    console.log('[orchestrator] GET /templates - fetching available templates');
+    console.log('[orchestrator] Environment check:');
+    console.log('[orchestrator] SUPABASE_URL:', process.env.SUPABASE_URL?.substring(0, 20) + '...');
+    console.log('[orchestrator] SUPABASE_SERVICE_ROLE_KEY:', process.env.SUPABASE_SERVICE_ROLE_KEY?.substring(0, 20) + '...');
+    
+    const storageService = new FileStorageService();
+    
+    // List all template directories in the project-templates bucket
+    const { data, error } = await supabaseService.storage
+      .from('project-templates')
+      .list('', {
+        limit: 100,
+        offset: 0
+      });
+    
+    if (error) {
+      console.error('[orchestrator] Error listing templates:', error);
+      return res.status(500).json({ error: 'Failed to fetch templates' });
+    }
+    
+    console.log('[orchestrator] Found', data?.length || 0, 'template entries');
+    console.log('[orchestrator] Storage data:', JSON.stringify(data, null, 2));
+    
+    // Only include metadata for templates that actually exist in storage
+    // Build dynamic templateMetadata based on what exists in storage
+    const allTemplateMetadata: { [key: string]: any } = {
+      'next-prisma-supabase': {
+        key: 'next-prisma-supabase',
+        name: '⚡ Next.js + Prisma + Supabase',
+        description: 'Full-stack starter with authentication, database, and modern UI',
+        icon: 'Zap',
+        color: 'from-green-600 to-teal-600',
+        category: 'fullstack',
+        features: ['Next.js 14', 'Prisma', 'Supabase', 'TypeScript']
+      },
+      'next-saas-starter': {
+        key: 'next-saas-starter',
+        name: '🚀 Next.js SaaS Starter',
+        description: 'Complete SaaS boilerplate with payments, auth, and dashboard',
+        icon: 'Rocket',
+        color: 'from-purple-600 to-blue-600',
+        category: 'saas',
+        features: ['Stripe', 'Auth', 'Dashboard', 'Responsive']
+      },
+      'ai-saas-dashboard': {
+        key: 'ai-saas-dashboard',
+        name: '🤖 AI-Powered SaaS Dashboard',
+        description: 'Production-ready AI SaaS with authentication, payments, and modern UI',
+        icon: 'Sparkles',
+        color: 'from-blue-600 to-violet-600',
+        category: 'ai',
+        features: ['AI Integration', 'Auth', 'Payments', 'Dashboard']
+      }
+    };
+    
+    // Only include metadata for templates that exist in storage
+    const existingTemplateKeys = data?.map(item => item.name) || [];
+    const templateMetadata: { [key: string]: any } = {};
+    existingTemplateKeys.forEach(key => {
+      if (allTemplateMetadata[key]) {
+        templateMetadata[key] = allTemplateMetadata[key];
+      }
+    });
+    
+    console.log('[orchestrator] Existing template keys in storage:', existingTemplateKeys);
+    console.log('[orchestrator] Template metadata keys:', Object.keys(templateMetadata));
+    
+    // Build response with available templates
+    const templates = [];
+    
+    if (data) {
+      for (const item of data) {
+        if (item.name && templateMetadata[item.name]) {
+          templates.push({
+            ...templateMetadata[item.name],
+            isActive: true,
+            version: '1.0.0',
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+          });
+        }
+      }
+    }
+    
+    // Only return templates that actually exist in storage
+    // Note: Removed fallback that was showing non-existent templates
+    
+    console.log('[orchestrator] Returning', templates.length, 'templates');
+    res.json({ templates });
+    
+  } catch (error) {
+    console.error('Failed to fetch templates:', error);
+    res.status(500).json({ error: 'Failed to fetch templates' });
+  }
+});
+
 // Test endpoint for dual-write functionality (no auth required)
 app.put('/test/files/save', async (req, res) => {
   try {
