@@ -26,6 +26,8 @@ interface Project {
   repoprovider: string;
   repoowner: string;
   reponame: string;
+  createdat: string;
+  updatedat: string;
 }
 
 interface Conversation {
@@ -125,7 +127,11 @@ export function ContextBar({ selectedProject, conversation, onSearch }: ContextB
   }, [selectedProject, activity.runningJobs]);
 
   const getRelativeTime = (dateString: string) => {
+    if (!dateString) return 'unknown';
+    
     const date = new Date(dateString);
+    if (isNaN(date.getTime())) return 'unknown';
+    
     const now = new Date();
     const diffMs = now.getTime() - date.getTime();
     const diffMins = Math.floor(diffMs / 60000);
@@ -255,8 +261,8 @@ export function ContextBar({ selectedProject, conversation, onSearch }: ContextB
       {selectedProject && (
         <div className="mt-3 flex items-center justify-between text-xs text-muted-foreground">
           <div className="flex items-center space-x-4">
-            <span>Repository: {selectedProject.repoowner}/{selectedProject.reponame}</span>
-            <span>Provider: {selectedProject.repoprovider}</span>
+            <span>Repository: {selectedProject.repoowner || 'No repository'}/{selectedProject.reponame || 'assigned'}</span>
+            <span>Provider: {selectedProject.repoprovider || 'none'}</span>
           </div>
           
           <div className="flex items-center space-x-4">

@@ -7,6 +7,7 @@ import { FileEditor } from '../file-tree/FileEditor';
 import { JobLogs } from '../jobs/job-logs';
 import { ProjectInfo } from './ProjectInfo';
 import { ConversationPanel } from '../conversation/ConversationPanel';
+import { GitHubConnectionModal } from './GitHubConnectionModal';
 import { Button } from '../ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { 
@@ -21,7 +22,9 @@ import {
   Clock,
   CheckCircle,
   AlertCircle,
-  Loader2
+  Loader2,
+  Github,
+  ExternalLink
 } from 'lucide-react';
 
 interface Project {
@@ -38,6 +41,9 @@ interface Project {
   updater?: string;
   deleter?: string;
   deletedAt?: string;
+  github_repo_url?: string;
+  github_repo_id?: number;
+  github_connected_at?: string;
 }
 
 interface Job {
@@ -80,6 +86,8 @@ export function ProjectView({ project, userId, onProjectDeleted }: ProjectViewPr
   const [isLoadingFiles, setIsLoadingFiles] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isScaffolding, setIsScaffolding] = useState(false);
+  const [showGitHubModal, setShowGitHubModal] = useState(false);
+  const [refreshProject, setRefreshProject] = useState(0);
 
   // Fetch project jobs and monitor for scaffold job completion
   useEffect(() => {
@@ -464,8 +472,38 @@ export function ProjectView({ project, userId, onProjectDeleted }: ProjectViewPr
             </div>
           </div>
           
-          {/* Job Actions */}
+          {/* Actions */}
           <div className="flex items-center space-x-3">
+            {/* GitHub Connection */}
+            {project.github_repo_url ? (
+              <Button
+                variant="outline"
+                className="button-secondary"
+                asChild
+              >
+                <a 
+                  href={project.github_repo_url} 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="flex items-center space-x-2"
+                >
+                  <Github className="w-4 h-4" />
+                  <span>GitHub</span>
+                  <ExternalLink className="w-3 h-3" />
+                </a>
+              </Button>
+            ) : (
+              <Button
+                onClick={() => setShowGitHubModal(true)}
+                variant="outline"
+                className="button-secondary"
+              >
+                <Github className="w-4 h-4 mr-2" />
+                Connect GitHub
+              </Button>
+            )}
+            
+            {/* Job Actions */}
             <Button
               onClick={() => createJob('SCAFFOLD')}
               disabled={isJobRunning}
@@ -641,6 +679,18 @@ export function ProjectView({ project, userId, onProjectDeleted }: ProjectViewPr
         onToggle={(isOpen) => {
           // Optional: handle conversation panel state changes
           console.log('Conversation panel toggled:', isOpen);
+        }}
+      />
+      
+      {/* GitHub Connection Modal */}
+      <GitHubConnectionModal
+        project={project}
+        open={showGitHubModal}
+        onOpenChange={setShowGitHubModal}
+        onSuccess={() => {
+          setShowGitHubModal(false);
+          // Trigger a project refresh to get updated GitHub info
+          setRefreshProject(prev => prev + 1);
         }}
       />
     </div>

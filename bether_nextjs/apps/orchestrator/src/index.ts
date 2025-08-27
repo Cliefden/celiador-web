@@ -367,6 +367,15 @@ app.get('/templates', async (req, res) => {
         color: 'from-blue-600 to-violet-600',
         category: 'ai',
         features: ['AI Integration', 'Auth', 'Payments', 'Dashboard']
+      },
+      'blank-nextjs': {
+        key: 'blank-nextjs',
+        name: '🎯 Blank Next.js Project',
+        description: 'Start with a minimal, clean Next.js setup - perfect for building from scratch',
+        icon: 'Code',
+        color: 'from-gray-600 to-slate-600',
+        category: 'minimal',
+        features: ['Next.js 14', 'TypeScript', 'Tailwind CSS', 'ESLint']
       }
     };
     
@@ -515,6 +524,153 @@ app.post('/auth/login', async (req, res) => {
   }
 });
 
+// GitHub OAuth routes
+import { githubService } from './github-service';
+
+app.get('/auth/github/connect', authenticateUser, async (req, res) => {
+  try {
+    console.log('[GitHub] Initiating OAuth connection');
+    const user = (req as any).user;
+    const state = `user_${user.id}_${Date.now()}`; // Include user ID in state for security
+    
+    const authUrl = githubService.getAuthorizationUrl(state);
+    console.log('[GitHub] Redirecting to:', authUrl);
+    
+    res.json({
+      success: true,
+      authUrl,
+      state
+    });
+  } catch (error) {
+    console.error('[GitHub] OAuth initiation failed:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to initiate GitHub connection'
+    });
+  }
+});
+
+app.get('/auth/github/callback', async (req, res) => {
+  try {
+    const { code, state } = req.query;
+    
+    if (!code) {
+      throw new Error('No authorization code received');
+    }
+    
+    console.log('[GitHub] OAuth callback received, code:', code ? 'present' : 'missing');
+    
+    // Extract user ID from state for security
+    const stateMatch = state?.toString().match(/^user_([^_]+)_\d+$/);
+    if (!stateMatch) {
+      throw new Error('Invalid state parameter');
+    }
+    const userId = stateMatch[1];
+    
+    // Exchange code for access token
+    const accessToken = await githubService.exchangeCodeForToken(code as string);
+    console.log('[GitHub] Access token obtained');
+    
+    // Get GitHub user info
+    const githubUser = await githubService.getAuthenticatedUser(accessToken);
+    console.log('[GitHub] GitHub user info:', githubUser.login);
+    
+    // Save integration to database
+    await githubService.saveUserIntegration(userId, accessToken, githubUser);
+    
+    // Redirect to frontend with success
+    res.redirect(`http://localhost:3000/dashboard?github_connected=true`);
+  } catch (error) {
+    console.error('[GitHub] OAuth callback failed:', error);
+    res.redirect(`http://localhost:3000/dashboard?github_error=${encodeURIComponent((error as Error).message)}`);
+  }
+});
+
+app.get('/auth/github/status', authenticateUser, async (req, res) => {
+  try {
+    const user = (req as any).user;
+    const integration = await githubService.getUserIntegration(user.id);
+    
+    res.json({
+      connected: !!integration,
+      hasToken: !!integration?.accesstoken
+    });
+  } catch (error) {
+    console.error('[GitHub] Status check failed:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to check GitHub connection status'
+    });
+  }
+});
+
+app.post('/projects/:id/github/connect', authenticateUser, async (req, res) => {
+  try {
+    const { id: projectId } = req.params;
+    const { repoName, description, isPrivate = false } = req.body;
+    const user = (req as any).user;
+    
+    console.log(`[GitHub] Creating repository for project ${projectId}`);
+    
+    // Check if user has GitHub integration
+    const integration = await githubService.getUserIntegration(user.id);
+    if (!integration) {
+      return res.status(400).json({
+        success: false,
+        error: 'GitHub not connected. Please connect GitHub first.'
+      });
+    }
+    
+    // Create GitHub repository
+    const repo = await githubService.createRepository(
+      integration.accesstoken,
+      repoName,
+      description,
+      isPrivate
+    );
+    
+    console.log(`[GitHub] Repository created: ${repo.full_name}`);
+    
+    // Get project files from storage
+    const storageService = await import('@mvp/shared').then(m => m.FileStorageService);
+    const storage = new storageService();
+    const files = await storage.downloadProjectFiles(projectId, user.id);
+    
+    console.log(`[GitHub] Downloaded ${files.length} project files`);
+    
+    // Convert files to GitHub format
+    const githubFiles = files.map(file => ({
+      path: file.path,
+      content: typeof file.content === 'string' ? file.content : file.content.toString()
+    }));
+    
+    // Push files to repository
+    await githubService.pushFilesToRepo(
+      integration.accesstoken,
+      repo.full_name,
+      githubFiles,
+      `Initial commit from Bether Studio - ${repoName}`
+    );
+    
+    // Connect project to repository in database
+    await githubService.connectProjectToRepo(projectId, repo.html_url, repo.id);
+    
+    console.log(`[GitHub] Successfully connected project ${projectId} to ${repo.html_url}`);
+    
+    res.json({
+      success: true,
+      repository: repo
+    });
+    
+  } catch (error) {
+    console.error('[GitHub] Repository creation failed:', error);
+    res.status(500).json({
+      success: false,
+      error: (error as Error).message
+    });
+  }
+});
+
 // Protected routes
 app.get('/projects', authenticateUser, async (req, res) => {
   try {
@@ -535,35 +691,45 @@ app.post('/projects', authenticateUser, async (req, res) => {
     const user = (req as any).user;
     const { name, templateKey, repo } = req.body;
 
-    if (!name || !repo) {
-      return res.status(400).json({ error: 'Name and repository information are required' });
+    if (!name) {
+      return res.status(400).json({ error: 'Project name is required' });
     }
 
     console.log(`[orchestrator] Creating project with templateKey: ${templateKey}`);
     
+    // Generate default repo names from project name if not provided
+    const defaultRepoName = name.toLowerCase()
+      .replace(/[^a-z0-9\s-]/g, '') // Remove special chars except spaces and hyphens
+      .replace(/\s+/g, '-') // Replace spaces with hyphens
+      .replace(/-+/g, '-') // Replace multiple hyphens with single
+      .replace(/^-|-$/g, ''); // Remove leading/trailing hyphens
+    
+    // Use blank-nextjs as default for empty projects
+    const finalTemplateKey = templateKey || 'blank-nextjs';
+    
     const project = await db.createProject({
       name,
-      templateKey: templateKey || 'next-prisma-supabase',
-      repoProvider: repo.provider || 'github',
-      repoOwner: repo.owner,
-      repoName: repo.name,
+      templateKey: finalTemplateKey,
+      repoProvider: repo?.provider || 'github',
+      repoOwner: repo?.owner || 'user', // Default placeholder
+      repoName: repo?.name || defaultRepoName,
       userId: user.id
     });
 
-    console.log(`[orchestrator] Project created: ${project.id}, checking if scaffold job needed...`);
-    console.log(`[orchestrator] Template check: templateKey="${templateKey}", condition met: ${templateKey && templateKey !== 'next-prisma-supabase'}`);
+    console.log(`[orchestrator] Project created: ${project.id} with template: ${finalTemplateKey}`);
+    console.log(`[orchestrator] Auto-scaffolding with template: ${finalTemplateKey}`);
 
-    // If a template is provided, automatically enqueue a scaffold job
-    if (templateKey && templateKey !== 'next-prisma-supabase') {
+    // Always scaffold with the selected template (including blank-nextjs)
+    if (finalTemplateKey) {
       try {
-        console.log(`[orchestrator] Auto-enqueueing scaffold job for project ${project.id} with template ${templateKey}`);
+        console.log(`[orchestrator] Auto-enqueueing scaffold job for project ${project.id} with template ${finalTemplateKey}`);
         
         // Create scaffold job in database
         const job = await db.createJob({
           projectId: project.id,
           userId: user.id,
           type: 'SCAFFOLD',
-          prompt: `Initialize project with ${templateKey} template`
+          prompt: `Initialize project with ${finalTemplateKey} template`
         });
 
         // Enqueue job for processing
@@ -572,8 +738,12 @@ app.post('/projects', authenticateUser, async (req, res) => {
           projectId: project.id,
           userId: user.id,
           type: 'SCAFFOLD' as const,
-          templateKey: templateKey,
-          repo: repo
+          templateKey: finalTemplateKey,
+          repo: repo || {
+            provider: 'github',
+            owner: 'user',
+            name: defaultRepoName
+          }
         };
 
         await jobQueue.add('scaffold-job', jobData, {

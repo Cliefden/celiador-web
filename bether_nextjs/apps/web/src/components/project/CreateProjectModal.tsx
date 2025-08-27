@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
-import { X, Plus, Github, Gitlab, Code, Sparkles, Zap, Palette, ShoppingCart, MessageSquare, BarChart3, Globe, Briefcase, Rocket } from 'lucide-react';
+import { X, Plus, Code, Sparkles, Zap, Palette, ShoppingCart, MessageSquare, BarChart3, Globe, Briefcase, Rocket } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 
 interface Project {
@@ -40,9 +40,7 @@ interface Template {
 
 export function CreateProjectModal({ isOpen, onClose, onProjectCreated, userId }: CreateProjectModalProps) {
   const [name, setName] = useState('');
-  const [repoOwner, setRepoOwner] = useState('');
-  const [repoName, setRepoName] = useState('');
-  const [templateKey, setTemplateKey] = useState('next-saas-starter');
+  const [templateKey, setTemplateKey] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [templates, setTemplates] = useState<Template[]>([]);
@@ -127,11 +125,6 @@ export function CreateProjectModal({ isOpen, onClose, onProjectCreated, userId }
       const projectData = {
         name,
         templateKey,
-        repo: {
-          provider: 'github',
-          owner: repoOwner,
-          name: repoName
-        },
         userId
       };
 
@@ -150,9 +143,7 @@ export function CreateProjectModal({ isOpen, onClose, onProjectCreated, userId }
         
         // Clear fields
         setName('');
-        setRepoOwner('');
-        setRepoName('');
-        setTemplateKey('next-saas-starter');
+        setTemplateKey('');
         onClose();
       } else {
         const errorText = await response.text();
@@ -193,7 +184,7 @@ export function CreateProjectModal({ isOpen, onClose, onProjectCreated, userId }
               Create New Project
             </CardTitle>
             <p className="text-sm text-muted-foreground mt-1">
-              Deploy your idea in minutes, not hours
+              Deploy your idea in minutes, connect to GitHub later
             </p>
           </div>
           <Button
@@ -219,7 +210,7 @@ export function CreateProjectModal({ isOpen, onClose, onProjectCreated, userId }
               <div>
                 <label className="text-sm font-medium">Project Details</label>
                 <p className="text-xs text-muted-foreground mt-1">
-                  Give your project a name and connect it to your GitHub repository
+                  Give your project a name to get started
                 </p>
               </div>
               <div className="grid gap-4">
@@ -231,38 +222,10 @@ export function CreateProjectModal({ isOpen, onClose, onProjectCreated, userId }
                     id="name"
                     value={name}
                     onChange={(e) => setName(e.target.value)}
-                    placeholder="my-awesome-project"
+                    placeholder="My Awesome Project"
                     required
                     disabled={isSubmitting}
                   />
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label htmlFor="repoOwner" className="block text-xs font-medium text-muted-foreground mb-2">
-                      GitHub Username
-                    </label>
-                    <Input
-                      id="repoOwner"
-                      value={repoOwner}
-                      onChange={(e) => setRepoOwner(e.target.value)}
-                      placeholder="username"
-                      required
-                      disabled={isSubmitting}
-                    />
-                  </div>
-                  <div>
-                    <label htmlFor="repoName" className="block text-xs font-medium text-muted-foreground mb-2">
-                      Repository Name
-                    </label>
-                    <Input
-                      id="repoName"
-                      value={repoName}
-                      onChange={(e) => setRepoName(e.target.value)}
-                      placeholder="my-project"
-                      required
-                      disabled={isSubmitting}
-                    />
-                  </div>
                 </div>
               </div>
             </div>
@@ -272,9 +235,11 @@ export function CreateProjectModal({ isOpen, onClose, onProjectCreated, userId }
               <div>
                 <label className="text-sm font-medium">Choose Your Template</label>
                 <p className="text-xs text-muted-foreground mt-1">
-                  Start with a professionally crafted template to accelerate your development
+                  Start with a template or begin with a minimal Next.js setup
                 </p>
               </div>
+              
+
               <div className="grid gap-3 max-h-64 overflow-y-auto pr-2">
                 {loadingTemplates ? (
                   <div className="text-center py-8 text-muted-foreground">
@@ -352,7 +317,7 @@ export function CreateProjectModal({ isOpen, onClose, onProjectCreated, userId }
               </Button>
               <Button
                 type="submit"
-                disabled={isSubmitting || !name || !repoOwner || !repoName}
+                disabled={isSubmitting || !name || !templateKey}
                 className="min-w-[140px] bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
               >
                 {isSubmitting ? (
