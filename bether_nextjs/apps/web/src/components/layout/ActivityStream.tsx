@@ -17,6 +17,7 @@ import {
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
 import { Card, CardContent } from '../ui/card';
+import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../lib/supabase';
 
 interface ActivityItem {
@@ -47,97 +48,45 @@ export function ActivityStream({ selectedProject, className = '' }: ActivityStre
   const [hasInitialized, setHasInitialized] = useState(false);
 
   useEffect(() => {
-    // Reset initialization flag when project changes
-    setHasInitialized(false);
-    
     const loadActivities = async () => {
       if (!selectedProject) {
         setActivities([]);
         setLoading(false);
-        setHasInitialized(false);
         return;
       }
 
       try {
-        // Only show loading spinner on initial load, refresh indicator otherwise
-        if (!hasInitialized) {
-          setLoading(true);
-        } else {
-          setIsRefreshing(true);
+        setLoading(true);
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) {
+          console.log('[ActivityStream] No session available');
+          setActivities([]);
+          return;
         }
-        const newActivities: ActivityItem[] = [];
-
-        // Get recent jobs
-        const { data: jobs, error: jobsError } = await supabase
-          .from('jobs')
-          .select('*')
-          .eq('projectid', selectedProject.id)
-          .order('createdat', { ascending: false })
-          .limit(showAll ? 30 : 10);
-
-        if (jobsError) {
-          console.error('Error fetching jobs:', jobsError);
-        } else if (jobs) {
-          jobs.forEach(job => {
-            newActivities.push({
-              id: `job-${job.id}`,
-              type: 'job',
-              title: getJobTitle(job.type, job.status),
-              description: job.prompt || `${job.type} job`,
-              status: job.status,
-              timestamp: job.createdat,
-              metadata: { jobId: job.id }
-            });
-          });
-        }
-
-        // Get recent messages
-        const { data: messages, error: messagesError } = await supabase
-          .from('messages')
-          .select('*, conversations!inner(projectid)')
-          .eq('conversations.projectid', selectedProject.id)
-          .order('createdat', { ascending: false })
-          .limit(showAll ? 20 : 5);
-
-        if (messagesError) {
-          console.error('Error fetching messages:', messagesError);
-        } else if (messages) {
-          messages.forEach(message => {
-            if (message.role === 'assistant' && message.relatedjobid) {
-              newActivities.push({
-                id: `message-${message.id}`,
-                type: 'conversation',
-                title: 'AI Response with Actions',
-                description: message.content.substring(0, 100) + (message.content.length > 100 ? '...' : ''),
-                timestamp: message.createdat,
-                metadata: { 
-                  messageId: message.id,
-                  conversationId: message.conversationid,
-                  jobId: message.relatedjobid
-                }
-              });
-            }
-          });
-        }
-
-        // Sort all activities by timestamp
-        newActivities.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
         
-        setActivities(newActivities);
-        setHasInitialized(true);
+        const response = await fetch(`http://localhost:4000/projects/${selectedProject.id}/activity?showAll=${showAll}`, {
+          headers: {
+            'Authorization': `Bearer ${session.access_token}`
+          }
+        });
+
+        if (!response.ok) {
+          console.error('[ActivityStream] Failed to load activities:', response.status);
+          setActivities([]);
+          return;
+        }
+
+        const data = await response.json();
+        setActivities(data.activities || []);
       } catch (error) {
-        console.error('Error loading activities:', error);
+        console.error('[ActivityStream] Error loading activities:', error);
+        setActivities([]);
       } finally {
         setLoading(false);
-        setIsRefreshing(false);
       }
     };
-
-    loadActivities();
     
-    // Refresh activities every 30 seconds
-    const interval = setInterval(loadActivities, 30000);
-    return () => clearInterval(interval);
+    loadActivities();
   }, [selectedProject, showAll]);
 
   const getJobTitle = (type: string, status: string) => {

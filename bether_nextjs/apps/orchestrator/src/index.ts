@@ -965,6 +965,114 @@ app.get('/projects/:id/jobs', authenticateUser, async (req, res) => {
   }
 });
 
+// Get project activity for the activity stream
+app.get('/projects/:id/activity', authenticateUser, async (req, res) => {
+  try {
+    const user = (req as any).user;
+    const { id } = req.params;
+    
+    // Verify project ownership
+    const project = await db.getProjectById(id);
+    if (!project) {
+      return res.status(404).json({ error: 'Project not found' });
+    }
+    if (project.userid !== user.id) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    const activities = [];
+    const showAll = req.query.showAll === 'true';
+
+    // Get recent jobs
+    const jobs = await db.getJobsByProjectId(id);
+    const recentJobs = jobs.slice(0, showAll ? 30 : 10);
+    
+    recentJobs.forEach(job => {
+      activities.push({
+        id: `job-${job.id}`,
+        type: 'job',
+        title: getJobTitle(job.type, job.status),
+        description: job.prompt || `${job.type} job`,
+        status: job.status,
+        timestamp: job.createdat,
+        metadata: { jobId: job.id }
+      });
+    });
+
+    // Get recent messages (if messages table is available)
+    try {
+      const { data: messages, error: messagesError } = await supabaseService
+        .from('messages')
+        .select('*, conversations!inner(projectid)')
+        .eq('conversations.projectid', id)
+        .order('createdat', { ascending: false })
+        .limit(showAll ? 20 : 5);
+
+      if (!messagesError && messages) {
+        messages.forEach(message => {
+          if (message.role === 'assistant' && message.relatedjobid) {
+            activities.push({
+              id: `message-${message.id}`,
+              type: 'conversation',
+              title: 'AI Response with Actions',
+              description: message.content.substring(0, 100) + (message.content.length > 100 ? '...' : ''),
+              timestamp: message.createdat,
+              metadata: { 
+                messageId: message.id,
+                conversationId: message.conversationid,
+                jobId: message.relatedjobid
+              }
+            });
+          }
+        });
+      }
+    } catch (error) {
+      // Messages table might not exist or be accessible, continue without it
+      console.log('Messages not available for activity stream:', error.message);
+    }
+
+    // Sort all activities by timestamp
+    activities.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+    
+    res.json({ activities });
+  } catch (error) {
+    console.error('Failed to fetch project activity:', error);
+    res.status(500).json({ error: 'Failed to fetch project activity' });
+  }
+});
+
+// Helper function for job titles
+function getJobTitle(type, status) {
+  // Enhanced status messages for scaffold jobs
+  if (type === 'SCAFFOLD') {
+    switch (status) {
+      case 'PENDING': return 'Setting up project template...';
+      case 'RUNNING': return 'Creating project files...';
+      case 'COMPLETED': return 'Project created successfully';
+      case 'FAILED': return 'Project creation failed';
+      case 'CANCELLED': return 'Project creation cancelled';
+      default: return `Project scaffolding ${status.toLowerCase()}`;
+    }
+  }
+  
+  const typeMap = {
+    'EDIT': 'Code Edited',
+    'TEST': 'Tests Run',
+    'DEPLOY': 'Deployed',
+    'AI_ACTION': 'AI Actions Executed'
+  };
+  
+  const statusMap = {
+    'PENDING': 'pending',
+    'RUNNING': 'in progress',
+    'COMPLETED': 'completed',
+    'FAILED': 'failed',
+    'CANCELLED': 'cancelled'
+  };
+  
+  return `${typeMap[type] || type} ${statusMap[status] || status}`;
+}
+
 // Cancel job
 app.post('/jobs/:id/cancel', authenticateUser, async (req, res) => {
   try {
