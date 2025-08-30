@@ -8,6 +8,8 @@ import { JobLogs } from '../jobs/job-logs';
 import { ProjectInfo } from './ProjectInfo';
 import { ConversationPanel } from '../conversation/ConversationPanel';
 import { GitHubConnectionModal } from './GitHubConnectionModal';
+import { IntegrationSetup } from '../integrations/IntegrationSetup';
+import { DeploymentButtons } from '../integrations/DeploymentButtons';
 import { Button } from '../ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { 
@@ -672,6 +674,34 @@ export function ProjectView({ project, userId, onProjectDeleted }: ProjectViewPr
           </div>
         </div>
       )}
+
+      {/* GitHub & Vercel Integration */}
+      <div className="glass border-t border-gray-200/50 p-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div>
+            <IntegrationSetup 
+              projectId={project.id}
+              onIntegrationChange={() => {
+                // Refresh project data when integrations change
+                setRefreshProject(prev => prev + 1);
+              }}
+            />
+          </div>
+          <div>
+            <h3 className="text-lg font-medium text-gray-900 mb-4">Deploy</h3>
+            <DeploymentButtons 
+              projectId={project.id}
+              onDeploymentStart={() => {
+                console.log('Deployment started');
+              }}
+              onDeploymentComplete={(result) => {
+                console.log('Deployment completed:', result);
+                // Could show a toast notification here
+              }}
+            />
+          </div>
+        </div>
+      </div>
 
       {/* Conversation Panel */}
       <ConversationPanel 

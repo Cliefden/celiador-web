@@ -3,6 +3,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { ConversationPanel } from '../conversation/ConversationPanel';
 import { ProjectFileExplorer } from '../file-tree/ProjectFileExplorer';
+import { IntegrationSetup } from '../integrations/IntegrationSetup';
+import { DeploymentButtons } from '../integrations/DeploymentButtons';
 import { ProjectFileEditor } from '../file-tree/ProjectFileEditor';
 import { FullscreenFileEditor } from '../file-tree/FullscreenFileEditor';
 import { PreviewFrame, PreviewDevice } from '../preview/PreviewFrame';
@@ -16,6 +18,7 @@ import {
   Maximize2,
   Minimize2,
   Monitor,
+  Rocket,
   X
 } from 'lucide-react';
 import { Button } from '../ui/button';
@@ -42,7 +45,7 @@ export function ConversationWorkspace({ selectedProject }: ConversationWorkspace
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
   const [fileExplorerCollapsed, setFileExplorerCollapsed] = useState(false);
   const [conversationCollapsed, setConversationCollapsed] = useState(false);
-  const [activeTab, setActiveTab] = useState<'chat' | 'files' | 'preview'>('chat');
+  const [activeTab, setActiveTab] = useState<'chat' | 'files' | 'preview' | 'deploy'>('chat');
   const [isMobile, setIsMobile] = useState(false);
   const [fileRefreshKey, setFileRefreshKey] = useState(0);
   const [previewDevice, setPreviewDevice] = useState<PreviewDevice>('desktop');
@@ -87,9 +90,9 @@ export function ConversationWorkspace({ selectedProject }: ConversationWorkspace
   if (isMobile) {
     return (
       <div className="flex-1 flex flex-col h-full">
-        <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as 'chat' | 'files' | 'preview')} className="flex-1 flex flex-col">
+        <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as 'chat' | 'files' | 'preview' | 'deploy')} className="flex-1 flex flex-col">
           <div className="border-b px-4 py-2">
-            <TabsList className="grid w-full grid-cols-3">
+            <TabsList className="grid w-full grid-cols-4">
               <TabsTrigger value="chat" className="flex items-center space-x-2">
                 <MessageCircle className="w-4 h-4" />
                 <span>Chat</span>
@@ -101,6 +104,10 @@ export function ConversationWorkspace({ selectedProject }: ConversationWorkspace
               <TabsTrigger value="preview" className="flex items-center space-x-2">
                 <Monitor className="w-4 h-4" />
                 <span>Preview</span>
+              </TabsTrigger>
+              <TabsTrigger value="deploy" className="flex items-center space-x-2">
+                <Rocket className="w-4 h-4" />
+                <span>Deploy</span>
               </TabsTrigger>
             </TabsList>
           </div>
@@ -174,6 +181,32 @@ export function ConversationWorkspace({ selectedProject }: ConversationWorkspace
               loading={previewLoading}
               error={previewError}
             />
+          </TabsContent>
+
+          <TabsContent value="deploy" className="flex-1 m-0 p-6">
+            <div className="space-y-6">
+              <div>
+                <h3 className="text-lg font-semibold mb-4">Integration Setup</h3>
+                <IntegrationSetup 
+                  projectId={selectedProject?.id || ''} 
+                  onIntegrationChange={() => {
+                    console.log('Integration changed');
+                  }}
+                />
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold mb-4">Deploy</h3>
+                <DeploymentButtons 
+                  projectId={selectedProject?.id || ''} 
+                  onDeploymentStart={() => {
+                    console.log('Deployment started');
+                  }}
+                  onDeploymentComplete={(result) => {
+                    console.log('Deployment completed:', result);
+                  }}
+                />
+              </div>
+            </div>
           </TabsContent>
         </Tabs>
       </div>

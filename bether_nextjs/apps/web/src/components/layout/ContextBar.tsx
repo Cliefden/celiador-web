@@ -17,6 +17,7 @@ import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Badge } from '../ui/badge';
 import { supabase } from '../../lib/supabase';
+import { DeploymentButtons } from '../integrations/DeploymentButtons';
 
 interface Project {
   id: string;
@@ -223,19 +224,35 @@ export function ContextBar({ selectedProject, conversation, onSearch }: ContextB
 
         {/* Center: Activity Summary */}
         {selectedProject && (
-          <div className="hidden md:flex items-center space-x-4 px-4">
-            <div className="flex items-center space-x-2 text-sm">
-              <Activity className="w-4 h-4 text-muted-foreground" />
-              <span className="text-muted-foreground">Status:</span>
-              <span>{activity.lastActivity}</span>
+          <div className="hidden md:flex flex-col items-start space-y-2 px-4">
+            <div className="flex items-center space-x-4">
+              <div className="flex items-center space-x-2 text-sm">
+                <Activity className="w-4 h-4 text-muted-foreground" />
+                <span className="text-muted-foreground">Status:</span>
+                <span>{activity.lastActivity}</span>
+              </div>
+              
+              {activity.completedToday > 0 && (
+                <div className="flex items-center space-x-1 text-sm">
+                  <CheckCircle className="w-4 h-4 text-green-500" />
+                  <span className="text-muted-foreground">{activity.completedToday} completed today</span>
+                </div>
+              )}
             </div>
             
-            {activity.completedToday > 0 && (
-              <div className="flex items-center space-x-1 text-sm">
-                <CheckCircle className="w-4 h-4 text-green-500" />
-                <span className="text-muted-foreground">{activity.completedToday} completed today</span>
-              </div>
-            )}
+            {/* Deployment Buttons - underneath status */}
+            <div className="flex items-center space-x-2">
+              <DeploymentButtons 
+                projectId={selectedProject.id} 
+                onDeploymentStart={() => {
+                  console.log('Deployment started');
+                }}
+                onDeploymentComplete={(result) => {
+                  console.log('Deployment completed:', result);
+                }}
+                compact={true}
+              />
+            </div>
           </div>
         )}
 
@@ -259,19 +276,21 @@ export function ContextBar({ selectedProject, conversation, onSearch }: ContextB
       
       {/* Bottom: Quick Stats */}
       {selectedProject && (
-        <div className="mt-3 flex items-center justify-between text-xs text-muted-foreground">
-          <div className="flex items-center space-x-4">
-            <span>Repository: {selectedProject.repoowner || 'No repository'}/{selectedProject.reponame || 'assigned'}</span>
-            <span>Provider: {selectedProject.repoprovider || 'none'}</span>
-          </div>
-          
-          <div className="flex items-center space-x-4">
-            {activity.runningJobs > 0 && (
-              <span className="text-blue-600 font-medium">
-                {activity.runningJobs} job{activity.runningJobs !== 1 ? 's' : ''} running
-              </span>
-            )}
-            <span>Last updated: {getRelativeTime(selectedProject.updatedat || new Date().toISOString())}</span>
+        <div className="mt-3">
+          <div className="flex items-center justify-between text-xs text-muted-foreground">
+            <div className="flex items-center space-x-4">
+              <span>Repository: {selectedProject.repoowner || 'No repository'}/{selectedProject.reponame || 'assigned'}</span>
+              <span>Provider: {selectedProject.repoprovider || 'none'}</span>
+            </div>
+            
+            <div className="flex items-center space-x-4">
+              {activity.runningJobs > 0 && (
+                <span className="text-blue-600 font-medium">
+                  {activity.runningJobs} job{activity.runningJobs !== 1 ? 's' : ''} running
+                </span>
+              )}
+              <span>Last updated: {getRelativeTime(selectedProject.updatedat || new Date().toISOString())}</span>
+            </div>
           </div>
         </div>
       )}

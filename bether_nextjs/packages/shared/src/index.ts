@@ -2,7 +2,7 @@
 import { z } from 'zod';
 
 // Job types
-export const JobType = z.enum(['SCAFFOLD', 'EDIT', 'TEST', 'DEPLOY', 'AI_ACTION']);
+export const JobType = z.enum(['SCAFFOLD', 'EDIT', 'TEST', 'DEPLOY', 'AI_ACTION', 'GITHUB_PUSH', 'VERCEL_DEPLOY', 'PREVIEW_DEPLOY']);
 export type JobType = z.infer<typeof JobType>;
 
 export const JobStatus = z.enum(['PENDING', 'RUNNING', 'COMPLETED', 'FAILED', 'CANCELLED']);
@@ -64,6 +64,47 @@ export const LLMMetadata = z.object({
 }).passthrough(); // Allow additional properties
 
 export type LLMMetadata = z.infer<typeof LLMMetadata>;
+
+// Integration schemas
+export const ProjectIntegration = z.object({
+  id: z.string(),
+  projectId: z.string(),
+  githubEnabled: z.boolean().default(false),
+  githubDefaultBranch: z.string().default('main'),
+  vercelEnabled: z.boolean().default(false),
+  vercelProjectId: z.string().optional(),
+  vercelTeamId: z.string().optional(),
+  vercelAccessToken: z.string().optional(),
+  vercelDomain: z.string().optional(),
+  deploymentMode: z.enum(['GITHUB_ONLY', 'SMART_BRANCHING']).default('GITHUB_ONLY'),
+  createdAt: z.date(),
+  updatedAt: z.date()
+});
+
+export type ProjectIntegration = z.infer<typeof ProjectIntegration>;
+
+export const DeploymentHistory = z.object({
+  id: z.string(),
+  projectId: z.string(),
+  type: z.enum(['GITHUB_PUSH', 'VERCEL_DEPLOY', 'PREVIEW_DEPLOY']),
+  branch: z.string().optional(),
+  commitSha: z.string().optional(),
+  vercelUrl: z.string().optional(),
+  status: z.enum(['PENDING', 'SUCCESS', 'FAILED']),
+  metadata: z.record(z.any()).optional(),
+  createdAt: z.date()
+});
+
+export type DeploymentHistory = z.infer<typeof DeploymentHistory>;
+
+export const DeploymentAction = z.object({
+  type: z.enum(['GITHUB_PUSH', 'VERCEL_DEPLOY', 'PREVIEW_DEPLOY']),
+  commitMessage: z.string(),
+  branch: z.string().optional(),
+  mergeToMain: z.boolean().optional()
+});
+
+export type DeploymentAction = z.infer<typeof DeploymentAction>;
 
 // Enhanced job result with LLM metadata
 export const EnhancedJobResult = JobResult.extend({

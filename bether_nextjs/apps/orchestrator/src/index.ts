@@ -265,6 +265,10 @@ app.use((req, res, next) => {
   next();
 });
 
+// Integration routes
+import integrationsRouter from './routes/integrations';
+app.use('/api/integrations', integrationsRouter);
+
 // Redis connection
 const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379';
 
@@ -280,7 +284,7 @@ const authenticateUser = async (req: express.Request, res: express.Response, nex
   console.log('[orchestrator] Auth middleware - headers:', req.headers.authorization ? 'present' : 'missing');
   
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    console.log('[orchestrator] Auth middleware - invalid header format');
+    console.log('[orchestrator] Auth middleware - invalid header format for path:', req.path);
     return res.status(401).json({ error: 'Missing or invalid authorization header' });
   }
 
