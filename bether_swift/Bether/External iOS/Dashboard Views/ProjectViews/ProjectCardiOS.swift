@@ -52,11 +52,17 @@ struct ProjectCard_iOS: View {
             }
             
             Spacer()
+            
+            // Navigation indicator
+            Image(systemName: "chevron.right")
+                .font(.caption)
+                .foregroundColor(.secondary)
         }
         .padding()
         .background(Color(.systemBackground))
         .cornerRadius(12)
         .shadow(color: .black.opacity(0.05), radius: 4, x: 0, y: 2)
+        .buttonStyle(PlainButtonStyle())
         .onAppear {
             template = ProjectTemplate.allCases.first(where: { $0.rawValue == project.templateKey }) ?? .aiChatApp
             

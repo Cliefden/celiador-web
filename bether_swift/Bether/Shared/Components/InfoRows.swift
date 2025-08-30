@@ -23,6 +23,33 @@ struct InfoRow: View {
     }
 }
 
+struct InfoRow2: View {
+    let label: String
+    let value: String
+    let icon: String
+    var valueColor: Color = .primary
+    
+    var body: some View {
+        HStack {
+            Image(systemName: icon)
+                .font(.body)
+                .foregroundColor(.blue)
+                .frame(width: 20)
+            
+            Text(label)
+                .font(.body)
+                .foregroundColor(.secondary)
+            
+            Spacer()
+            
+            Text(value)
+                .font(.body)
+                .fontWeight(.medium)
+                .foregroundColor(valueColor)
+        }
+    }
+}
+
 struct DateInfoRow: View {
     let title: String
     let date: Date?

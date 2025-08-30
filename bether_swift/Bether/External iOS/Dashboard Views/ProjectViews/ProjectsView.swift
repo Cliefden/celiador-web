@@ -49,7 +49,9 @@ struct ProjectsView: View {
                 ScrollView {
                     LazyVStack {
                         ForEach(filteredProjects) { item in
-                            ProjectCard_iOS(project: item)
+                            NavigationLink(destination: ProjectDetailiOS(project: item)) {
+                                ProjectCard_iOS(project: item)
+                            }
                         }
                     }
                 }
