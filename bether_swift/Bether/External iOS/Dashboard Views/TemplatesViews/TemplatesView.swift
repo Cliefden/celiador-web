@@ -6,29 +6,93 @@
 //
 
 import SwiftUI
+import Supabasable
 
 struct TemplatesView: View {
-    @State private var selectedCategory: TemplateCategory = .all
+    @State private var selectedCategory: TemplateCategory? = nil
     @State private var searchText = ""
     @State private var showingTemplateDetail: Template? = nil
+    @State private var templates = SBTableViewModel<Template>()
+    @State private var categories = SBTableViewModel<TemplateCategory>()
+    @State private var features = SBTableViewModel<TemplateFeature>()
+    @State private var techStack = SBTableViewModel<TemplateTechStack>()
+    @State private var templateCategories = SBTableViewModel<TemplatesCategoriesJunction>()
+    @State private var templateFeatures = SBTableViewModel<TemplatesFeaturesJunction>()
+    @State private var templateTechStack = SBTableViewModel<TemplatesTechStackJunction>()
+    
+    var availableCategories: [TemplateCategory] {
+        categories.items.filter { $0.deleter == nil && $0.isActive == true }
+            .sorted { ($0.sortOrder ?? 0) < ($1.sortOrder ?? 0) }
+    }
     
     var filteredTemplates: [Template] {
-        var templates = sampleTemplates
+        var filteredTemplates = templates.items.filter { 
+            $0.deleter == nil && $0.isActive == true 
+        }
         
-        // Filter by category
-        if selectedCategory != .all {
-            templates = templates.filter { $0.category == selectedCategory }
+        // Filter by category using junction table
+        if let selectedCategory = selectedCategory, let categoryId = selectedCategory.id {
+            let templatesInCategory = templateCategories.items
+                .filter { $0.deleter == nil && $0.categoryId == categoryId }
+                .compactMap { $0.templateId }
+            
+            filteredTemplates = filteredTemplates.filter { template in
+                guard let templateId = template.id else { return false }
+                return templatesInCategory.contains(templateId)
+            }
         }
         
         // Filter by search
         if !searchText.isEmpty {
-            templates = templates.filter {
-                $0.name.localizedCaseInsensitiveContains(searchText) ||
-                $0.description.localizedCaseInsensitiveContains(searchText)
+            filteredTemplates = filteredTemplates.filter {
+                ($0.name?.localizedCaseInsensitiveContains(searchText) ?? false) ||
+                ($0.description?.localizedCaseInsensitiveContains(searchText) ?? false)
             }
         }
         
-        return templates
+        return filteredTemplates.sorted { ($0.sortOrder ?? 0) < ($1.sortOrder ?? 0) }
+    }
+    
+    // Helper method to get features for a template
+    func getFeaturesForTemplate(_ template: Template) -> [TemplateFeature] {
+        guard let templateId = template.id else { return [] }
+        
+        let featureIds = templateFeatures.items
+            .filter { $0.deleter == nil && $0.templateId == templateId }
+            .compactMap { $0.featureId }
+        
+        return features.items.filter { feature in
+            guard let featureId = feature.id else { return false }
+            return featureIds.contains(featureId) && feature.deleter == nil
+        }
+    }
+    
+    // Helper method to get tech stack for a template
+    func getTechStackForTemplate(_ template: Template) -> [TemplateTechStack] {
+        guard let templateId = template.id else { return [] }
+        
+        let techIds = templateTechStack.items
+            .filter { $0.deleter == nil && $0.templateId == templateId }
+            .compactMap { $0.techId }
+        
+        return techStack.items.filter { tech in
+            guard let techId = tech.id else { return false }
+            return techIds.contains(techId) && tech.deleter == nil
+        }
+    }
+    
+    // Helper method to get categories for a template
+    func getCategoriesForTemplate(_ template: Template) -> [TemplateCategory] {
+        guard let templateId = template.id else { return [] }
+        
+        let categoryIds = templateCategories.items
+            .filter { $0.deleter == nil && $0.templateId == templateId }
+            .compactMap { $0.categoryId }
+        
+        return categories.items.filter { category in
+            guard let categoryId = category.id else { return false }
+            return categoryIds.contains(categoryId) && category.deleter == nil
+        }
     }
     
     var body: some View {
@@ -71,10 +135,28 @@ struct TemplatesView: View {
             // Category Filter
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 12) {
-                    ForEach(TemplateCategory.allCases, id: \.self) { category in
+                    // "All" category chip
+                    Button {
+                        selectedCategory = nil
+                    } label: {
+                        HStack {
+                            Image(systemName: "square.grid.2x2")
+                            Text("All")
+                        }
+                        .font(.subheadline)
+                        .fontWeight(selectedCategory == nil ? .semibold : .regular)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 8)
+                        .background(selectedCategory == nil ? Color.blue : Color(.systemGray6))
+                        .foregroundColor(selectedCategory == nil ? .white : .primary)
+                        .cornerRadius(20)
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                    
+                    ForEach(availableCategories) { category in
                         CategoryChip(
                             category: category,
-                            isSelected: selectedCategory == category
+                            isSelected: selectedCategory?.id == category.id
                         ) {
                             selectedCategory = category
                         }
@@ -102,6 +184,24 @@ struct TemplatesView: View {
         .sheet(item: $showingTemplateDetail) { template in
             TemplateDetailSheet(template: template)
         }
+        .onFirstAppear {
+            templates.addListener()
+            categories.addListener()
+            features.addListener()
+            techStack.addListener()
+            templateCategories.addListener()
+            templateFeatures.addListener()
+            templateTechStack.addListener()
+        }
+        .onDisappear {
+            templates.cancelListener()
+            categories.cancelListener()
+            features.cancelListener()
+            techStack.cancelListener()
+            templateCategories.cancelListener()
+            templateFeatures.cancelListener()
+            templateTechStack.cancelListener()
+        }
     }
     
 }
@@ -111,154 +211,154 @@ struct TemplatesView: View {
 
 
 
-// MARK: - Data Models
-struct Template: Identifiable {
-    let id: UUID
-    let name: String
-    let description: String
-    let longDescription: String
-    let category: TemplateCategory
-    let icon: String
-    let emoji: String
-    let colors: [Color]
-    let rating: Double
-    let difficulty: TemplateDifficulty
-    let features: [String]
-    let techStack: [String]
-}
-
-
-
-// Sample data
-let sampleTemplates = [
-    Template(
-        id: UUID(),
-        name: "SaaS Starter Kit",
-        description: "Complete SaaS application with auth, payments, and dashboard",
-        longDescription: "A comprehensive SaaS starter kit with user authentication, subscription management, payment processing, and a beautiful dashboard. Perfect for launching your next SaaS product quickly.",
-        category: .saas,
-        icon: "cloud",
-        emoji: "🚀",
-        colors: [.blue, .purple],
-        rating: 4.8,
-        difficulty: .intermediate,
-        features: [
-            "User Authentication",
-            "Stripe Integration",
-            "Admin Dashboard",
-            "Email Templates",
-            "Database Schema",
-            "Responsive Design"
-        ],
-        techStack: ["Next.js", "TypeScript", "Tailwind", "Stripe", "Supabase"]
-    ),
-    Template(
-        id: UUID(),
-        name: "AI Chat Assistant",
-        description: "Smart chatbot with OpenAI integration and beautiful UI",
-        longDescription: "An intelligent chat assistant powered by OpenAI's GPT models. Features real-time conversations, message history, and customizable AI personalities.",
-        category: .ai,
-        icon: "brain",
-        emoji: "🤖",
-        colors: [.purple, .pink],
-        rating: 4.9,
-        difficulty: .advanced,
-        features: [
-            "OpenAI Integration",
-            "Real-time Chat",
-            "Message History",
-            "Custom AI Personas",
-            "File Uploads",
-            "Voice Input"
-        ],
-        techStack: ["React", "OpenAI API", "WebSocket", "Node.js", "MongoDB"]
-    ),
-    Template(
-        id: UUID(),
-        name: "E-commerce Store",
-        description: "Full-featured online store with cart and payments",
-        longDescription: "A complete e-commerce solution with product catalog, shopping cart, checkout process, and order management. Ready to start selling online immediately.",
-        category: .ecommerce,
-        icon: "cart",
-        emoji: "🛍️",
-        colors: [.green, .blue],
-        rating: 4.7,
-        difficulty: .intermediate,
-        features: [
-            "Product Catalog",
-            "Shopping Cart",
-            "Payment Processing",
-            "Order Management",
-            "Inventory Tracking",
-            "Customer Accounts"
-        ],
-        techStack: ["Next.js", "Stripe", "Prisma", "PostgreSQL", "Redis"]
-    ),
-    Template(
-        id: UUID(),
-        name: "Analytics Dashboard",
-        description: "Beautiful dashboard with charts and real-time data",
-        longDescription: "A comprehensive analytics dashboard with interactive charts, real-time data updates, and customizable widgets. Perfect for monitoring business metrics.",
-        category: .dashboard,
-        icon: "chart.bar",
-        emoji: "📊",
-        colors: [.orange, .red],
-        rating: 4.6,
-        difficulty: .beginner,
-        features: [
-            "Interactive Charts",
-            "Real-time Updates",
-            "Custom Widgets",
-            "Data Export",
-            "User Roles",
-            "Mobile Responsive"
-        ],
-        techStack: ["React", "Chart.js", "WebSocket", "Express", "MySQL"]
-    ),
-    Template(
-        id: UUID(),
-        name: "Landing Page Pro",
-        description: "High-converting landing page with modern design",
-        longDescription: "A professionally designed landing page template with high conversion optimization, A/B testing support, and integrated analytics.",
-        category: .landing,
-        icon: "doc.text",
-        emoji: "📄",
-        colors: [.blue, .green],
-        rating: 4.5,
-        difficulty: .beginner,
-        features: [
-            "High Conversion Design",
-            "A/B Testing",
-            "Contact Forms",
-            "Analytics Integration",
-            "SEO Optimized",
-            "Fast Loading"
-        ],
-        techStack: ["HTML", "CSS", "JavaScript", "Tailwind", "Alpine.js"]
-    ),
-    Template(
-        id: UUID(),
-        name: "Task Manager App",
-        description: "Collaborative task management with teams and projects",
-        longDescription: "A full-featured task management application with team collaboration, project organization, and productivity tracking.",
-        category: .saas,
-        icon: "checkmark.circle",
-        emoji: "✅",
-        colors: [.purple, .blue],
-        rating: 4.4,
-        difficulty: .intermediate,
-        features: [
-            "Task Management",
-            "Team Collaboration",
-            "Project Organization",
-            "Time Tracking",
-            "Notifications",
-            "File Attachments"
-        ],
-        techStack: ["Vue.js", "Node.js", "MongoDB", "Socket.io", "Redis"]
-    )
-]
-
-#Preview {
-    TemplatesView()
-}
+//// MARK: - Data Models
+//struct Template: Identifiable {
+//    let id: UUID
+//    let name: String
+//    let description: String
+//    let longDescription: String
+//    let category: TemplateCategory
+//    let icon: String
+//    let emoji: String
+//    let colors: [Color]
+//    let rating: Double
+//    let difficulty: TemplateDifficulty
+//    let features: [String]
+//    let techStack: [String]
+//}
+//
+//
+//
+//// Sample data
+//let sampleTemplates = [
+//    Template(
+//        id: UUID(),
+//        name: "SaaS Starter Kit",
+//        description: "Complete SaaS application with auth, payments, and dashboard",
+//        longDescription: "A comprehensive SaaS starter kit with user authentication, subscription management, payment processing, and a beautiful dashboard. Perfect for launching your next SaaS product quickly.",
+//        category: .saas,
+//        icon: "cloud",
+//        emoji: "🚀",
+//        colors: [.blue, .purple],
+//        rating: 4.8,
+//        difficulty: .intermediate,
+//        features: [
+//            "User Authentication",
+//            "Stripe Integration",
+//            "Admin Dashboard",
+//            "Email Templates",
+//            "Database Schema",
+//            "Responsive Design"
+//        ],
+//        techStack: ["Next.js", "TypeScript", "Tailwind", "Stripe", "Supabase"]
+//    ),
+//    Template(
+//        id: UUID(),
+//        name: "AI Chat Assistant",
+//        description: "Smart chatbot with OpenAI integration and beautiful UI",
+//        longDescription: "An intelligent chat assistant powered by OpenAI's GPT models. Features real-time conversations, message history, and customizable AI personalities.",
+//        category: .ai,
+//        icon: "brain",
+//        emoji: "🤖",
+//        colors: [.purple, .pink],
+//        rating: 4.9,
+//        difficulty: .advanced,
+//        features: [
+//            "OpenAI Integration",
+//            "Real-time Chat",
+//            "Message History",
+//            "Custom AI Personas",
+//            "File Uploads",
+//            "Voice Input"
+//        ],
+//        techStack: ["React", "OpenAI API", "WebSocket", "Node.js", "MongoDB"]
+//    ),
+//    Template(
+//        id: UUID(),
+//        name: "E-commerce Store",
+//        description: "Full-featured online store with cart and payments",
+//        longDescription: "A complete e-commerce solution with product catalog, shopping cart, checkout process, and order management. Ready to start selling online immediately.",
+//        category: .ecommerce,
+//        icon: "cart",
+//        emoji: "🛍️",
+//        colors: [.green, .blue],
+//        rating: 4.7,
+//        difficulty: .intermediate,
+//        features: [
+//            "Product Catalog",
+//            "Shopping Cart",
+//            "Payment Processing",
+//            "Order Management",
+//            "Inventory Tracking",
+//            "Customer Accounts"
+//        ],
+//        techStack: ["Next.js", "Stripe", "Prisma", "PostgreSQL", "Redis"]
+//    ),
+//    Template(
+//        id: UUID(),
+//        name: "Analytics Dashboard",
+//        description: "Beautiful dashboard with charts and real-time data",
+//        longDescription: "A comprehensive analytics dashboard with interactive charts, real-time data updates, and customizable widgets. Perfect for monitoring business metrics.",
+//        category: .dashboard,
+//        icon: "chart.bar",
+//        emoji: "📊",
+//        colors: [.orange, .red],
+//        rating: 4.6,
+//        difficulty: .beginner,
+//        features: [
+//            "Interactive Charts",
+//            "Real-time Updates",
+//            "Custom Widgets",
+//            "Data Export",
+//            "User Roles",
+//            "Mobile Responsive"
+//        ],
+//        techStack: ["React", "Chart.js", "WebSocket", "Express", "MySQL"]
+//    ),
+//    Template(
+//        id: UUID(),
+//        name: "Landing Page Pro",
+//        description: "High-converting landing page with modern design",
+//        longDescription: "A professionally designed landing page template with high conversion optimization, A/B testing support, and integrated analytics.",
+//        category: .landing,
+//        icon: "doc.text",
+//        emoji: "📄",
+//        colors: [.blue, .green],
+//        rating: 4.5,
+//        difficulty: .beginner,
+//        features: [
+//            "High Conversion Design",
+//            "A/B Testing",
+//            "Contact Forms",
+//            "Analytics Integration",
+//            "SEO Optimized",
+//            "Fast Loading"
+//        ],
+//        techStack: ["HTML", "CSS", "JavaScript", "Tailwind", "Alpine.js"]
+//    ),
+//    Template(
+//        id: UUID(),
+//        name: "Task Manager App",
+//        description: "Collaborative task management with teams and projects",
+//        longDescription: "A full-featured task management application with team collaboration, project organization, and productivity tracking.",
+//        category: .saas,
+//        icon: "checkmark.circle",
+//        emoji: "✅",
+//        colors: [.purple, .blue],
+//        rating: 4.4,
+//        difficulty: .intermediate,
+//        features: [
+//            "Task Management",
+//            "Team Collaboration",
+//            "Project Organization",
+//            "Time Tracking",
+//            "Notifications",
+//            "File Attachments"
+//        ],
+//        techStack: ["Vue.js", "Node.js", "MongoDB", "Socket.io", "Redis"]
+//    )
+//]
+//
+//#Preview {
+//    TemplatesView()
+//}

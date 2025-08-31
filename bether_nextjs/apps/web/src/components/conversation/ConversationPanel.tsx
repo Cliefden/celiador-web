@@ -20,6 +20,7 @@ interface ConversationPanelProps {
   onToggle?: (isOpen: boolean) => void;
   onFileOperation?: () => void;
   embedded?: boolean; // New prop to control embedded vs floating mode
+  conversationHook?: any; // Optional shared conversation hook
 }
 
 export function ConversationPanel({ 
@@ -28,20 +29,22 @@ export function ConversationPanel({
   className = '',
   onToggle,
   onFileOperation,
-  embedded = false
+  embedded = false,
+  conversationHook
 }: ConversationPanelProps) {
   const [isOpen, setIsOpen] = useState(embedded ? true : false); // Start open if embedded
   const [message, setMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
+  const defaultConversationHook = useConversation(selectedProject?.id || projectId);
   const {
     conversation,
     messages,
     sendMessage,
     createConversation,
     loading: conversationLoading
-  } = useConversation(selectedProject?.id || projectId);
+  } = conversationHook || defaultConversationHook;
 
   // Debug logging
   useEffect(() => {

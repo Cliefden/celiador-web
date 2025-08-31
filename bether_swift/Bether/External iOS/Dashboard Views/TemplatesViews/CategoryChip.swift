@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import OptionalHelpers
 
 struct CategoryChip: View {
     let category: TemplateCategory
@@ -15,17 +16,26 @@ struct CategoryChip: View {
     var body: some View {
         Button(action: action) {
             HStack {
-                Image(systemName: category.icon)
-                Text(category.displayName)
+                Image(systemName: category.icon.uW)
+                Text(category.name.uW)
             }
             .font(.subheadline)
             .fontWeight(isSelected ? .semibold : .regular)
             .padding(.horizontal, 16)
             .padding(.vertical, 8)
-            .background(isSelected ? Color.blue : Color(.systemGray6))
+            .background(isSelected ? category.primaryColor : Color(.systemGray6))
             .foregroundColor(isSelected ? .white : .primary)
             .cornerRadius(20)
         }
         .buttonStyle(PlainButtonStyle())
+    }
+}
+
+extension TemplateCategory {
+    var primaryColor: Color {
+        if let colorPrimary = colorPrimary {
+            return Color(hex: colorPrimary) ?? .blue
+        }
+        return .blue
     }
 }

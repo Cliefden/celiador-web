@@ -12,6 +12,7 @@ import { IntegrationSetup } from '../integrations/IntegrationSetup';
 import { DeploymentButtons } from '../integrations/DeploymentButtons';
 import { Button } from '../ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
+import type { ProjectCommand } from '@bether/shared';
 import { 
   Code, 
   TestTube, 
@@ -26,7 +27,10 @@ import {
   AlertCircle,
   Loader2,
   Github,
-  ExternalLink
+  ExternalLink,
+  MessageSquare,
+  Mic,
+  Send
 } from 'lucide-react';
 
 interface Project {
@@ -90,6 +94,9 @@ export function ProjectView({ project, userId, onProjectDeleted }: ProjectViewPr
   const [isScaffolding, setIsScaffolding] = useState(false);
   const [showGitHubModal, setShowGitHubModal] = useState(false);
   const [refreshProject, setRefreshProject] = useState(0);
+  const [commands, setCommands] = useState<ProjectCommand[]>([]);
+  const [commandText, setCommandText] = useState('');
+  const [isSubmittingCommand, setIsSubmittingCommand] = useState(false);
 
   // Fetch project jobs and monitor for scaffold job completion
   useEffect(() => {
@@ -451,6 +458,88 @@ export function ProjectView({ project, userId, onProjectDeleted }: ProjectViewPr
     }
   };
 
+  // Fetch project commands
+  const fetchCommands = async () => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+
+      const response = await fetch(`/api/projects/${project.id}/commands`, {
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`
+        }
+      });
+
+      if (response.ok) {
+        const { commands: commandsData } = await response.json();
+        setCommands(commandsData || []);
+      }
+    } catch (error) {
+      console.error('Failed to fetch commands:', error);
+    }
+  };
+
+  // Submit a new command
+  const submitCommand = async () => {
+    if (!commandText.trim() || isSubmittingCommand) return;
+
+    setIsSubmittingCommand(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+
+      const response = await fetch(`/api/projects/${project.id}/commands`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`
+        },
+        body: JSON.stringify({
+          command_text: commandText.trim(),
+          command_type: 'text',
+          status: 'pending'
+        })
+      });
+
+      if (response.ok) {
+        setCommandText('');
+        fetchCommands(); // Refresh commands
+      }
+    } catch (error) {
+      console.error('Failed to submit command:', error);
+    } finally {
+      setIsSubmittingCommand(false);
+    }
+  };
+
+  // Fetch commands on mount and when project changes
+  useEffect(() => {
+    fetchCommands();
+    
+    // Set up real-time subscription for commands
+    const channel = supabase
+      .channel(`project_commands:${project.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'project_commands',
+          filter: `project_id=eq.${project.id}`
+        },
+        (payload) => {
+          console.log('Command update:', payload);
+          // Refresh commands when there are changes
+          fetchCommands();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      channel.unsubscribe();
+    };
+  }, [project.id]);
+
   return (
     <div className="h-full flex flex-col bg-gradient-to-br from-gray-50 to-gray-100">
       {/* Project Header */}
@@ -585,9 +674,83 @@ export function ProjectView({ project, userId, onProjectDeleted }: ProjectViewPr
           />
         </div>
 
-        {/* Job Logs */}
-        <div className="w-96 bg-white/70 backdrop-blur-sm border-l border-gray-200/50">
-          <div className="p-4 h-full flex flex-col">
+        {/* Commands & Job Logs */}
+        <div className="w-96 bg-white/70 backdrop-blur-sm border-l border-gray-200/50 flex flex-col">
+          {/* Commands Section */}
+          <div className="p-4 border-b border-gray-200/50">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-900 flex items-center space-x-2">
+                <MessageSquare className="w-5 h-5" />
+                <span>Commands</span>
+              </h3>
+            </div>
+            
+            {/* Command Input */}
+            <div className="flex space-x-2 mb-4">
+              <input
+                type="text"
+                value={commandText}
+                onChange={(e) => setCommandText(e.target.value)}
+                placeholder="Type a command..."
+                className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                onKeyDown={(e) => e.key === 'Enter' && submitCommand()}
+                disabled={isSubmittingCommand}
+              />
+              <Button
+                onClick={submitCommand}
+                disabled={!commandText.trim() || isSubmittingCommand}
+                size="sm"
+                className="px-3 py-2"
+              >
+                {isSubmittingCommand ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Send className="w-4 h-4" />
+                )}
+              </Button>
+            </div>
+
+            {/* Recent Commands */}
+            <div className="space-y-2 max-h-32 overflow-y-auto">
+              {commands.slice(0, 3).map((command) => (
+                <div
+                  key={command.id}
+                  className="flex items-start justify-between p-2 bg-gray-50 rounded-md text-sm"
+                >
+                  <div className="flex-1 min-w-0">
+                    <p className="text-gray-900 truncate">{command.command_text}</p>
+                    <div className="flex items-center space-x-2 mt-1">
+                      <span className="text-xs text-gray-500">
+                        {new Date(command.created_at).toLocaleTimeString()}
+                      </span>
+                      {command.command_type === 'voice' && (
+                        <Mic className="w-3 h-3 text-blue-500" />
+                      )}
+                    </div>
+                  </div>
+                  <div
+                    className={`w-2 h-2 rounded-full flex-shrink-0 mt-2 ${
+                      command.status === 'completed'
+                        ? 'bg-green-500'
+                        : command.status === 'failed'
+                        ? 'bg-red-500'
+                        : command.status === 'processing'
+                        ? 'bg-blue-500'
+                        : 'bg-yellow-500'
+                    }`}
+                  />
+                </div>
+              ))}
+              {commands.length === 0 && (
+                <p className="text-gray-500 text-sm text-center py-2">
+                  No commands yet
+                </p>
+              )}
+            </div>
+          </div>
+
+          {/* Job Logs */}
+          <div className="flex-1 p-4">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-semibold text-gray-900">Job Logs</h3>
               <div className="flex items-center space-x-2">

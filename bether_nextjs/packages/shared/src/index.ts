@@ -115,3 +115,24 @@ export type EnhancedJobResult = z.infer<typeof EnhancedJobResult>;
 
 // File storage exports
 export { FileStorageService, type FileData, type FileTreeItem } from './storage.js';
+
+// Subscription exports
+export type {
+  SubscriptionTier,
+  SubscriptionStatus,
+  BillingCycle,
+  Subscription,
+  SubscriptionLimits,
+  UsageTracking,
+  SubscriptionEvent
+} from './types/subscription.js';
+
+export { SubscriptionService, TIER_PRICING, getTierLimits, canUserPerformAction } from './types/subscription.js';
+export { SubscriptionService as SubscriptionServiceClass } from './services/subscription-service.js';
+
+// Project command exports
+export type {
+  ProjectCommand,
+  CreateProjectCommandData,
+  UpdateProjectCommandData
+} from './types/project-command.js';

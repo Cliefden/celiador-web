@@ -20,16 +20,26 @@ export default function SignInModal({ isOpen, onClose, onSwitchToSignUp }: SignI
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    console.log('SignInModal: Form submitted with email:', email);
     setIsLoading(true);
     setError('');
 
-    const { error } = await signIn(email, password);
+    try {
+      console.log('SignInModal: Calling signIn function...');
+      const { error } = await signIn(email, password);
+      console.log('SignInModal: SignIn response:', { error });
 
-    if (error) {
-      setError(error.message || 'Failed to sign in');
-    } else {
-      onClose();
-      // Redirect to dashboard will be handled by AuthContext
+      if (error) {
+        console.error('SignInModal: Sign in error:', error);
+        setError(error.message || 'Failed to sign in');
+      } else {
+        console.log('SignInModal: Sign in successful, closing modal');
+        onClose();
+        // Redirect to dashboard will be handled by AuthContext
+      }
+    } catch (err) {
+      console.error('SignInModal: Unexpected error:', err);
+      setError('An unexpected error occurred');
     }
 
     setIsLoading(false);

@@ -42,6 +42,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Fetch user profile from profiles table
   const fetchProfile = async (userId: string) => {
     try {
+      console.log('AuthContext: Attempting to fetch profile for userId:', userId);
       const { data, error } = await supabase
         .from('profiles')
         .select('*')
@@ -49,13 +50,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         .single();
 
       if (error) {
-        console.error('Error fetching profile:', error);
+        console.error('AuthContext: Error fetching profile:', error);
+        console.error('AuthContext: Profile error details:', {
+          code: error.code,
+          message: error.message,
+          details: error.details,
+          hint: error.hint
+        });
         return null;
       }
 
+      console.log('AuthContext: Profile data retrieved:', data);
       return data as Profile;
     } catch (error) {
-      console.error('Error fetching profile:', error);
+      console.error('AuthContext: Unexpected error fetching profile:', error);
       return null;
     }
   };
@@ -67,13 +75,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const initializeAuth = async () => {
       try {
         console.log('AuthContext: Starting auth initialization...');
+        console.log('AuthContext: Supabase URL:', process.env.NEXT_PUBLIC_SUPABASE_URL);
+        
+        // Test basic Supabase connectivity
+        try {
+          const testResponse = await supabase.from('profiles').select('count', { count: 'exact', head: true });
+          console.log('AuthContext: Supabase connectivity test:', { 
+            error: testResponse.error, 
+            status: testResponse.status,
+            statusText: testResponse.statusText 
+          });
+        } catch (testError) {
+          console.error('AuthContext: Supabase connectivity test failed:', testError);
+        }
         
         // Get initial session
         const { data: { session }, error } = await supabase.auth.getSession();
-        console.log('AuthContext: Got session:', !!session, 'Error:', error);
+        console.log('AuthContext: Got session:', !!session, 'User:', session?.user?.email, 'Error:', error);
         
         if (error) {
           console.error('AuthContext: Session error:', error);
+          console.error('AuthContext: Session error details:', {
+            code: error.code,
+            message: error.message,
+            status: error.status
+          });
         }
         
         if (!isMounted) return;
@@ -86,7 +112,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           const userProfile = await fetchProfile(session.user.id);
           if (isMounted) {
             setProfile(userProfile);
-            console.log('AuthContext: Profile loaded:', !!userProfile);
+            console.log('AuthContext: Profile loaded:', !!userProfile, userProfile);
           }
         }
 
@@ -122,13 +148,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     };
 
-    // Add shorter timeout to detect auth issues faster
+    // Add timeout to detect auth issues
     const timeoutId = setTimeout(() => {
       console.log('AuthContext: Timeout reached, forcing loading to false');
       if (isMounted) {
         setIsLoading(false);
       }
-    }, 3000); // Reduced from 5000 to 3000
+    }, 10000); // Increased to 10 seconds for debugging
 
     initializeAuth().finally(() => {
       clearTimeout(timeoutId);
@@ -142,17 +168,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Sign in function
   const signIn = async (email: string, password: string) => {
     try {
-      const { error } = await supabase.auth.signInWithPassword({
+      console.log('AuthContext: signIn called with email:', email);
+      const { error, data } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
 
+      console.log('AuthContext: Supabase signIn response:', { error, user: data?.user?.email });
+
       if (!error) {
+        console.log('AuthContext: Sign in successful, auth state listener will handle redirect');
         // Profile will be fetched by the auth state change listener
       }
 
       return { error };
     } catch (error) {
+      console.error('AuthContext: Unexpected error in signIn:', error);
       return { error };
     }
   };

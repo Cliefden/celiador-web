@@ -5,10 +5,14 @@ import { ConversationPanel } from '../conversation/ConversationPanel';
 import { ProjectFileExplorer } from '../file-tree/ProjectFileExplorer';
 import { IntegrationSetup } from '../integrations/IntegrationSetup';
 import { DeploymentButtons } from '../integrations/DeploymentButtons';
+import { CommandsPanel } from '../commands/CommandsPanel';
+import { ClaudeCodePanel } from '../claude-code/ClaudeCodePanel';
 import { ProjectFileEditor } from '../file-tree/ProjectFileEditor';
 import { FullscreenFileEditor } from '../file-tree/FullscreenFileEditor';
 import { PreviewFrame, PreviewDevice } from '../preview/PreviewFrame';
 import { usePreview } from '../../hooks/usePreview';
+import { useConversation } from '../conversation/useConversation';
+import { supabase } from '../../lib/supabase';
 import { 
   MessageCircle, 
   FolderOpen, 
@@ -19,7 +23,8 @@ import {
   Minimize2,
   Monitor,
   Rocket,
-  X
+  X,
+  Terminal
 } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Card } from '../ui/card';
@@ -41,16 +46,21 @@ interface ConversationWorkspaceProps {
   selectedProject: Project | null;
 }
 
+// Add a global refresh function for commands
+let globalCommandsRefresh: (() => void) | null = null;
+
 export function ConversationWorkspace({ selectedProject }: ConversationWorkspaceProps) {
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
   const [fileExplorerCollapsed, setFileExplorerCollapsed] = useState(false);
   const [conversationCollapsed, setConversationCollapsed] = useState(false);
-  const [activeTab, setActiveTab] = useState<'chat' | 'files' | 'preview' | 'deploy'>('chat');
+  const [activeTab, setActiveTab] = useState<'chat' | 'files' | 'preview' | 'deploy' | 'commands' | 'claude-code'>('chat');
   const [isMobile, setIsMobile] = useState(false);
   const [fileRefreshKey, setFileRefreshKey] = useState(0);
   const [previewDevice, setPreviewDevice] = useState<PreviewDevice>('desktop');
   const [fullscreenEditor, setFullscreenEditor] = useState(false);
   const [previewCollapsed, setPreviewCollapsed] = useState(false);
+  const [commandsCollapsed, setCommandsCollapsed] = useState(false);
+  const [claudeCodeCollapsed, setClaudeCodeCollapsed] = useState(false);
 
   // Use preview hook
   const { 
@@ -62,10 +72,69 @@ export function ConversationWorkspace({ selectedProject }: ConversationWorkspace
     restartPreview 
   } = usePreview(selectedProject?.id || null);
 
+  // Use conversation hook
+  const conversationHook = useConversation(selectedProject?.id);
+  const { sendMessage } = conversationHook;
+
   // Function to refresh file explorer
   const refreshFileExplorer = useCallback(() => {
     setFileRefreshKey(prev => prev + 1);
   }, []);
+
+  // Function to add command to conversation
+  const handleCommandToConversation = useCallback(async (commandText: string, commandType: 'text' | 'voice' | 'generated', commandId?: string) => {
+    console.log('ConversationWorkspace: handleCommandToConversation called with:', { commandText, commandType, commandId });
+    try {
+      // Switch to chat tab first
+      console.log('ConversationWorkspace: Switching to chat tab');
+      setActiveTab('chat');
+      
+      // Send the command as a message with appropriate type
+      const messageType = commandType === 'voice' ? 'voice' : 'text';
+      console.log('ConversationWorkspace: Sending message with type:', messageType);
+      await sendMessage(commandText, messageType);
+      console.log('ConversationWorkspace: Message sent successfully');
+      
+      // Update command status to 'completed' if commandId provided
+      if (commandId) {
+        try {
+          console.log('ConversationWorkspace: Updating command status to completed for:', commandId);
+          const { data: { session } } = await supabase.auth.getSession();
+          if (session) {
+            const updateResponse = await fetch(`/api/projects/${selectedProject?.id}/commands`, {
+              method: 'PATCH',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${session.access_token}`
+              },
+              body: JSON.stringify({
+                commandId,
+                status: 'completed',
+                response: 'Added to conversation'
+              })
+            });
+            
+            console.log('ConversationWorkspace: Command status update response:', updateResponse.status);
+            if (!updateResponse.ok) {
+              const errorText = await updateResponse.text();
+              console.error('ConversationWorkspace: Failed to update command status:', errorText);
+            } else {
+              console.log('ConversationWorkspace: Command status updated successfully');
+              // Force refresh of commands panel
+              if ((window as any).globalCommandsRefresh) {
+                console.log('ConversationWorkspace: Triggering commands refresh');
+                (window as any).globalCommandsRefresh();
+              }
+            }
+          }
+        } catch (updateError) {
+          console.error('Failed to update command status:', updateError);
+        }
+      }
+    } catch (error) {
+      console.error('Failed to add command to conversation:', error);
+    }
+  }, [sendMessage, setActiveTab, selectedProject?.id]);
 
   // Check if mobile view
   useEffect(() => {
@@ -90,9 +159,9 @@ export function ConversationWorkspace({ selectedProject }: ConversationWorkspace
   if (isMobile) {
     return (
       <div className="flex-1 flex flex-col h-full">
-        <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as 'chat' | 'files' | 'preview' | 'deploy')} className="flex-1 flex flex-col">
+        <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as 'chat' | 'files' | 'preview' | 'deploy' | 'commands' | 'claude-code')} className="flex-1 flex flex-col">
           <div className="border-b px-4 py-2">
-            <TabsList className="grid w-full grid-cols-4">
+            <TabsList className="grid w-full grid-cols-6">
               <TabsTrigger value="chat" className="flex items-center space-x-2">
                 <MessageCircle className="w-4 h-4" />
                 <span>Chat</span>
@@ -109,6 +178,14 @@ export function ConversationWorkspace({ selectedProject }: ConversationWorkspace
                 <Rocket className="w-4 h-4" />
                 <span>Deploy</span>
               </TabsTrigger>
+              <TabsTrigger value="commands" className="flex items-center space-x-2">
+                <Terminal className="w-4 h-4" />
+                <span>Commands</span>
+              </TabsTrigger>
+              <TabsTrigger value="claude-code" className="flex items-center space-x-2">
+                <Code className="w-4 h-4" />
+                <span>Claude Code</span>
+              </TabsTrigger>
             </TabsList>
           </div>
           
@@ -117,6 +194,7 @@ export function ConversationWorkspace({ selectedProject }: ConversationWorkspace
               selectedProject={selectedProject} 
               onFileOperation={refreshFileExplorer}
               embedded={true}
+              conversationHook={conversationHook}
             />
           </TabsContent>
           
@@ -208,6 +286,21 @@ export function ConversationWorkspace({ selectedProject }: ConversationWorkspace
               </div>
             </div>
           </TabsContent>
+
+          <TabsContent value="commands" className="flex-1 m-0">
+            <CommandsPanel 
+              projectId={selectedProject?.id || ''}
+              className="h-full"
+              onCommandToConversation={handleCommandToConversation}
+            />
+          </TabsContent>
+
+          <TabsContent value="claude-code" className="flex-1 m-0">
+            <ClaudeCodePanel 
+              projectId={selectedProject?.id || ''}
+              className="h-full"
+            />
+          </TabsContent>
         </Tabs>
       </div>
     );
@@ -247,6 +340,7 @@ export function ConversationWorkspace({ selectedProject }: ConversationWorkspace
               selectedProject={selectedProject} 
               onFileOperation={refreshFileExplorer}
               embedded={true}
+              conversationHook={conversationHook}
             />
           </div>
         )}
@@ -254,9 +348,10 @@ export function ConversationWorkspace({ selectedProject }: ConversationWorkspace
 
       {/* File Explorer & Editor Panel */}
       <div className={`flex flex-col border-r transition-all duration-300 overflow-hidden ${
-        conversationCollapsed && previewCollapsed ? 'flex-1' :
-        conversationCollapsed ? 'w-1/2' : 
-        previewCollapsed ? 'w-1/2' : 'w-1/3'
+        conversationCollapsed && previewCollapsed && commandsCollapsed && claudeCodeCollapsed ? 'flex-1' :
+        (conversationCollapsed && previewCollapsed && commandsCollapsed) || (conversationCollapsed && previewCollapsed && claudeCodeCollapsed) || (conversationCollapsed && commandsCollapsed && claudeCodeCollapsed) || (previewCollapsed && commandsCollapsed && claudeCodeCollapsed) ? 'w-1/2' :
+        (conversationCollapsed && previewCollapsed) || (conversationCollapsed && commandsCollapsed) || (conversationCollapsed && claudeCodeCollapsed) || (previewCollapsed && commandsCollapsed) || (previewCollapsed && claudeCodeCollapsed) || (commandsCollapsed && claudeCodeCollapsed) ? 'w-1/3' :
+        conversationCollapsed || previewCollapsed || commandsCollapsed || claudeCodeCollapsed ? 'w-1/4' : 'w-1/5'
       }`}>
         <div className="flex items-center justify-between p-3 border-b bg-muted/30">
           {!fileExplorerCollapsed && (
@@ -358,7 +453,9 @@ export function ConversationWorkspace({ selectedProject }: ConversationWorkspace
       {/* Preview Panel */}
       <div className={`flex flex-col transition-all duration-300 overflow-hidden ${
         previewCollapsed ? 'w-12' :
-        conversationCollapsed ? 'w-1/2' : 'w-1/3'
+        conversationCollapsed && commandsCollapsed && claudeCodeCollapsed ? 'w-1/2' :
+        (conversationCollapsed && commandsCollapsed) || (conversationCollapsed && claudeCodeCollapsed) || (commandsCollapsed && claudeCodeCollapsed) ? 'w-1/3' :
+        conversationCollapsed || commandsCollapsed || claudeCodeCollapsed ? 'w-1/4' : 'w-1/5'
       }`}>
         <div className="flex items-center justify-between p-3 border-b bg-muted/30">
           {!previewCollapsed && (
@@ -401,6 +498,85 @@ export function ConversationWorkspace({ selectedProject }: ConversationWorkspace
               onRestart={restartPreview}
               loading={previewLoading}
               error={previewError}
+            />
+          </div>
+        )}
+      </div>
+
+      {/* Commands Panel */}
+      <div className={`flex flex-col border-l transition-all duration-300 overflow-hidden ${
+        commandsCollapsed ? 'w-12' :
+        conversationCollapsed && previewCollapsed && claudeCodeCollapsed ? 'w-1/2' :
+        (conversationCollapsed && previewCollapsed) || (conversationCollapsed && claudeCodeCollapsed) || (previewCollapsed && claudeCodeCollapsed) ? 'w-1/3' :
+        conversationCollapsed || previewCollapsed || claudeCodeCollapsed ? 'w-1/4' : 'w-1/5'
+      }`}>
+        <div className="flex items-center justify-between p-3 border-b bg-muted/30">
+          {!commandsCollapsed && (
+            <div className="flex items-center space-x-2">
+              <Terminal className="w-4 h-4 text-muted-foreground" />
+              <h2 className="font-semibold">Commands</h2>
+            </div>
+          )}
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setCommandsCollapsed(!commandsCollapsed)}
+            className="p-1"
+            title={commandsCollapsed ? "Expand commands panel" : "Collapse commands panel"}
+          >
+            {commandsCollapsed ? (
+              <PanelLeftOpen className="w-4 h-4" />
+            ) : (
+              <PanelLeftClose className="w-4 h-4" />
+            )}
+          </Button>
+        </div>
+        
+        {!commandsCollapsed && (
+          <div className="flex-1 overflow-hidden">
+            <CommandsPanel 
+              projectId={selectedProject?.id || ''}
+              className="h-full"
+              onCommandToConversation={handleCommandToConversation}
+            />
+          </div>
+        )}
+      </div>
+
+      {/* Claude Code Panel */}
+      <div className={`flex flex-col border-l transition-all duration-300 overflow-hidden ${
+        claudeCodeCollapsed ? 'w-12' :
+        conversationCollapsed && previewCollapsed && commandsCollapsed ? 'w-1/2' :
+        (conversationCollapsed && previewCollapsed) || (conversationCollapsed && commandsCollapsed) || (previewCollapsed && commandsCollapsed) ? 'w-1/3' :
+        conversationCollapsed || previewCollapsed || commandsCollapsed ? 'w-1/4' : 'w-1/5'
+      }`}>
+        <div className="flex items-center justify-between p-3 border-b bg-muted/30">
+          {!claudeCodeCollapsed && (
+            <div className="flex items-center space-x-2">
+              <Code className="w-4 h-4 text-muted-foreground" />
+              <h2 className="font-semibold">Claude Code</h2>
+            </div>
+          )}
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setClaudeCodeCollapsed(!claudeCodeCollapsed)}
+            className="p-1"
+            title={claudeCodeCollapsed ? "Expand Claude Code panel" : "Collapse Claude Code panel"}
+          >
+            {claudeCodeCollapsed ? (
+              <PanelLeftOpen className="w-4 h-4" />
+            ) : (
+              <PanelLeftClose className="w-4 h-4" />
+            )}
+          </Button>
+        </div>
+        
+        {!claudeCodeCollapsed && (
+          <div className="flex-1 overflow-hidden">
+            <ClaudeCodePanel 
+              projectId={selectedProject?.id || ''}
+              className="h-full"
             />
           </div>
         )}

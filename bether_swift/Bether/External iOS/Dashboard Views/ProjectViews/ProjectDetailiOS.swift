@@ -9,6 +9,7 @@ import SwiftUI
 import Supabasable
 import OptionalHelpers
 import Auth
+import Speech
 
 struct ProjectDetailiOS: View {
     let project: Project
@@ -19,6 +20,7 @@ struct ProjectDetailiOS: View {
     @State private var commands = SBTableViewModel<ProjectCommand>()
     @State private var commandText = ""
     @State private var isSubmittingCommand = false
+    @State private var speechRecognizer = SpeechRecognizer()
     
     var body: some View {
         ScrollView {
@@ -111,6 +113,11 @@ struct ProjectDetailiOS: View {
         }
         .onDisappear {
             commands.cancelListener()
+        }
+        .onChange(of: speechRecognizer.transcript) { _, newValue in
+            if !newValue.isEmpty {
+                commandText = newValue
+            }
         }
     }
     
@@ -261,11 +268,27 @@ struct ProjectDetailiOS: View {
                 .foregroundColor(.primary)
             
             VStack(spacing: 12) {
-                HStack(alignment: .top, spacing: 12) {
-                    TextField("Type your command here...", text: $commandText, axis: .vertical)
+                HStack(alignment: .top, spacing: 8) {
+                    TextField("Type or speak your command...", text: $commandText, axis: .vertical)
                         .textFieldStyle(.roundedBorder)
                         .lineLimit(1...4)
                     
+                    // Microphone button
+                    Button(action: toggleRecording) {
+                        if speechRecognizer.isRecording {
+                            Image(systemName: "stop.circle.fill")
+                                .foregroundColor(.red)
+                                .scaleEffect(speechRecognizer.isRecording ? 1.2 : 1.0)
+                        } else {
+                            Image(systemName: "mic.circle.fill")
+                                .foregroundColor(speechRecognizer.isAvailable ? .blue : .gray)
+                        }
+                    }
+                    .buttonStyle(.bordered)
+                    .disabled(!speechRecognizer.isAvailable)
+                    .animation(.easeInOut(duration: 0.1), value: speechRecognizer.isRecording)
+                    
+                    // Send button
                     Button(action: submitCommand) {
                         if isSubmittingCommand {
                             ProgressView()
@@ -278,9 +301,32 @@ struct ProjectDetailiOS: View {
                     .disabled(commandText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isSubmittingCommand)
                 }
                 
-                Text("Example commands: \"Deploy to production\", \"Update dependencies\", \"Generate new component\"")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
+                // Recording status
+                if speechRecognizer.isRecording {
+                    HStack {
+                        Circle()
+                            .fill(.red)
+                            .frame(width: 8, height: 8)
+                            .scaleEffect(speechRecognizer.isRecording ? 1.2 : 1.0)
+                            .animation(.easeInOut(duration: 0.6).repeatForever(), value: speechRecognizer.isRecording)
+                        
+                        Text("Listening...")
+                            .font(.caption)
+                            .foregroundColor(.red)
+                            .fontWeight(.medium)
+                    }
+                } else {
+                    Text("Example commands: \"Deploy to production\", \"Update dependencies\", \"Generate new component\"")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+                
+                // Error message
+                if let errorMessage = speechRecognizer.errorMessage {
+                    Text(errorMessage)
+                        .font(.caption)
+                        .foregroundColor(.red)
+                }
             }
             .padding()
             .background(Color(.systemGray6))
@@ -369,18 +415,29 @@ struct ProjectDetailiOS: View {
         
         isSubmittingCommand = true
         
+        let commandType = speechRecognizer.transcript.isEmpty ? "text" : "voice"
+        
         let newCommand = ProjectCommand(
             projectId: projectId,
             commandText: commandText.trimmingCharacters(in: .whitespacesAndNewlines),
-            commandType: "text",
+            commandType: commandType,
             status: "pending"
         )
         
         SBTableManager.create(newCommand)
         
         commandText = ""
+        speechRecognizer.reset()
         isSubmittingCommand = false
         commands.items.append(newCommand)
+    }
+    
+    private func toggleRecording() {
+        if speechRecognizer.isRecording {
+            speechRecognizer.stopRecording()
+        } else {
+            speechRecognizer.startRecording()
+        }
     }
 }
 

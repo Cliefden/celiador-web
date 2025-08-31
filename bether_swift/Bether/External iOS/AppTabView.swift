@@ -40,6 +40,13 @@ struct AppTabView: View {
                         }
                         .tag("Activity")
 
+                    StackedTab { ClaudeCodeView() }
+                        .tabItem {
+                            Image(systemName: "brain.head.profile")
+                            Text("Claude Code")
+                        }
+                        .tag("ClaudeCode")
+
                     StackedTab { DashboardProfileView() }
                         .tabItem {
                             Image(systemName: "person.crop.circle")

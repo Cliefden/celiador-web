@@ -1,67 +1,57 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import { Button } from '../ui/button';
 import { Card } from '../ui/card';
 import { Sparkles, ShoppingCart, MessageSquare, BarChart3, Palette, Briefcase, Globe, Zap, ArrowRight } from 'lucide-react';
+import { supabase } from '../../lib/supabase';
 
-const templates = [
-  {
-    key: 'next-saas-starter',
-    name: '🚀 SaaS MVP Starter',
-    description: 'Complete SaaS boilerplate with auth, payments, and dashboard',
-    icon: <Sparkles className="w-6 h-6 text-purple-500" />,
-    color: 'from-purple-500 to-pink-500',
-    features: ['Next.js 14', 'Stripe', 'Auth', 'Database'],
-    preview: '/api/placeholder/400/300'
-  },
-  {
-    key: 'ecommerce-storefront',
-    name: '🛍️ E-commerce Store',
-    description: 'Modern online store with cart, checkout, and admin panel',
-    icon: <ShoppingCart className="w-6 h-6 text-green-500" />,
-    color: 'from-green-500 to-emerald-500',
-    features: ['React', 'Payment', 'Inventory', 'Orders'],
-    preview: '/api/placeholder/400/300'
-  },
-  {
-    key: 'ai-chat-app',
-    name: '🤖 AI Chat App',
-    description: 'ChatGPT-style interface with real-time conversations',
-    icon: <MessageSquare className="w-6 h-6 text-blue-500" />,
-    color: 'from-blue-500 to-cyan-500',
-    features: ['OpenAI', 'Real-time', 'Chat UI', 'History'],
-    preview: '/api/placeholder/400/300'
-  },
-  {
-    key: 'dashboard-analytics',
-    name: '📊 Analytics Dashboard',
-    description: 'Beautiful data visualization with charts and metrics',
-    icon: <BarChart3 className="w-6 h-6 text-orange-500" />,
-    color: 'from-orange-500 to-red-500',
-    features: ['Chart.js', 'Real-time', 'KPIs', 'Export'],
-    preview: '/api/placeholder/400/300'
-  },
-  {
-    key: 'portfolio-website',
-    name: '🎨 Portfolio Site',
-    description: 'Stunning personal portfolio with animations and CMS',
-    icon: <Palette className="w-6 h-6 text-indigo-500" />,
-    color: 'from-indigo-500 to-purple-500',
-    features: ['Framer Motion', 'CMS', 'SEO', 'Mobile'],
-    preview: '/api/placeholder/400/300'
-  },
-  {
-    key: 'business-landing',
-    name: '💼 Business Landing',
-    description: 'High-converting landing page with contact forms',
-    icon: <Briefcase className="w-6 h-6 text-slate-600" />,
-    color: 'from-slate-600 to-slate-800',
-    features: ['Lead Gen', 'Analytics', 'Forms', 'SEO'],
-    preview: '/api/placeholder/400/300'
-  }
-];
+interface Template {
+  id: string;
+  template_key: string;
+  name: string;
+  description: string;
+  difficulty: string;
+  icon: string;
+  emoji: string;
+  color_primary: string;
+  color_secondary?: string;
+  rating: number;
+  version: string;
+}
 
 export default function Templates() {
+  const [templates, setTemplates] = useState<Template[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchTemplates = async () => {
+      try {
+        console.log('Fetching templates for landing page...');
+        const { data: templatesData, error } = await supabase
+          .from('templates')
+          .select('*')
+          .eq('is_active', true)
+          .is('deleted_at', null)
+          .order('sort_order')
+          .limit(6); // Show top 6 for landing page
+
+        console.log('Templates query result:', { data: templatesData, error });
+        
+        if (error) throw error;
+        setTemplates(templatesData || []);
+        console.log('Templates set:', templatesData?.length || 0);
+      } catch (error) {
+        console.error('Error fetching templates:', error);
+        // Fallback to empty array
+        setTemplates([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchTemplates();
+  }, []);
   return (
     <div className="py-16 bg-gradient-to-br from-slate-50 to-blue-50" id="templates">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -83,58 +73,83 @@ export default function Templates() {
 
         {/* Templates Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 mb-12">
-          {templates.map((template) => (
-            <Card key={template.key} className="group hover:shadow-2xl transition-all duration-300 hover:-translate-y-1 overflow-hidden border-0 bg-white/60 backdrop-blur-sm">
-              {/* Template Preview */}
-              <div className="relative h-48 bg-gradient-to-r overflow-hidden">
-                <div className={`absolute inset-0 bg-gradient-to-r ${template.color} opacity-90`} />
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <div className="text-white text-center">
-                    <div className="mb-4">
-                      {template.icon}
+          {loading ? (
+            // Loading skeleton
+            Array.from({ length: 6 }).map((_, idx) => (
+              <Card key={idx} className="overflow-hidden border-0 bg-white/60 backdrop-blur-sm">
+                <div className="h-48 bg-gray-200 animate-pulse" />
+                <div className="p-6 space-y-3">
+                  <div className="h-6 bg-gray-200 rounded animate-pulse" />
+                  <div className="h-4 bg-gray-200 rounded animate-pulse" />
+                  <div className="flex gap-2">
+                    <div className="h-6 w-16 bg-gray-200 rounded animate-pulse" />
+                    <div className="h-6 w-20 bg-gray-200 rounded animate-pulse" />
+                  </div>
+                </div>
+              </Card>
+            ))
+          ) : (
+            templates.map((template) => (
+              <Card key={template.template_key} className="group hover:shadow-2xl transition-all duration-300 hover:-translate-y-1 overflow-hidden border-0 bg-white/60 backdrop-blur-sm">
+                {/* Template Preview */}
+                <div className="relative h-48 bg-gradient-to-r overflow-hidden">
+                  <div 
+                    className="absolute inset-0 opacity-90"
+                    style={{
+                      background: `linear-gradient(135deg, ${template.color_primary}, ${template.color_secondary || template.color_primary})`
+                    }}
+                  />
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <div className="text-white text-center">
+                      <div className="mb-4 text-4xl">
+                        {template.emoji}
+                      </div>
+                      <div className="text-lg font-semibold">{template.name}</div>
                     </div>
-                    <div className="text-lg font-semibold">{template.name}</div>
+                  </div>
+                  <div className="absolute top-4 right-4">
+                    <div className="bg-white/20 backdrop-blur-sm rounded-full p-2">
+                      <ArrowRight className="w-4 h-4 text-white group-hover:translate-x-1 transition-transform" />
+                    </div>
                   </div>
                 </div>
-                <div className="absolute top-4 right-4">
-                  <div className="bg-white/20 backdrop-blur-sm rounded-full p-2">
-                    <ArrowRight className="w-4 h-4 text-white group-hover:translate-x-1 transition-transform" />
-                  </div>
-                </div>
-              </div>
 
-              {/* Template Info */}
-              <div className="p-6">
-                <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                  {template.name}
-                </h3>
-                <p className="text-gray-600 text-sm mb-4 line-clamp-2">
-                  {template.description}
-                </p>
-                
-                {/* Features */}
-                <div className="flex flex-wrap gap-2 mb-4">
-                  {template.features.map((feature, idx) => (
-                    <span
-                      key={idx}
-                      className="text-xs px-2 py-1 rounded-full bg-gray-100 text-gray-600"
-                    >
-                      {feature}
+                {/* Template Info */}
+                <div className="p-6">
+                  <div className="flex items-center gap-2 mb-2">
+                    <h3 className="text-lg font-semibold text-gray-900">
+                      {template.name}
+                    </h3>
+                    {template.rating > 0 && (
+                      <span className="text-xs text-gray-500">⭐ {template.rating}</span>
+                    )}
+                  </div>
+                  <p className="text-gray-600 text-sm mb-4 line-clamp-2">
+                    {template.description}
+                  </p>
+                  
+                  {/* Template metadata */}
+                  <div className="flex flex-wrap gap-2 mb-4">
+                    <span className="text-xs px-2 py-1 rounded-full bg-gray-100 text-gray-600">
+                      {template.difficulty}
                     </span>
-                  ))}
-                </div>
+                    <span className="text-xs px-2 py-1 rounded-full bg-gray-100 text-gray-600">
+                      v{template.version}
+                    </span>
+                  </div>
 
-                <Button
-                  variant="outline"
-                  className="w-full group-hover:bg-gradient-to-r group-hover:from-purple-500 group-hover:to-pink-500 group-hover:text-white group-hover:border-transparent transition-all"
-                  onClick={() => window.location.href = '/dashboard'}
-                >
-                  <Sparkles className="w-4 h-4 mr-2" />
-                  Start with this template
-                </Button>
-              </div>
-            </Card>
-          ))}
+                  <Button
+                    variant="outline"
+                    className="w-full group-hover:bg-gradient-to-r group-hover:from-purple-500 group-hover:to-pink-500 group-hover:text-white group-hover:border-transparent transition-all"
+                    onClick={() => window.location.href = '/dashboard'}
+                  >
+                    <Sparkles className="w-4 h-4 mr-2" />
+                    Start with this template
+                  </Button>
+                </div>
+              </Card>
+            ))
+          )}
         </div>
 
         {/* CTA Section */}

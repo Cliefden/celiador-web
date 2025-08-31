@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import OptionalHelpers
 
 struct TemplateCard: View {
     let template: Template
@@ -18,7 +19,7 @@ struct TemplateCard: View {
                 RoundedRectangle(cornerRadius: 8)
                     .fill(
                         LinearGradient(
-                            colors: template.colors,
+                            colors: [template.primaryColor, template.secondaryColor ?? template.primaryColor],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         )
@@ -26,22 +27,22 @@ struct TemplateCard: View {
                     .frame(height: 120)
                     .overlay(
                         VStack {
-                            Image(systemName: template.icon)
+                            Image(systemName: template.icon.uW)
                                 .font(.system(size: 32))
                                 .foregroundColor(.white)
                             
-                            Text(template.emoji)
+                            Text(template.emoji.uW)
                                 .font(.title)
                         }
                     )
                 
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(template.name)
+                    Text(template.name.uW)
                         .font(.headline)
                         .foregroundColor(.primary)
                         .lineLimit(1)
                     
-                    Text(template.description)
+                    Text(template.description.uW)
                         .font(.caption)
                         .foregroundColor(.secondary)
                         .lineLimit(2)
@@ -51,19 +52,19 @@ struct TemplateCard: View {
                             Image(systemName: "star.fill")
                                 .font(.caption2)
                                 .foregroundColor(.yellow)
-                            Text("\(template.rating, specifier: "%.1f")")
+                            Text("\(template.rating ?? 0.0, specifier: "%.1f")")
                                 .font(.caption2)
                                 .foregroundColor(.secondary)
                         }
                         
                         Spacer()
                         
-                        Text(template.difficulty.displayName)
+                        Text(template.difficultyEnum.displayName)
                             .font(.caption2)
                             .padding(.horizontal, 6)
                             .padding(.vertical, 2)
-                            .background(template.difficulty.color.opacity(0.1))
-                            .foregroundColor(template.difficulty.color)
+                            .background(template.difficultyEnum.color.opacity(0.1))
+                            .foregroundColor(template.difficultyEnum.color)
                             .cornerRadius(4)
                     }
                 }

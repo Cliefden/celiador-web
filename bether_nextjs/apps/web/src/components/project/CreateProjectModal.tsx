@@ -27,15 +27,46 @@ interface CreateProjectModalProps {
 }
 
 interface Template {
-  key: string;
+  id: string;
+  template_key: string;
   name: string;
   description: string;
+  long_description?: string;
+  difficulty: 'beginner' | 'intermediate' | 'advanced';
   icon: string;
-  color: string;
-  category: string;
-  features: string[];
-  isActive: boolean;
+  emoji: string;
+  color_primary: string;
+  color_secondary?: string;
+  rating: number;
   version: string;
+  storage_path: string;
+  is_active: boolean;
+  sort_order: number;
+  categories: Array<{
+    id: string;
+    key: string;
+    name: string;
+    icon: string;
+    color_primary: string;
+    is_primary_category: boolean;
+  }>;
+  features: Array<{
+    id: string;
+    name: string;
+    description?: string;
+    icon?: string;
+    category?: string;
+    is_core_feature: boolean;
+  }>;
+  tech_stack: Array<{
+    id: string;
+    name: string;
+    description?: string;
+    icon?: string;
+    category?: string;
+    website_url?: string;
+    is_primary_tech: boolean;
+  }>;
 }
 
 export function CreateProjectModal({ isOpen, onClose, onProjectCreated, userId }: CreateProjectModalProps) {
@@ -46,54 +77,58 @@ export function CreateProjectModal({ isOpen, onClose, onProjectCreated, userId }
   const [templates, setTemplates] = useState<Template[]>([]);
   const [loadingTemplates, setLoadingTemplates] = useState(true);
 
-  // Fetch templates from API
+  // Fetch templates from Supabase
   useEffect(() => {
     const fetchTemplates = async () => {
       try {
         setLoadingTemplates(true);
-        const response = await fetch('http://localhost:4000/templates');
         
-        if (response.ok) {
-          const data = await response.json();
-          setTemplates(data.templates || []);
-          
-          // Set default template if none selected
-          if (data.templates && data.templates.length > 0 && !templateKey) {
-            setTemplateKey(data.templates[0].key);
-          }
-        } else {
-          console.error('Failed to fetch templates:', response.status);
-          // Fallback to hardcoded templates if API fails
-          setTemplates([
-            {
-              key: 'next-saas-starter',
-              name: '🚀 Next.js SaaS Starter',
-              description: 'Complete SaaS boilerplate with payments, auth, and dashboard',
-              icon: 'Rocket',
-              color: 'from-purple-600 to-blue-600',
-              category: 'saas',
-              features: ['Stripe', 'Auth', 'Dashboard', 'Responsive'],
-              isActive: true,
-              version: '1.0.0'
-            }
-          ]);
+        // Fetch templates first
+        const { data: templatesData, error: templatesError } = await supabase
+          .from('templates')
+          .select('*')
+          .eq('is_active', true)
+          .is('deleted_at', null)
+          .order('sort_order');
+
+        if (templatesError) {
+          throw templatesError;
         }
+
+        // For now, use basic template data without junction relationships
+        // TODO: Add junction table loading for features and tech stack
+        const transformedTemplates = templatesData?.map(template => ({
+          id: template.id,
+          template_key: template.template_key,
+          name: template.name,
+          description: template.description,
+          long_description: template.long_description,
+          difficulty: template.difficulty,
+          icon: template.icon,
+          emoji: template.emoji,
+          color_primary: template.color_primary,
+          color_secondary: template.color_secondary,
+          rating: template.rating,
+          version: template.version,
+          storage_path: template.storage_path,
+          is_active: template.is_active,
+          sort_order: template.sort_order,
+          categories: [], // TODO: Load from junction table
+          features: [], // TODO: Load from junction table
+          tech_stack: [] // TODO: Load from junction table
+        })) || [];
+
+        setTemplates(transformedTemplates);
+        
+        // Set default template if none selected
+        if (transformedTemplates.length > 0 && !templateKey) {
+          setTemplateKey(transformedTemplates[0].template_key);
+        }
+        
       } catch (error) {
         console.error('Error fetching templates:', error);
-        // Fallback to hardcoded templates
-        setTemplates([
-          {
-            key: 'next-saas-starter',
-            name: '🚀 Next.js SaaS Starter',
-            description: 'Complete SaaS boilerplate with payments, auth, and dashboard',
-            icon: 'Rocket',
-            color: 'from-purple-600 to-blue-600',
-            category: 'saas',
-            features: ['Stripe', 'Auth', 'Dashboard', 'Responsive'],
-            isActive: true,
-            version: '1.0.0'
-          }
-        ]);
+        // Fallback to empty array on error
+        setTemplates([]);
       } finally {
         setLoadingTemplates(false);
       }
@@ -252,47 +287,74 @@ export function CreateProjectModal({ isOpen, onClose, onProjectCreated, userId }
                 ) : (
                   templates.map((template) => (
                     <div
-                      key={template.key}
+                      key={template.template_key}
                       className={`relative border rounded-xl p-4 cursor-pointer transition-all duration-200 hover:shadow-md ${
-                        templateKey === template.key
-                          ? 'border-primary bg-gradient-to-r ' + template.color + ' text-white shadow-lg'
+                        templateKey === template.template_key
+                          ? 'border-primary text-white shadow-lg'
                           : 'border-muted hover:border-muted-foreground/30 bg-white'
                       }`}
-                      onClick={() => setTemplateKey(template.key)}
+                      style={{
+                        background: templateKey === template.template_key 
+                          ? `linear-gradient(135deg, ${template.color_primary}, ${template.color_secondary || template.color_primary})`
+                          : undefined
+                      }}
+                      onClick={() => setTemplateKey(template.template_key)}
                     >
                       <div className="flex items-start space-x-3">
                         <div className="flex-shrink-0 mt-0.5">
-                          {getTemplateIcon(template.icon)}
+                          <span className="text-lg">{template.emoji}</span>
                         </div>
                         <div className="flex-1 min-w-0">
-                          <h3 className="text-sm font-semibold mb-1">{template.name}</h3>
+                          <div className="flex items-center gap-2 mb-1">
+                            <h3 className="text-sm font-semibold">{template.name}</h3>
+                            <span className={`text-xs px-2 py-1 rounded-full ${
+                              templateKey === template.template_key
+                                ? 'bg-white/20 text-white'
+                                : 'bg-muted text-muted-foreground'
+                            }`}>
+                              {template.difficulty}
+                            </span>
+                            {template.rating > 0 && (
+                              <span className={`text-xs ${
+                                templateKey === template.template_key ? 'text-white/90' : 'text-muted-foreground'
+                              }`}>
+                                ⭐ {template.rating}
+                              </span>
+                            )}
+                          </div>
                           <p className={`text-xs mb-3 ${
-                            templateKey === template.key ? 'text-white/90' : 'text-muted-foreground'
+                            templateKey === template.template_key ? 'text-white/90' : 'text-muted-foreground'
                           }`}>
                             {template.description}
                           </p>
-                          <div className="flex flex-wrap gap-1">
-                            {template.features.map((feature, idx) => (
-                              <span
-                                key={idx}
-                                className={`text-xs px-2 py-1 rounded-full ${
-                                  templateKey === template.key
-                                    ? 'bg-white/20 text-white'
-                                    : 'bg-muted text-muted-foreground'
-                                }`}
-                              >
-                                {feature}
-                              </span>
-                            ))}
+                          <div className="flex flex-wrap gap-1 mb-2">
+                            <span
+                              className={`text-xs px-2 py-1 rounded-full ${
+                                templateKey === template.template_key
+                                  ? 'bg-white/20 text-white'
+                                  : 'bg-muted text-muted-foreground'
+                              }`}
+                            >
+                              {template.difficulty}
+                            </span>
+                            <span
+                              className={`text-xs px-2 py-1 rounded-full ${
+                                templateKey === template.template_key
+                                  ? 'bg-white/20 text-white'
+                                  : 'bg-muted text-muted-foreground'
+                              }`}
+                            >
+                              v{template.version}
+                            </span>
                           </div>
                         </div>
                         <div className="flex-shrink-0">
                           <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
-                            templateKey === template.key
+                            templateKey === template.template_key
                               ? 'border-white bg-white'
                               : 'border-muted-foreground/30'
                           }`}>
-                            {templateKey === template.key && (
+                            {templateKey === template.template_key && (
                               <div className="w-2 h-2 rounded-full bg-gradient-to-r from-purple-500 to-pink-500" />
                             )}
                           </div>
