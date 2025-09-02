@@ -38,7 +38,7 @@ app.use('/status', statusRouter);
 // Root endpoint
 app.get('/', (req, res) => {
   res.json({
-    service: 'Bether Preview Service',
+    service: 'Celiador Preview Service',
     version: '1.0.0',
     status: 'running',
     endpoints: {

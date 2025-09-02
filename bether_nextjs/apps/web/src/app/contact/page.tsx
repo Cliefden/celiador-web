@@ -43,7 +43,7 @@ export default function ContactPage() {
     {
       title: 'Email Support',
       description: 'Get help with your account or technical questions',
-      value: 'support@bether.com',
+      value: 'support@celiador.com',
       icon: (
         <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 4.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
@@ -53,7 +53,7 @@ export default function ContactPage() {
     {
       title: 'Sales Inquiries',
       description: 'Learn about enterprise plans and custom solutions',
-      value: 'sales@bether.com',
+      value: 'sales@celiador.com',
       icon: (
         <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
@@ -63,7 +63,7 @@ export default function ContactPage() {
     {
       title: 'General Inquiries',
       description: 'Questions about our platform or company',
-      value: 'hello@bether.com',
+      value: 'hello@celiador.com',
       icon: (
         <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
@@ -102,7 +102,7 @@ export default function ContactPage() {
               <span className="text-blue-600"> Touch</span>
             </h1>
             <p className="mt-6 max-w-2xl mx-auto text-xl text-gray-500">
-                             Have questions about Bether? We\'d love to hear from you. Send us a message and we\'ll respond as soon as possible.
+                             Have questions about Celiador? We\'d love to hear from you. Send us a message and we\'ll respond as soon as possible.
             </p>
           </div>
         </div>
@@ -282,7 +282,7 @@ export default function ContactPage() {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
             <div className="bg-white rounded-lg p-6 shadow-sm">
-              <h3 className="text-lg font-semibold text-gray-900 mb-2">How do I get started with Bether?</h3>
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">How do I get started with Celiador?</h3>
               <p className="text-gray-600">Sign up for a free account and start building your first project. Our AI will guide you through the process.</p>
             </div>
             

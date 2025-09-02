@@ -22,7 +22,7 @@ export class FileSyncManager {
   private syncedProjects = new Map<string, ProjectSyncConfig>();
   private readonly baseDirectory: string;
 
-  constructor(baseDirectory = '/tmp/bether-previews') {
+  constructor(baseDirectory = '/tmp/celiador-previews') {
     this.baseDirectory = baseDirectory;
   }
 

@@ -1,6 +1,6 @@
 //
 //  ClaudeCodeConversation.swift
-//  Bether
+//  Celiador
 //
 //  Created by Claude on 2025-08-31.
 //

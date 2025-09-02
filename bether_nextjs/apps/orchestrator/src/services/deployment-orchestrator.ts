@@ -320,8 +320,8 @@ export class DeploymentOrchestrator {
       await execAsync(`git remote add origin ${authRepoUrl}`, { cwd: projectDir });
       
       // Configure git user
-      await execAsync('git config user.name "Bether Bot"', { cwd: projectDir });
-      await execAsync('git config user.email "bot@bether.ai"', { cwd: projectDir });
+      await execAsync('git config user.name "Celiador Bot"', { cwd: projectDir });
+      await execAsync('git config user.email "bot@celiador.ai"', { cwd: projectDir });
       
       // Add all files
       await execAsync('git add .', { cwd: projectDir });

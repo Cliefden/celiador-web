@@ -20,7 +20,7 @@ async function testOpenAI() {
     const response = await openai.chat.completions.create({
       model: 'gpt-4',
       messages: [
-        { role: 'user', content: 'Say "Hello from Bether!"' }
+        { role: 'user', content: 'Say "Hello from Celiador!"' }
       ],
       max_tokens: 10,
     });

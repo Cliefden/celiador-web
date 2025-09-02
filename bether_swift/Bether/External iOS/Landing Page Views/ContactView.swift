@@ -15,7 +15,7 @@ struct ContactView: View {
         ContactInfoCard(
             icon: "envelope",
             title: "Email Us",
-            details: "contact@bether.com",
+            details: "contact@celiador.com",
             description: "Get in touch for general inquiries"
         ),
         ContactInfoCard(
@@ -228,15 +228,15 @@ struct ContactView: View {
             VStack(spacing: 20) {
                 AdditionalInfoCard(
                     title: "Sales Inquiries",
-                    description: "Interested in learning more about our platform? Our sales team is ready to show you how Bether can transform your development workflow.",
-                    email: "sales@bether.com",
+                    description: "Interested in learning more about our platform? Our sales team is ready to show you how Celiador can transform your development workflow.",
+                    email: "sales@celiador.com",
                     phone: "+1 (555) 123-4567"
                 )
                 
                 AdditionalInfoCard(
                     title: "Technical Support",
-                    description: "Already using Bether? Our technical support team is available 24/7 to help you with any platform-related questions or issues.",
-                    email: "support@bether.com",
+                    description: "Already using Celiador? Our technical support team is available 24/7 to help you with any platform-related questions or issues.",
+                    email: "support@celiador.com",
                     portal: "Available in your dashboard"
                 )
                 
@@ -380,7 +380,7 @@ struct PartnershipCard: View {
                 .fontWeight(.bold)
                 .foregroundColor(.primary)
             
-            Text("Interested in partnering with Bether? We're always looking for strategic partnerships that can benefit our mutual developers.")
+            Text("Interested in partnering with Celiador? We're always looking for strategic partnerships that can benefit our mutual developers.")
                 .font(.body)
                 .foregroundColor(.secondary)
             

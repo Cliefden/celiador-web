@@ -31,7 +31,7 @@ async function updatePreviewTempFile(
   operation: 'create' | 'update' | 'delete'
 ) {
   try {
-    const previewTempPath = `/tmp/bether-previews/${userId}-${projectId}`;
+    const previewTempPath = `/tmp/celiador-previews/${userId}-${projectId}`;
     const fullFilePath = path.join(previewTempPath, filePath);
     
     // Check if preview temp directory exists
@@ -653,7 +653,7 @@ app.post('/projects/:id/github/connect', authenticateUser, async (req, res) => {
       integration.accesstoken,
       repo.full_name,
       githubFiles,
-      `Initial commit from Bether Studio - ${repoName}`
+      `Initial commit from Celiador Studio - ${repoName}`
     );
     
     // Connect project to repository in database

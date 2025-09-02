@@ -12,7 +12,7 @@ import { IntegrationSetup } from '../integrations/IntegrationSetup';
 import { DeploymentButtons } from '../integrations/DeploymentButtons';
 import { Button } from '../ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
-import type { ProjectCommand } from '@bether/shared';
+import type { ProjectCommand } from '@mvp/shared';
 import { 
   Code, 
   TestTube, 

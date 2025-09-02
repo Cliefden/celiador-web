@@ -291,7 +291,7 @@ export function useConversation(projectId?: string): UseConversationReturn {
           content: msg.content
         }));
 
-        console.log('[useConversation] Making AI API call to:', `http://localhost:4000/projects/${activeConversation.projectid}/chat`);
+        console.log('[useConversation] Making AI API call to:', `http://localhost:4000/projects/${activeConversation.projectId}/chat`);
         console.log('[useConversation] Auth token length:', authToken.length);
         console.log('[useConversation] Request body:', {
           message: content,
@@ -300,7 +300,7 @@ export function useConversation(projectId?: string): UseConversationReturn {
           provider: 'openai'
         });
 
-        const aiResponse = await fetch(`http://localhost:4000/projects/${activeConversation.projectid}/chat`, {
+        const aiResponse = await fetch(`http://localhost:4000/projects/${activeConversation.projectId}/chat`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',

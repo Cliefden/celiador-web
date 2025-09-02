@@ -35,8 +35,8 @@ import './globals.css'
 const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
-  title: 'Bether Preview - Next.js App',
-  description: 'A preview of your Next.js application built with Bether',
+  title: 'Celiador Preview - Next.js App',
+  description: 'A preview of your Next.js application built with Celiador',
 }
 
 export default function RootLayout({
@@ -83,7 +83,7 @@ export default function Home() {
         {/* Hero Section */}
         <div className="mb-12">
           <h1 className="text-6xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent mb-6">
-            Bether Preview
+            Celiador Preview
           </h1>
           <p className="text-xl text-gray-600 mb-8 max-w-2xl mx-auto">
             Welcome to your Next.js application preview! This demo showcases a modern, 
@@ -146,7 +146,7 @@ export default function Home() {
         {/* Footer */}
         <div className="text-gray-500 text-sm">
           <p>Built with Next.js 14, React 18, TypeScript, and Tailwind CSS</p>
-          <p className="mt-1">Powered by Bether Preview System</p>
+          <p className="mt-1">Powered by Celiador Preview System</p>
         </div>
       </div>
     </main>

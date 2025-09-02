@@ -1,6 +1,6 @@
 //
 //  TemplateFeature.swift
-//  Bether
+//  Celiador
 //
 //  Created by Stefan Crafoord-Wiklund on 2025-08-31.
 //

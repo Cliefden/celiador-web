@@ -16,18 +16,16 @@ import {
   Eye,
   Copy,
   MoreVertical,
-  FileText,
   Code,
   Image,
-  Archive,
   FileCode,
   FileJson,
   FileType,
   FileImage,
   FileVideo,
   FileAudio,
-  FilePdf,
-  FileZip
+  FileText,
+  Archive
 } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
@@ -65,6 +63,7 @@ export function FileExplorer({
   onFileDownload,
   selectedFile, 
   projectId,
+  isScaffolding = false,
   className = ""
 }: FileExplorerProps) {
   const { success, error, info } = useToast();
@@ -176,11 +175,11 @@ export function FileExplorer({
       case 'wav':
         return <FileAudio className="w-4 h-4 text-green-500" />;
       case 'pdf':
-        return <FilePdf className="w-4 h-4 text-red-500" />;
+        return <FileText className="w-4 h-4 text-red-500" />;
       case 'zip':
       case 'tar':
       case 'gz':
-        return <FileZip className="w-4 h-4 text-orange-500" />;
+        return <Archive className="w-4 h-4 text-orange-500" />;
       default:
         return <File className="w-4 h-4 text-gray-500" />;
     }

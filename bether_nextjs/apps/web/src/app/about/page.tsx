@@ -56,7 +56,7 @@ const team = [
 const milestones = [
   {
     year: '2024',
-    title: 'Bether Founded',
+    title: 'Celiador Founded',
     description: 'Started with a vision to revolutionize how developers build applications.'
   },
   {
@@ -72,7 +72,7 @@ const milestones = [
   {
     year: '2024',
     title: 'Public Launch',
-    description: 'Made Bether available to developers worldwide.'
+    description: 'Made Celiador available to developers worldwide.'
   }
 ];
 
@@ -87,7 +87,7 @@ export default function AboutPage() {
           <div className="text-center">
             <h1 className="text-4xl font-extrabold text-gray-900 sm:text-5xl md:text-6xl">
               About
-              <span className="text-blue-600"> Bether</span>
+              <span className="text-blue-600"> Celiador</span>
             </h1>
             <p className="mt-6 max-w-2xl mx-auto text-xl text-gray-500">
                              We\'re on a mission to make software development faster, more efficient, and more enjoyable through the power of AI.
@@ -105,7 +105,7 @@ export default function AboutPage() {
                 Our Mission
               </h2>
               <p className="text-lg text-gray-600 mb-6">
-                At Bether, we believe that every developer deserves tools that amplify their creativity and productivity. 
+                At Celiador, we believe that every developer deserves tools that amplify their creativity and productivity. 
                                  We\'re building the future of software development by combining cutting-edge AI with intuitive design.
               </p>
               <p className="text-lg text-gray-600 mb-8">
@@ -161,7 +161,7 @@ export default function AboutPage() {
               Meet Our Team
             </h2>
             <p className="mt-4 text-xl text-gray-500">
-              The passionate people behind Bether
+              The passionate people behind Celiador
             </p>
           </div>
 

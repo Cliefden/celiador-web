@@ -61,7 +61,7 @@ struct UserProfileCard: View {
     }
     
     func CardFooter() -> some View {
-        Text("If you want any of this info to be changed, please contact info@bether.com")
+        Text("If you want any of this info to be changed, please contact info@celiador.com")
             .font(.caption2)
             .foregroundColor(.secondary)
             .multilineTextAlignment(.leading)

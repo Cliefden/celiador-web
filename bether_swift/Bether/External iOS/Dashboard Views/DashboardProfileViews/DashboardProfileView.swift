@@ -1,6 +1,6 @@
 //
 //  ProfileView.swift
-//  Bether
+//  Celiador
 //
 //  Created by Stefan Crafoord-Wiklund on 2025-08-29.
 //
@@ -65,7 +65,7 @@ struct DashboardProfileView: View {
                     .font(.title2)
                     .foregroundColor(.primary)
                 
-                Text("Bether Developer")
+                Text("Celiador Developer")
                     .font(.body)
                     .foregroundColor(.secondary)
             }
@@ -103,11 +103,11 @@ struct DashboardProfileView: View {
                 // Handle help action
             }
             
-            MenuRow(icon: "info.circle", title: "About Bether", subtitle: "Version info and credits") {
+            MenuRow(icon: "info.circle", title: "About Celiador", subtitle: "Version info and credits") {
                 showingAbout = true
             }
             
-            MenuRow(icon: "star", title: "Rate Bether", subtitle: "Leave a review on the App Store") {
+            MenuRow(icon: "star", title: "Rate Celiador", subtitle: "Leave a review on the App Store") {
                 // Handle rate action
             }
         }

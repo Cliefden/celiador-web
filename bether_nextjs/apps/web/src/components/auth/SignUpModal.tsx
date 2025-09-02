@@ -122,10 +122,10 @@ export default function SignUpModal({ isOpen, onClose, onSwitchToSignIn }: SignU
         {/* Header */}
         <div className="text-center mb-8">
           <div className="w-12 h-12 bg-gradient-to-br from-blue-600 to-purple-600 rounded-xl flex items-center justify-center mx-auto mb-4">
-            <span className="text-white font-bold text-lg">B</span>
+            <span className="text-white font-bold text-lg">C</span>
           </div>
           <h2 className="text-2xl font-bold text-gray-900">Create your account</h2>
-          <p className="text-gray-600 mt-2">Join Bether and start building amazing apps</p>
+          <p className="text-gray-600 mt-2">Join Celiador and start building amazing apps</p>
         </div>
 
         {/* Form */}

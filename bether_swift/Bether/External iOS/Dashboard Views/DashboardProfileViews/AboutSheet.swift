@@ -1,6 +1,6 @@
 //
 //  AboutSheet.swift
-//  Bether
+//  Celiador
 //
 //  Created by Stefan Crafoord-Wiklund on 2025-08-30.
 //
@@ -25,7 +25,7 @@ struct AboutSheet: View {
                         )
                     
                     VStack(spacing: 8) {
-                        Text("Bether")
+                        Text("Celiador")
                             .font(.largeTitle)
                             .fontWeight(.bold)
                             .foregroundColor(.primary)
@@ -44,7 +44,7 @@ struct AboutSheet: View {
                             .font(.headline)
                             .foregroundColor(.primary)
                         
-                        Text("Bether helps developers build better applications faster with AI-powered code generation, smart templates, and seamless deployment.")
+                        Text("Celiador helps developers build better applications faster with AI-powered code generation, smart templates, and seamless deployment.")
                             .font(.body)
                             .foregroundColor(.secondary)
                     }

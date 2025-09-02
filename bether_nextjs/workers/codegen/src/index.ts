@@ -556,7 +556,7 @@ async function updatePreviewTempFile(
   operation: 'create' | 'update' | 'delete'
 ) {
   try {
-    const previewTempPath = `/tmp/bether-previews/${userId}-${projectId}`;
+    const previewTempPath = `/tmp/celiador-previews/${userId}-${projectId}`;
     const fullFilePath = path.join(previewTempPath, filePath);
     
     // Check if preview temp directory exists

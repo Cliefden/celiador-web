@@ -1,6 +1,6 @@
 //
 //  HeaderSection.swift
-//  Bether
+//  Celiador
 //
 //  Created by Stefan Crafoord-Wiklund on 2025-08-07.
 //
@@ -25,7 +25,7 @@ struct HeaderSection: View {
                     .fontWeight(.bold)
                     .foregroundColor(.primary)
                 
-                Text("Sign in to your Bether account to continue")
+                Text("Sign in to your Celiador account to continue")
                     .font(.title3)
                     .foregroundColor(.secondary)
                     .multilineTextAlignment(.center)

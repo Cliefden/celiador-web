@@ -26,7 +26,7 @@ struct LoggedInView: View {
                         .bold()
                         .padding(.top, 20)
                     
-                    ProfileCard()
+                    LoginProfileCard()
                     
                     Button {
                         logOut()

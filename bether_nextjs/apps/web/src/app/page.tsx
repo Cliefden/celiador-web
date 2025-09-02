@@ -16,19 +16,13 @@ export default function HomePage() {
   const router = useRouter();
 
   useEffect(() => {
-    console.log('HomePage: Auth state changed', { user: !!user, isLoading });
-    
     // If user is authenticated, redirect to dashboard
     if (!isLoading && user) {
-      console.log('HomePage: Redirecting to dashboard');
       router.push('/dashboard');
     }
   }, [user, isLoading, router]);
 
-  // Debug: show current state
-  console.log('HomePage render: isLoading:', isLoading, 'user:', !!user);
-
-  // Show loading state while checking authentication (with timeout)
+  // Show loading state while checking authentication
   if (isLoading) {
     return (
       <div className="min-h-screen bg-white flex items-center justify-center">
@@ -37,7 +31,6 @@ export default function HomePage() {
             <span className="text-white font-bold text-lg">B</span>
           </div>
           <p className="text-gray-600">Loading...</p>
-          <p className="text-xs text-gray-400 mt-2">Checking authentication...</p>
         </div>
       </div>
     );

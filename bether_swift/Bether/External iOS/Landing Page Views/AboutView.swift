@@ -89,7 +89,7 @@ struct AboutView: View {
                     .font(.system(size: 36, weight: .bold))
                     .foregroundColor(.primary)
                 
-                Text("Bether was founded with a simple mission: to make software development accessible, fast, and efficient for developers of all skill levels. We're building the future of AI-powered development.")
+                Text("Celiador was founded with a simple mission: to make software development accessible, fast, and efficient for developers of all skill levels. We're building the future of AI-powered development.")
                     .font(.title3)
                     .foregroundColor(.secondary)
                     .lineLimit(nil)
@@ -151,7 +151,7 @@ We're not just building development tools – we're democratizing software creat
                     .italic()
                     .multilineTextAlignment(.center)
                 
-                Text("— Bether Leadership Team")
+                Text("— Celiador Leadership Team")
                     .font(.body)
                     .foregroundColor(.secondary)
             }
@@ -201,7 +201,7 @@ We're not just building development tools – we're democratizing software creat
     private var differencesSection: some View {
         VStack(spacing: 40) {
             VStack(spacing: 16) {
-                Text("What Makes Bether Different")
+                Text("What Makes Celiador Different")
                     .font(.system(size: 32, weight: .bold))
                     .foregroundColor(.primary)
                 

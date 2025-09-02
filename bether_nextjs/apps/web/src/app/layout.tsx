@@ -2,7 +2,7 @@ import './globals.css';
 import { AuthProvider } from '../contexts/AuthContext';
 
 export const metadata = { 
-  title: 'Bether Studio', 
+  title: 'Celiador Studio', 
   description: 'AI-powered development platform' 
 };
 

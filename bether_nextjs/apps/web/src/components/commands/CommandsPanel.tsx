@@ -14,7 +14,17 @@ import {
   MessageCircle,
   Filter
 } from 'lucide-react';
-import type { ProjectCommand } from '@bether/shared';
+// Local types for commands
+interface ProjectCommand {
+  id: string;
+  project_id: string;
+  command_text: string;
+  command_type: string;
+  status: string;
+  response?: string;
+  created_at: string;
+  updated_at: string;
+}
 
 interface CommandsPanelProps {
   projectId: string;
@@ -282,7 +292,7 @@ export function CommandsPanel({ projectId, className = '', onCommandToConversati
                       size="sm"
                       onClick={() => {
                         console.log('CommandsPanel: Button clicked for command:', command.command_text);
-                        onCommandToConversation?.(command.command_text, command.command_type, command.id);
+                        onCommandToConversation?.(command.command_text, command.command_type as 'text' | 'voice' | 'generated', command.id);
                       }}
                       className="px-3 py-1 h-8 bg-blue-500 hover:bg-blue-600 border-blue-500 text-white text-xs font-medium"
                       title="Add to conversation"

@@ -130,8 +130,8 @@ export function JobManagement({ projectId, userId, onJobCreated, onJobUpdated }:
         const errorText = await response.text();
         error('Job Creation Failed', errorText);
       }
-    } catch (error) {
-      console.error('Failed to create job:', error);
+    } catch (err) {
+      console.error('Failed to create job:', err);
       error('Job Creation Failed', 'An unexpected error occurred while creating the job');
     } finally {
       setIsCreatingJob(false);
@@ -162,8 +162,8 @@ export function JobManagement({ projectId, userId, onJobCreated, onJobUpdated }:
         const errorText = await response.text();
         error('Job Cancellation Failed', errorText);
       }
-    } catch (error) {
-      console.error('Failed to cancel job:', error);
+    } catch (err) {
+      console.error('Failed to cancel job:', err);
       error('Job Cancellation Failed', 'An unexpected error occurred while cancelling the job');
     }
   };

@@ -112,7 +112,7 @@ struct SolutionsView: View {
                         .foregroundColor(.blue)
                 }
                 
-                Text("Discover how Bether's comprehensive platform transforms every aspect of software development, from idea to deployment.")
+                Text("Discover how Celiador's comprehensive platform transforms every aspect of software development, from idea to deployment.")
                     .font(.title3)
                     .foregroundColor(.secondary)
                     .lineLimit(nil)
@@ -187,7 +187,7 @@ struct SolutionsView: View {
                     .font(.system(size: 32, weight: .bold))
                     .foregroundColor(.primary)
                 
-                Text("See the impact Bether makes on your development workflow")
+                Text("See the impact Celiador makes on your development workflow")
                     .font(.title3)
                     .foregroundColor(.secondary)
                     .multilineTextAlignment(.center)
@@ -279,7 +279,7 @@ struct SolutionsView: View {
                 .foregroundColor(.primary)
                 .multilineTextAlignment(.center)
             
-            Text("Join leading developers who trust Bether to power their application development.")
+            Text("Join leading developers who trust Celiador to power their application development.")
                 .font(.title3)
                 .foregroundColor(.secondary)
                 .multilineTextAlignment(.center)

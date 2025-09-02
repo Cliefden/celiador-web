@@ -133,7 +133,7 @@ export class GitHubService {
     accessToken: string,
     repoFullName: string,
     files: { path: string; content: string }[],
-    commitMessage = 'Initial commit from Bether Studio'
+    commitMessage = 'Initial commit from Celiador Studio'
   ): Promise<void> {
     const octokit = new Octokit({ auth: accessToken });
     const [owner, repo] = repoFullName.split('/');

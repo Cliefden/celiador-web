@@ -7,7 +7,7 @@ import SwiftUI
 
 struct TerminalWindowView: View {
     @State private var command: String = ""
-    @State private var output: String = "Welcome to the Bether Terminal!\n"
+    @State private var output: String = "Welcome to the Celiador Terminal!\n"
     @FocusState private var inputFocused: Bool
 
     private let shell = Process()

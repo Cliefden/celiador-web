@@ -276,7 +276,7 @@ export function ProjectFileExplorer({
       onCreateFolder={handleCreateFolder}
       onDeleteFile={handleDeleteFile}
       onDeleteFolder={handleDeleteFolder}
-      selectedFile={selectedFile}
+      selectedFile={selectedFile || undefined}
       projectId={projectId}
       className={className}
       isScaffolding={isScaffolding}

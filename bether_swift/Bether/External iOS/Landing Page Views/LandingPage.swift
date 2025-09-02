@@ -106,7 +106,7 @@ struct LandingPage: View {
     private var benefitsSection: some View {
         VStack(spacing: 40) {
             VStack(spacing: 16) {
-                Text("Why Choose Bether?")
+                Text("Why Choose Celiador?")
                     .font(.system(size: 32, weight: .bold))
                     .foregroundColor(.primary)
                 
@@ -208,7 +208,7 @@ struct LandingPage: View {
             ], spacing: 20) {
                 TestimonialCard(
                     company: "StartupLab",
-                    quote: "Bether reduced our development time by 80%. We ship features faster than ever before.",
+                    quote: "Celiador reduced our development time by 80%. We ship features faster than ever before.",
                     author: "Sarah Chen, CTO"
                 )
                 
@@ -232,7 +232,7 @@ struct LandingPage: View {
                 .foregroundColor(.primary)
                 .multilineTextAlignment(.center)
             
-            Text("Join thousands of developers already using Bether to build amazing applications faster.")
+            Text("Join thousands of developers already using Celiador to build amazing applications faster.")
                 .font(.title3)
                 .foregroundColor(.secondary)
                 .multilineTextAlignment(.center)

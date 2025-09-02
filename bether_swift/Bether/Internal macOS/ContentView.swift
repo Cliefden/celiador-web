@@ -37,7 +37,7 @@ struct ContentView: View {
                     Label(tab.rawValue, systemImage: tab.icon)
                 }
             }
-            .navigationTitle("Bether Admin")
+            .navigationTitle("Celiador Admin")
             .navigationSplitViewColumnWidth(min: 200, ideal: 250)
             
             // Main Content

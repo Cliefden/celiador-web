@@ -30,7 +30,7 @@ export class ProjectRunner {
   private instances = new Map<string, PreviewInstance>();
   private readonly basePreviewDir: string;
 
-  constructor(basePreviewDir: string = '/tmp/bether-previews') {
+  constructor(basePreviewDir: string = '/tmp/celiador-previews') {
     this.basePreviewDir = basePreviewDir;
   }
 
@@ -59,7 +59,7 @@ export class ProjectRunner {
       
       // Sync project files from Supabase Storage to local directory
       // Only clean on first sync - check if directory already exists with recent files
-      const localPath = `/tmp/bether-previews/${projectConfig.userId}-${projectConfig.id}`;
+      const localPath = `/tmp/celiador-previews/${projectConfig.userId}-${projectConfig.id}`;
       let shouldClean = true;
       
       try {

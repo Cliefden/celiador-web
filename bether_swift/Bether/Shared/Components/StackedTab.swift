@@ -1,6 +1,6 @@
 //
 //  StackedTab.swift
-//  Bether
+//  Celiador
 //
 //  Created by Stefan Crafoord-Wiklund on 2025-08-30.
 //
@@ -24,7 +24,7 @@ struct StackedTab<Content: View>: View {
     var body: some View {
         NavigationStack {
             content
-                .navigationTitle(!auth.isAuthenticated ? "Bether" : profile.fullName)
+                .navigationTitle(!auth.isAuthenticated ? "Celiador" : profile.fullName)
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .topBarTrailing) {
@@ -34,7 +34,7 @@ struct StackedTab<Content: View>: View {
                     }
                 }
         }
-        .sheet(isPresented: $showProfile) { UserProfileView() }
+        .sheet(isPresented: $showProfile) { ProfileView() }
         .onChange(of: auth.authState) { _, _ in showProfile = false }
     }
 }
