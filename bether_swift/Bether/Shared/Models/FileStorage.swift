@@ -82,6 +82,57 @@ class FileStorageManager: ObservableObject {
     
     private init() {}
     
+    // MARK: - Template Storage Operations
+    
+    func listTemplateFiles(storagePath: String) async throws -> [FileStorage] {
+        let templatesBucketName = "project-templates"
+        guard let url = URL(string: "\(supabaseURL)/storage/v1/object/list/\(templatesBucketName)") else {
+            throw NSError(domain: "FileStorageManager", code: 1, userInfo: [NSLocalizedDescriptionKey: "Invalid URL"])
+        }
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(supabaseKey)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        
+        let requestBody = [
+            "limit": 1000,
+            "offset": 0,
+            "prefix": storagePath
+        ] as [String : Any]
+        
+        request.httpBody = try JSONSerialization.data(withJSONObject: requestBody)
+        
+        let (data, response) = try await URLSession.shared.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse,
+              httpResponse.statusCode == 200 else {
+            throw NSError(domain: "FileStorageManager", code: 2, userInfo: [NSLocalizedDescriptionKey: "Failed to fetch files"])
+        }
+        
+        let storageObjects = try JSONDecoder().decode([SupabaseFileObject].self, from: data)
+        
+        return storageObjects.compactMap { obj in
+            FileStorage(
+                id: UUID(uuidString: obj.id ?? UUID().uuidString) ?? UUID(),
+                createdAt: parseDate(obj.created_at) ?? Date(),
+                name: obj.name,
+                path: "\(storagePath)/\(obj.name)",
+                size: Int64(obj.metadata?.size ?? 0),
+                mimeType: obj.metadata?.mimetype,
+                bucketName: templatesBucketName,
+                userId: nil,
+                projectId: nil
+            )
+        }
+    }
+    
+    private func parseDate(_ dateString: String?) -> Date? {
+        guard let dateString = dateString else { return nil }
+        let formatter = ISO8601DateFormatter()
+        return formatter.date(from: dateString)
+    }
+    
     // MARK: - File Operations
     func loadFiles() {
         isLoading = true

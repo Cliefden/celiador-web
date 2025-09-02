@@ -1,0 +1,109 @@
+// Upload existing local templates to Supabase Storage
+import { createClient } from '@supabase/supabase-js';
+import fs from 'fs/promises';
+import path from 'path';
+
+const supabaseUrl = "https://wpnucnsejqmqgtxdrwnt.supabase.co";
+const supabaseServiceKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndwbnVjbnNlanFtcWd0eGRyd250Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1NDg4OTYwOCwiZXhwIjoyMDcwNDY1NjA4fQ.eVJn8uw5tne2VTAvHHw3OJ83AoVcC_p2vgypFK5BPZ4";
+
+const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+const templates = [
+  'next-saas-starter',
+  'ecommerce-storefront', 
+  'ai-chat-app',
+  'dashboard-analytics',
+  'next-prisma-supabase'
+];
+
+async function getContentType(filePath) {
+  const ext = path.extname(filePath).toLowerCase();
+  const contentTypes = {
+    '.js': 'application/javascript',
+    '.jsx': 'application/javascript',
+    '.ts': 'text/plain', // Use text/plain for TypeScript files
+    '.tsx': 'text/plain',
+    '.json': 'application/json',
+    '.css': 'text/css',
+    '.scss': 'text/css',
+    '.md': 'text/plain', // Use text/plain for markdown
+    '.html': 'text/html',
+    '.txt': 'text/plain',
+    '.png': 'image/png',
+    '.jpg': 'image/jpeg',
+    '.jpeg': 'image/jpeg',
+    '.gif': 'image/gif',
+    '.svg': 'image/svg+xml',
+    '.ico': 'image/x-icon',
+    '.prisma': 'text/plain'
+  };
+  return contentTypes[ext] || 'text/plain'; // Default to text/plain instead of octet-stream
+}
+
+async function uploadFileRecursively(localPath, storagePath, relativePath = '') {
+  const stats = await fs.stat(localPath);
+  
+  if (stats.isDirectory()) {
+    console.log(`📁 Processing directory: ${relativePath || '(root)'}`);
+    
+    const entries = await fs.readdir(localPath);
+    for (const entry of entries) {
+      // Skip hidden files and node_modules
+      if (entry.startsWith('.') || entry === 'node_modules' || entry === '.next') {
+        continue;
+      }
+      
+      const entryLocalPath = path.join(localPath, entry);
+      const entryRelativePath = relativePath ? `${relativePath}/${entry}` : entry;
+      await uploadFileRecursively(entryLocalPath, storagePath, entryRelativePath);
+    }
+  } else {
+    // Upload file
+    const fileContent = await fs.readFile(localPath);
+    const storageFilePath = relativePath ? `${storagePath}/${relativePath}` : storagePath;
+    const contentType = await getContentType(localPath);
+    
+    console.log(`📄 Uploading: ${relativePath} (${fileContent.length} bytes, ${contentType})`);
+    
+    const { data, error } = await supabase.storage
+      .from('project-templates')
+      .upload(storageFilePath, fileContent, {
+        contentType,
+        upsert: true
+      });
+    
+    if (error) {
+      console.error(`❌ Failed to upload ${relativePath}:`, error);
+    } else {
+      console.log(`✅ Uploaded: ${relativePath}`);
+    }
+  }
+}
+
+async function uploadTemplates() {
+  console.log('🚀 Uploading templates to Supabase Storage...\n');
+  
+  const templatesDir = 'packages/templates';
+  
+  for (const template of templates) {
+    console.log(`\n📦 Uploading template: ${template}`);
+    const localTemplatePath = path.join(templatesDir, template);
+    const storageTemplatePath = `packages/templates/${template}`;
+    
+    try {
+      // Check if local template exists
+      await fs.access(localTemplatePath);
+      
+      // Upload all files in this template
+      await uploadFileRecursively(localTemplatePath, storageTemplatePath);
+      
+      console.log(`✅ Template ${template} uploaded successfully`);
+    } catch (error) {
+      console.error(`❌ Failed to upload template ${template}:`, error);
+    }
+  }
+  
+  console.log('\n🎉 Template upload completed!');
+}
+
+uploadTemplates();

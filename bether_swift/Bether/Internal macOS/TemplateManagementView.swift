@@ -348,6 +348,9 @@ struct TemplateDetailView: View {
     @State private var allCategories = SBTableViewModel<TemplateCategory>()
     @State private var allFeatures = SBTableViewModel<TemplateFeature>()
     @State private var allTechStack = SBTableViewModel<TemplateTechStack>()
+    @State private var storageFiles: [FileStorage] = []
+    @State private var isLoadingFiles = false
+    @State private var expandedFolders: Set<String> = []
     
     var templateCategories: [TemplateCategory] {
         let categoryIds = categoriesJunction.items
@@ -393,12 +396,16 @@ struct TemplateDetailView: View {
                 
                 // Associated Data
                 associatedDataSection
+                
+                // Storage Files
+                storageFilesSection
             }
             .padding()
         }
         .navigationTitle(template.name ?? "Template")
         .onFirstAppear {
             setupViewModels()
+            loadStorageFiles()
         }
         .onDisappear {
             teardownViewModels()
@@ -550,6 +557,52 @@ struct TemplateDetailView: View {
         .cornerRadius(12)
     }
     
+    private var storageFilesSection: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack {
+                Text("Storage Files")
+                    .font(.headline)
+                
+                Spacer()
+                
+                if isLoadingFiles {
+                    ProgressView()
+                        .scaleEffect(0.8)
+                } else {
+                    Button(action: loadStorageFiles) {
+                        Image(systemName: "arrow.clockwise")
+                    }
+                }
+            }
+            
+            if storageFiles.isEmpty && !isLoadingFiles {
+                Text("No files found in storage")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .padding()
+            } else {
+                ScrollView(.vertical) {
+                    LazyVStack(alignment: .leading, spacing: 4) {
+                        ForEach(organizedFiles, id: \.id) { file in
+                            FileStorageRow(file: file, expandedFolders: $expandedFolders)
+                        }
+                    }
+                    .padding(.vertical, 4)
+                }
+                .frame(maxHeight: 300)
+                .background(Color(.textBackgroundColor))
+                .cornerRadius(8)
+            }
+        }
+        .padding()
+        .background(Color(.controlBackgroundColor))
+        .cornerRadius(12)
+    }
+    
+    var organizedFiles: [FileStorage] {
+        storageFiles.sorted { $0.path < $1.path }
+    }
+    
     // MARK: - Actions
     
     private func setupViewModels() {
@@ -568,6 +621,28 @@ struct TemplateDetailView: View {
         allCategories.cancelListener()
         allFeatures.cancelListener()
         allTechStack.cancelListener()
+    }
+    
+    private func loadStorageFiles() {
+        guard let storagePath = template.storagePath else { return }
+        
+        isLoadingFiles = true
+        
+        Task {
+            do {
+                let files = try await FileStorageManager.shared.listTemplateFiles(storagePath: storagePath)
+                await MainActor.run {
+                    self.storageFiles = files
+                    self.isLoadingFiles = false
+                }
+            } catch {
+                print("Error loading storage files for \(storagePath): \(error)")
+                await MainActor.run {
+                    self.storageFiles = []
+                    self.isLoadingFiles = false
+                }
+            }
+        }
     }
 }
 
@@ -613,6 +688,89 @@ struct DetailRow: View {
             
             Spacer()
         }
+    }
+}
+
+// MARK: - Storage File Views
+
+struct FileStorageRow: View {
+    let file: FileStorage
+    @Binding var expandedFolders: Set<String>
+    
+    private var indentLevel: Int {
+        file.path.components(separatedBy: "/").count - 3 // Adjust for base path
+    }
+    
+    private var isExpanded: Bool {
+        expandedFolders.contains(file.path)
+    }
+    
+    var body: some View {
+        HStack(spacing: 8) {
+            // Indentation
+            if indentLevel > 0 {
+                HStack(spacing: 0) {
+                    ForEach(0..<indentLevel, id: \.self) { _ in
+                        Rectangle()
+                            .frame(width: 16, height: 1)
+                            .opacity(0)
+                    }
+                }
+            }
+            
+            // Expand/collapse for directories
+            if file.isDirectory {
+                Button(action: toggleFolder) {
+                    Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+                .buttonStyle(PlainButtonStyle())
+            } else {
+                Spacer()
+                    .frame(width: 16)
+            }
+            
+            // Icon
+            Image(systemName: file.fileTypeIcon)
+                .font(.caption)
+                .foregroundColor(iconColorForFile(file))
+                .frame(width: 16)
+            
+            // Name
+            Text(file.name)
+                .font(.caption)
+                .foregroundColor(.primary)
+            
+            Spacer()
+            
+            // Size (for files only)
+            if !file.isDirectory {
+                Text(file.formattedSize)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+        .background(Color.clear)
+        .cornerRadius(4)
+    }
+    
+    private func toggleFolder() {
+        if isExpanded {
+            expandedFolders.remove(file.path)
+        } else {
+            expandedFolders.insert(file.path)
+        }
+    }
+    
+    private func iconColorForFile(_ file: FileStorage) -> Color {
+        if file.isDirectory { return .blue }
+        if file.isImage { return .green }
+        if file.isCode { return .purple }
+        if file.isDocument { return .orange }
+        return .secondary
     }
 }
 

@@ -125,3 +125,4 @@ test-results.xml
 
 # Local development
 .local/
+.vercel

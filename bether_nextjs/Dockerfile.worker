@@ -1,0 +1,31 @@
+FROM node:18-alpine
+
+WORKDIR /app
+
+# Copy package files
+COPY package.json pnpm-lock.yaml ./
+COPY workers/codegen/package.json workers/codegen/
+COPY packages/shared/package.json packages/shared/
+COPY packages/agent-tools/package.json packages/agent-tools/
+
+# Install pnpm and dependencies
+RUN npm install -g pnpm
+RUN pnpm install --frozen-lockfile
+
+# Copy source code
+COPY packages/shared packages/shared
+COPY packages/agent-tools packages/agent-tools
+COPY workers/codegen workers/codegen
+
+# Build packages first
+WORKDIR /app/packages/shared
+RUN pnpm build
+
+WORKDIR /app/packages/agent-tools
+RUN pnpm build
+
+# Build worker
+WORKDIR /app/workers/codegen
+RUN pnpm build
+
+CMD ["pnpm", "start"]

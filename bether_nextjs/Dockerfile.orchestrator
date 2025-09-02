@@ -1,0 +1,28 @@
+FROM node:18-alpine
+
+WORKDIR /app
+
+# Copy package files
+COPY package.json pnpm-lock.yaml ./
+COPY apps/orchestrator/package.json apps/orchestrator/
+COPY packages/shared/package.json packages/shared/
+
+# Install pnpm and dependencies
+RUN npm install -g pnpm
+RUN pnpm install --frozen-lockfile
+
+# Copy source code
+COPY packages/shared packages/shared
+COPY apps/orchestrator apps/orchestrator
+
+# Build shared package first
+WORKDIR /app/packages/shared
+RUN pnpm build
+
+# Build orchestrator
+WORKDIR /app/apps/orchestrator
+RUN pnpm build
+
+EXPOSE 4000
+
+CMD ["pnpm", "start"]
