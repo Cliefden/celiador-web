@@ -11,6 +11,25 @@ import OptionalHelpers
 import Auth
 import Speech
 
+enum ClaudeCodeTab: String, CaseIterable {
+    case conversation = "conversation"
+    case preview = "preview"
+    
+    var displayName: String {
+        switch self {
+        case .conversation: return "Chat"
+        case .preview: return "Preview"
+        }
+    }
+    
+    var iconName: String {
+        switch self {
+        case .conversation: return "message"
+        case .preview: return "display"
+        }
+    }
+}
+
 struct ClaudeCodeView: View {
     @Environment(SBAuthViewModel.self) var auth
     @State private var selectedProject: Project?
@@ -23,17 +42,30 @@ struct ClaudeCodeView: View {
     @State private var isProcessing = false
     @State private var speechRecognizer = SpeechRecognizer()
     @State private var showingProjectPicker = false
+    @State private var selectedTab: ClaudeCodeTab = .conversation
     
     var body: some View {
         VStack(spacing: 0) {
             // Project Context Header
             projectContextHeader
             
-            // Conversation Area
-            conversationArea
+            // Tab Picker
+            tabPicker
             
-            // Input Area
-            inputArea
+            // Tab Content
+            TabView(selection: $selectedTab) {
+                // Conversation Tab
+                VStack(spacing: 0) {
+                    conversationArea
+                    inputArea
+                }
+                .tag(ClaudeCodeTab.conversation)
+                
+                // Preview Tab
+                PreviewView(project: selectedProject)
+                    .tag(ClaudeCodeTab.preview)
+            }
+            .tabViewStyle(PageTabViewStyle(indexDisplayMode: .never))
         }
         .toolbar {
             ToolbarItem {
@@ -66,6 +98,34 @@ struct ClaudeCodeView: View {
                 messageText = newValue
             }
         }
+    }
+    
+    private var tabPicker: some View {
+        HStack(spacing: 0) {
+            ForEach(ClaudeCodeTab.allCases, id: \.self) { tab in
+                Button {
+                    selectedTab = tab
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: tab.iconName)
+                            .font(.caption)
+                        Text(tab.displayName)
+                            .font(.caption)
+                            .fontWeight(.medium)
+                    }
+                    .foregroundColor(selectedTab == tab ? .white : .primary)
+                    .padding(.vertical, 8)
+                    .padding(.horizontal, 16)
+                    .background(selectedTab == tab ? Color.accentColor : Color.clear)
+                    .cornerRadius(8)
+                }
+            }
+            
+            Spacer()
+        }
+        .padding(.horizontal)
+        .padding(.vertical, 8)
+        .background(Color(.systemGray6))
     }
     
     private var projectContextHeader: some View {

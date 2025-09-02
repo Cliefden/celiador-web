@@ -34,7 +34,7 @@ struct StackedTab<Content: View>: View {
                     }
                 }
         }
-        .sheet(isPresented: $showProfile) { ProfileView() }
+        .sheet(isPresented: $showProfile) { UserProfileView() }
         .onChange(of: auth.authState) { _, _ in showProfile = false }
     }
 }

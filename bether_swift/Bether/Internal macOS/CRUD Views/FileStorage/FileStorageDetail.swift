@@ -24,15 +24,15 @@ struct FileStorageDetail: View {
                         .fontWeight(.semibold)
                     
                     VStack(spacing: 8) {
-                        InfoRow(label: "File Name", value: file.name)
-                        InfoRow(label: "Path", value: file.path)
-                        InfoRow(label: "Size", value: file.formattedSize)
-                        InfoRow(label: "Type", value: file.fileTypeDescription)
+                        InfoRow(title: "File Name", value: file.name)
+                        InfoRow(title: "Path", value: file.path)
+                        InfoRow(title: "Size", value: file.formattedSize)
+                        InfoRow(title: "Type", value: file.fileTypeDescription)
                         if let mimeType = file.mimeType {
-                            InfoRow(label: "MIME Type", value: mimeType)
+                            InfoRow(title: "MIME Type", value: mimeType)
                         }
-                        InfoRow(label: "Bucket", value: file.bucketName)
-                        InfoRow(label: "Created", value: file.formattedDate)
+                        InfoRow(title: "Bucket", value: file.bucketName)
+                        InfoRow(title: "Created", value: file.formattedDate)
                     }
                 }
                 .padding()
@@ -152,26 +152,26 @@ struct FileStorageDetail: View {
     }
 }
 
-struct InfoRow: View {
-    let label: String
-    let value: String
-    
-    var body: some View {
-        HStack {
-            Text(label)
-                .font(.subheadline)
-                .fontWeight(.medium)
-                .foregroundColor(.secondary)
-                .frame(width: 80, alignment: .leading)
-            
-            Text(value)
-                .font(.subheadline)
-                .foregroundColor(.primary)
-            
-            Spacer()
-        }
-    }
-}
+//struct InfoRow: View {
+//    let label: String
+//    let value: String
+//    
+//    var body: some View {
+//        HStack {
+//            Text(label)
+//                .font(.subheadline)
+//                .fontWeight(.medium)
+//                .foregroundColor(.secondary)
+//                .frame(width: 80, alignment: .leading)
+//            
+//            Text(value)
+//                .font(.subheadline)
+//                .foregroundColor(.primary)
+//            
+//            Spacer()
+//        }
+//    }
+//}
 
 #Preview {
     FileStorageDetail(

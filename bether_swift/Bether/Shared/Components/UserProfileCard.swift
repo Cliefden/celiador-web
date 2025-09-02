@@ -1,5 +1,5 @@
 //
-//  ProfileCard.swift
+//  UserProfileCard.swift
 //  PengRF
 //
 //  Created by Stefan Crafoord-Wiklund on 2025-04-21.
@@ -8,7 +8,7 @@
 import SwiftUI
 import Supabasable
 
-struct ProfileCard: View {
+struct UserProfileCard: View {
     
     @Environment(SBProfileViewModel.self) var profile
     @Environment(SBAuthViewModel.self) var auth

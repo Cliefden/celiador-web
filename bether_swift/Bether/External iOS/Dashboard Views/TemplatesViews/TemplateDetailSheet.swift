@@ -8,10 +8,12 @@
 import SwiftUI
 import OptionalHelpers
 import Supabasable
+import Auth
 
 struct TemplateDetailSheet: View {
     let template: Template
     @Environment(\.dismiss) private var dismiss
+    @Environment(SBAuthViewModel.self) var auth
     @State private var showingCreateProject = false
     @State private var features = SBTableViewModel<TemplateFeature>()
     @State private var techStack = SBTableViewModel<TemplateTechStack>()
@@ -157,12 +159,20 @@ struct TemplateDetailSheet: View {
                         }
                     }
                     
-                    // CTA Button
-                    Button("Use This Template") {
-                        showingCreateProject = true
+                    // CTA Button - Only show when authenticated
+                    if auth.currentUser != nil {
+                        Button("Use This Template") {
+                            showingCreateProject = true
+                        }
+                        .buttonStyle(PrimaryButtonStyle())
+                        .frame(maxWidth: .infinity)
+                    } else {
+                        Button("Sign In to Use Template") {
+                            // TODO: Navigate to login or show login sheet
+                        }
+                        .buttonStyle(.bordered)
+                        .frame(maxWidth: .infinity)
                     }
-                    .buttonStyle(PrimaryButtonStyle())
-                    .frame(maxWidth: .infinity)
                 }
                 .padding()
             }

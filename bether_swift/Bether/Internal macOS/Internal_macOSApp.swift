@@ -29,6 +29,12 @@ struct Internal_macOSApp: App {
 //            }
 //            .environment(authViewModel)
         }
+        WindowGroup("Cost Monitoring") {
+            CostMonitoringView()
+        }
+        WindowGroup("Template Monitoring") {
+            TemplateManagementView()
+        }
         WindowGroup("Terminal") {
             TerminalWindowView()
         }
