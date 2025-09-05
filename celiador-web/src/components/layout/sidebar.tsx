@@ -51,7 +51,7 @@ export function Sidebar({ projects, selectedProject, onProjectSelect, onCreatePr
     <div className="w-80 h-screen bg-muted/30 border-r flex flex-col">
       {/* Header */}
       <div className="p-4 border-b">
-        <h1 className="text-xl font-bold">Bether Studio</h1>
+        <h1 className="text-xl font-bold">Celiador Studio</h1>
         <p className="text-sm text-muted-foreground">AI-powered development</p>
       </div>
 

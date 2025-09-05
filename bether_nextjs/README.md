@@ -1,37 +1,30 @@
 
-# Lovable-like MVP Monorepo
+# Celiador Web Application
 
-This is a build-ready scaffold for a prompt → app generator (Lovable-style). It includes:
-- `apps/web`: React/Next.js UI shell (Monaco-ready) for file tree, jobs, and logs
-- `apps/orchestrator`: REST + SSE API (Express) and BullMQ job queue
-- `workers/codegen`: LLM worker with BullMQ job processing and tool orchestration
-- `packages/agent-tools`: strongly-typed tool interfaces (writeFile, patchFile, runCmd…)
-- `packages/templates/next-prisma-supabase`: base full-stack web template
-- `packages/shared`: shared DTOs and zod schemas
-- `infra`: placeholders for Docker and Terraform
+This is the web frontend for the Celiador platform. It includes:
+- `apps/web`: React/Next.js UI for project management, file editing, and AI conversations
+- Connects to external services:
+  - Orchestrator API at `../celiador-orchestrator` (port 4000)
+  - Preview service at `../celiador-preview-service` (port 4001) 
+  - Codegen worker at `../celiador-codegen-worker`
 
 ## Quickstart
 
-1) Install pnpm and Node 20+
-2) Install and start Redis (required for job queue):
+### Prerequisites
+Make sure the external services are running:
+1) Start the orchestrator: `cd ../celiador-orchestrator && npm run dev`
+2) Start the preview service: `cd ../celiador-preview-service && npm run dev` 
+3) Start the codegen worker: `cd ../celiador-codegen-worker && npm run dev`
+
+### Start Web App
+1) Install dependencies: `pnpm i`
+2) Start the web app:
    ```bash
-   # macOS
-   brew install redis
-   brew services start redis
-   
-   # Or use Docker
-   docker run -d -p 6379:6379 redis:alpine
+   ./start-new-dev.sh
+   # OR
+   npm run dev
    ```
-3) `pnpm i`
-4) Copy `env.example` to `.env` files in each app and fill values:
-   ```bash
-   cp env.example apps/orchestrator/.env
-   cp env.example workers/codegen/.env
-   ```
-5) Dev:
-   - `pnpm --filter @mvp/orchestrator dev` (API + job queue)
-   - `pnpm --filter @mvp/worker-codegen dev` (job processor)
-   - `pnpm --filter @mvp/web dev` (web UI)
+3) Access at: http://localhost:3000
 
 ## Job Queue System
 

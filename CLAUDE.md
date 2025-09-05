@@ -81,12 +81,13 @@ Open `bether_swift/Bether/Bether.xcodeproj` in Xcode to work with:
 **AI Conversation System**: Natural language interface for project commands  
 **File Management**: Supabase Storage with real-time preview sync
 
-### Celiador Web (Standalone Next.js App)
+### Celiador Web (Primary Frontend)
 - **Framework**: Next.js 15.5.2 with React 19, TypeScript
 - **Styling**: Tailwind CSS v4 with PostCSS
 - **Build Tool**: Uses Turbopack for faster development builds
-- **Components**: Similar component structure to main platform (auth, conversation, file-tree, etc.)
-- **Integration**: Uses Supabase for backend services
+- **Components**: Mirrors the legacy frontend component structure (auth, conversation, file-tree, etc.)
+- **Backend Integration**: Connects to `bether_nextjs/` orchestrator API and shared Supabase services
+- **Status**: **Primary frontend application** replacing `bether_nextjs/apps/web/`
 
 ### iOS Platform
 - **External iOS**: SwiftUI app for end users with dashboard, project management, and conversation features
@@ -153,14 +154,19 @@ Components organized by domain:
 
 ## Development Workflow
 
-### Working with Bether Platform
-1. Start Redis: `brew services start redis`
-2. Configure environment files from `env.example`
-3. Run `npm run dev:all` in `bether_nextjs/`
-4. Access web app at http://localhost:3000, API at http://localhost:4000
+### Full Stack Development (Migration Architecture)
+1. **Backend Services**: Start Redis (`brew services start redis`) and run `npm run dev:orchestrator` + `npm run dev:worker` in `bether_nextjs/`
+2. **Primary Frontend**: Run `npm run dev` in `celiador-web/` 
+3. **Legacy Frontend**: Optionally run `npm run dev:web` in `bether_nextjs/` for comparison/migration work
+4. **Access Points**: 
+   - Primary frontend (Celiador): http://localhost:3000
+   - Legacy frontend (Bether): http://localhost:3000 (if running)
+   - Backend API: http://localhost:4000
 
-### Working with Celiador Web
-Navigate to `celiador-web/` and run standard Next.js commands.
+### Migration Notes
+- **Frontend work**: Focus development on `celiador-web/` as the primary frontend
+- **Backend work**: Continue using `bether_nextjs/` orchestrator and workers
+- **Component migration**: Copy/adapt components from `bether_nextjs/apps/web/` to `celiador-web/`
 
 ### iOS Development
 Open Xcode project and select appropriate target for development.
@@ -176,7 +182,13 @@ Open Xcode project and select appropriate target for development.
 ### Cross-Platform Data Sync
 All platforms share the same Supabase backend, enabling seamless project synchronization between web, mobile, and different applications.
 
-### Shared Packages (Bether Platform Only)
-- **`@mvp/shared`** - Common utilities, types, and services
+### Shared Packages (Backend Services)
+- **`@mvp/shared`** - Common utilities, types, and services used by orchestrator and workers
 - **`@mvp/agent-tools`** - AI agent tools for code generation
 - **`@mvp/templates`** - Project template packages
+
+### Migration Strategy
+- **Phase 1**: `celiador-web/` connects to existing `bether_nextjs/` backend APIs
+- **Phase 2**: Components and features gradually migrated from legacy frontend  
+- **Phase 3**: `bether_nextjs/apps/web/` deprecated, monorepo becomes backend-only
+- **End State**: `celiador-web/` as frontend + `bether_nextjs/` as backend services + iOS apps

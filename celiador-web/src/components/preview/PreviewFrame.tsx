@@ -35,6 +35,7 @@ export interface PreviewInstance {
   };
   startTime: string;
   lastAccessed?: string;
+  errorMessage?: string;
 }
 
 interface PreviewFrameProps {
@@ -340,10 +341,15 @@ export function PreviewFrame({
         ) : (
           /* Stopped/Error State */
           <div className="text-center max-w-md">
-            <AlertCircle className="w-12 h-12 text-amber-500 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-gray-700 mb-2">Preview Stopped</h3>
+            <AlertCircle className={`w-12 h-12 mx-auto mb-4 ${preview.status === 'error' ? 'text-red-500' : 'text-amber-500'}`} />
+            <h3 className="text-lg font-medium text-gray-700 mb-2">
+              {preview.status === 'error' ? 'Preview Error' : 'Preview Stopped'}
+            </h3>
             <p className="text-sm text-gray-500 mb-4">
-              The preview server has stopped. Click restart to start it again.
+              {preview.errorMessage || (preview.status === 'error' 
+                ? 'The preview failed to start. Please check your project files and try again.'
+                : 'The preview server has stopped. Click restart to start it again.'
+              )}
             </p>
             <Button
               variant="default"

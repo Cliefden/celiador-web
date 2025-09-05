@@ -142,7 +142,7 @@ export default function SolutionsPage() {
               Perfect for Every Team
             </h2>
             <p className="mt-4 text-xl text-gray-500">
-              See how different organizations use Bether to accelerate their development
+              See how different organizations use Celiador to accelerate their development
             </p>
           </div>
 

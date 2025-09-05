@@ -83,40 +83,37 @@ export function CreateProjectModal({ isOpen, onClose, onProjectCreated, userId }
       try {
         setLoadingTemplates(true);
         
-        // Fetch templates first
-        const { data: templatesData, error: templatesError } = await supabase
-          .from('templates')
-          .select('*')
-          .eq('is_active', true)
-          .is('deleted_at', null)
-          .order('sort_order');
-
-        if (templatesError) {
-          throw templatesError;
+        // Fetch templates from orchestrator API
+        const response = await fetch(`${process.env.NEXT_PUBLIC_ORCHESTRATOR_URL || 'http://localhost:4000'}/templates`);
+        
+        if (!response.ok) {
+          throw new Error('Failed to fetch templates');
         }
 
-        // For now, use basic template data without junction relationships
-        // TODO: Add junction table loading for features and tech stack
-        const transformedTemplates = templatesData?.map(template => ({
-          id: template.id,
-          template_key: template.template_key,
+        const templatesData = await response.json();
+        const orchestratorTemplates = templatesData.templates || [];
+
+        // Transform orchestrator template format to expected frontend format
+        const transformedTemplates = orchestratorTemplates.map((template: any) => ({
+          id: template.key,
+          template_key: template.key,
           name: template.name,
           description: template.description,
-          long_description: template.long_description,
-          difficulty: template.difficulty,
+          long_description: template.description,
+          difficulty: 'intermediate',
           icon: template.icon,
-          emoji: template.emoji,
-          color_primary: template.color_primary,
-          color_secondary: template.color_secondary,
-          rating: template.rating,
-          version: template.version,
-          storage_path: template.storage_path,
-          is_active: template.is_active,
-          sort_order: template.sort_order,
-          categories: [], // TODO: Load from junction table
-          features: [], // TODO: Load from junction table
-          tech_stack: [] // TODO: Load from junction table
-        })) || [];
+          emoji: template.name.split(' ')[0],
+          color_primary: '#3B82F6',
+          color_secondary: '#8B5CF6',
+          rating: 0,
+          version: template.version || '1.0.0',
+          storage_path: template.key,
+          is_active: template.isActive,
+          sort_order: 0,
+          categories: [],
+          features: template.features || [],
+          tech_stack: []
+        }));
 
         setTemplates(transformedTemplates);
         

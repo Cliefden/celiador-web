@@ -50,7 +50,7 @@ export function DeploymentButtons({
   const [loading, setLoading] = useState(true);
   const [deploying, setDeploying] = useState<string | null>(null);
   const [lastResult, setLastResult] = useState<DeploymentResult | null>(null);
-  const [commitMessage, setCommitMessage] = useState('Update from Bether Studio');
+  const [commitMessage, setCommitMessage] = useState('Update from Celiador Studio');
 
   useEffect(() => {
     console.log('[DeploymentButtons] useEffect triggered with projectId:', projectId);

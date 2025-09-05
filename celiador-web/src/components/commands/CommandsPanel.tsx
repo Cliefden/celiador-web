@@ -51,7 +51,8 @@ export function CommandsPanel({ projectId, className = '', onCommandToConversati
       }
 
       console.log('CommandsPanel: Making API call...');
-      const response = await fetch(`/api/projects/${projectId}/commands`, {
+      const orchestratorUrl = process.env.NEXT_PUBLIC_ORCHESTRATOR_URL || 'http://localhost:4000';
+      const response = await fetch(`${orchestratorUrl}/api/projects/${projectId}/commands`, {
         headers: {
           'Authorization': `Bearer ${session.access_token}`
         }
@@ -81,7 +82,8 @@ export function CommandsPanel({ projectId, className = '', onCommandToConversati
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) return;
 
-      const response = await fetch(`/api/projects/${projectId}/commands`, {
+      const orchestratorUrl = process.env.NEXT_PUBLIC_ORCHESTRATOR_URL || 'http://localhost:4000';
+      const response = await fetch(`${orchestratorUrl}/api/projects/${projectId}/commands`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -111,7 +113,8 @@ export function CommandsPanel({ projectId, className = '', onCommandToConversati
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) return;
 
-      const response = await fetch(`/api/projects/${projectId}/commands`, {
+      const orchestratorUrl = process.env.NEXT_PUBLIC_ORCHESTRATOR_URL || 'http://localhost:4000';
+      const response = await fetch(`${orchestratorUrl}/api/projects/${projectId}/commands`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',

@@ -33,7 +33,7 @@ export default function HomePage() {
       <div className="min-h-screen bg-white flex items-center justify-center">
         <div className="text-center">
           <div className="w-12 h-12 bg-gradient-to-br from-blue-600 to-purple-600 rounded-xl flex items-center justify-center mx-auto mb-4 animate-pulse">
-            <span className="text-white font-bold text-lg">B</span>
+            <span className="text-white font-bold text-lg">C</span>
           </div>
           <p className="text-gray-600">Loading...</p>
           <p className="text-xs text-gray-400 mt-2">Checking authentication...</p>
@@ -48,7 +48,7 @@ export default function HomePage() {
       <div className="min-h-screen bg-white flex items-center justify-center">
         <div className="text-center">
           <div className="w-12 h-12 bg-gradient-to-br from-blue-600 to-purple-600 rounded-xl flex items-center justify-center mx-auto mb-4">
-            <span className="text-white font-bold text-lg">B</span>
+            <span className="text-white font-bold text-lg">C</span>
           </div>
           <p className="text-gray-600">Redirecting to dashboard...</p>
         </div>

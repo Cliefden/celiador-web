@@ -27,7 +27,7 @@ export default function ContactView() {
     {
       icon: "✉️",
       title: "Email Us",
-      details: "contact@bether.com",
+      details: "contact@celiador.com",
       description: "Get in touch for general inquiries"
     },
     {
@@ -65,7 +65,7 @@ export default function ContactView() {
       <nav className="bg-white shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
-            <Link href="/" className="text-xl font-bold text-blue-600">Bether</Link>
+            <Link href="/" className="text-xl font-bold text-blue-600">Celiador</Link>
             <div className="flex space-x-8">
               <Link href="/about" className="text-gray-600 hover:text-gray-900">About</Link>
               <Link href="/solutions" className="text-gray-600 hover:text-gray-900">Solutions</Link>
@@ -234,10 +234,10 @@ export default function ContactView() {
               <div className="bg-white p-6 rounded-xl shadow-sm">
                 <h3 className="text-lg font-bold text-gray-900 mb-3">Sales Inquiries</h3>
                 <p className="text-gray-600 mb-4">
-                  Interested in learning more about our platform? Our sales team is ready to show you how Bether can transform your development workflow.
+                  Interested in learning more about our platform? Our sales team is ready to show you how Celiador can transform your development workflow.
                 </p>
                 <div className="text-sm text-gray-500 space-y-1">
-                  <p><span className="font-medium">Email:</span> sales@bether.com</p>
+                  <p><span className="font-medium">Email:</span> sales@celiador.com</p>
                   <p><span className="font-medium">Phone:</span> +1 (555) 123-4567</p>
                 </div>
               </div>
@@ -245,10 +245,10 @@ export default function ContactView() {
               <div className="bg-white p-6 rounded-xl shadow-sm">
                 <h3 className="text-lg font-bold text-gray-900 mb-3">Technical Support</h3>
                 <p className="text-gray-600 mb-4">
-                  Already using Bether? Our technical support team is available 24/7 to help you with any platform-related questions or issues.
+                  Already using Celiador? Our technical support team is available 24/7 to help you with any platform-related questions or issues.
                 </p>
                 <div className="text-sm text-gray-500 space-y-1">
-                  <p><span className="font-medium">Email:</span> support@bether.com</p>
+                  <p><span className="font-medium">Email:</span> support@celiador.com</p>
                   <p><span className="font-medium">Portal:</span> Available in your dashboard</p>
                 </div>
               </div>
@@ -256,7 +256,7 @@ export default function ContactView() {
               <div className="bg-gradient-to-br from-blue-50 to-green-50 p-6 rounded-xl shadow-sm">
                 <h3 className="text-lg font-bold text-gray-900 mb-3">Partnership Opportunities</h3>
                 <p className="text-gray-600 mb-4">
-                  Interested in partnering with Bether? We&apos;re always looking for strategic partnerships that can benefit our mutual developers.
+                  Interested in partnering with Celiador? We&apos;re always looking for strategic partnerships that can benefit our mutual developers.
                 </p>
                 <button className="border border-gray-300 text-gray-700 px-4 py-2 rounded-md hover:bg-gray-50 font-medium">
                   Learn About Partnerships

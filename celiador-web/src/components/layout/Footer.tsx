@@ -31,7 +31,7 @@ export default function Footer() {
   const social = [
     {
       name: 'GitHub',
-      href: 'https://github.com/bether',
+      href: 'https://github.com/celiador',
       icon: (props: any) => (
         <svg fill="currentColor" viewBox="0 0 24 24" {...props}>
           <path
@@ -44,7 +44,7 @@ export default function Footer() {
     },
     {
       name: 'Twitter',
-      href: 'https://twitter.com/bether',
+      href: 'https://twitter.com/celiador',
       icon: (props: any) => (
         <svg fill="currentColor" viewBox="0 0 24 24" {...props}>
           <path d="M8.29 20.251c7.547 0 11.675-6.253 11.675-11.675 0-.178 0-.355-.012-.53A8.348 8.348 0 0022 5.92a8.19 8.19 0 01-2.357.646 4.118 4.118 0 001.804-2.27 8.224 8.224 0 01-2.605.996 4.107 4.107 0 00-6.993 3.743 11.65 11.65 0 01-8.457-4.287 4.106 4.106 0 001.27 5.477A4.072 4.072 0 012.8 9.713v.052a4.105 4.105 0 003.292 4.022 4.095 4.095 0 01-1.853.07 4.108 4.108 0 003.834 2.85A8.233 8.233 0 012 18.407a11.616 11.616 0 006.29 1.84" />
@@ -53,7 +53,7 @@ export default function Footer() {
     },
     {
       name: 'LinkedIn',
-      href: 'https://linkedin.com/company/bether',
+      href: 'https://linkedin.com/company/celiador',
       icon: (props: any) => (
         <svg fill="currentColor" viewBox="0 0 24 24" {...props}>
           <path
@@ -76,9 +76,9 @@ export default function Footer() {
           <div className="space-y-8 xl:col-span-1">
             <div className="flex items-center space-x-2">
               <div className="w-8 h-8 bg-gradient-to-br from-blue-600 to-purple-600 rounded-lg flex items-center justify-center">
-                <span className="text-white font-bold text-sm">B</span>
+                <span className="text-white font-bold text-sm">C</span>
               </div>
-              <span className="text-xl font-bold text-white">Bether</span>
+              <span className="text-xl font-bold text-white">Celiador</span>
             </div>
             <p className="text-gray-400 text-base">
               Build better apps with AI-powered development tools. Generate, test, and deploy faster than ever before.
@@ -173,7 +173,7 @@ export default function Footer() {
         </div>
         <div className="mt-12 border-t border-gray-700 pt-8">
           <p className="text-base text-gray-400 xl:text-center">
-            &copy; 2024 Bether. All rights reserved.
+            &copy; 2024 Celiador. All rights reserved.
           </p>
         </div>
       </div>

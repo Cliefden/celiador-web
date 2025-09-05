@@ -19,6 +19,7 @@ export interface PreviewInstance {
   };
   startTime: string;
   lastAccessed?: string;
+  errorMessage?: string;
 }
 
 export function usePreview(projectId: string | null) {

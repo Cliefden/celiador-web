@@ -73,7 +73,7 @@ export default function SignInModal({ isOpen, onClose, onSwitchToSignUp }: SignI
             <span className="text-white font-bold text-lg">B</span>
           </div>
           <h2 className="text-2xl font-bold text-gray-900">Welcome back</h2>
-          <p className="text-gray-600 mt-2">Sign in to your Bether account</p>
+          <p className="text-gray-600 mt-2">Sign in to your Celiador account</p>
         </div>
 
         {/* Form */}
