@@ -113,6 +113,11 @@ export class ProjectRunner {
 
       console.log(`[ProjectRunner] Detected project type: ${projectType}`);
 
+      // Apply iframe-friendly configuration for Next.js projects
+      if (projectType === 'nextjs') {
+        await this.addNextjsMiddleware(syncResult.localPath);
+      }
+
       // Start the appropriate development server
       const devProcess = await this.spawnDevServer({
         ...projectConfig,
@@ -358,6 +363,48 @@ export class ProjectRunner {
       return true;
     } catch {
       return false;
+    }
+  }
+
+  /**
+   * Add Next.js middleware for iframe support (simpler than config modification)
+   */
+  private async addNextjsMiddleware(projectDir: string): Promise<void> {
+    try {
+      const middlewarePath = path.join(projectDir, 'middleware.ts');
+      
+      // Check if middleware already exists
+      if (await this.fileExists(middlewarePath)) {
+        console.log('[ProjectRunner] middleware.ts already exists, skipping iframe middleware');
+        return;
+      }
+
+      // Create simple middleware for iframe headers
+      const middlewareContent = `import { NextResponse } from 'next/server'
+import type { NextRequest } from 'next/server'
+
+export function middleware(request: NextRequest) {
+  const response = NextResponse.next()
+  
+  // Add iframe-friendly headers
+  response.headers.set('X-Frame-Options', 'SAMEORIGIN')
+  response.headers.set(
+    'Content-Security-Policy', 
+    "frame-ancestors 'self' http://localhost:* https://localhost:*"
+  )
+  
+  return response
+}
+
+export const config = {
+  matcher: '/((?!api|_next/static|_next/image|favicon.ico).*)',
+}`;
+
+      await fs.writeFile(middlewarePath, middlewareContent, 'utf8');
+      console.log('[ProjectRunner] Created middleware.ts with iframe-friendly headers');
+    } catch (error) {
+      console.error('[ProjectRunner] Failed to add Next.js middleware:', error);
+      // Don't throw - this is not a critical failure, preview can still work
     }
   }
 }

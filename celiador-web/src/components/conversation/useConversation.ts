@@ -88,12 +88,31 @@ export function useConversation(projectId?: string): UseConversationReturn {
 
       if (conversations && conversations.length > 0) {
         console.log('[useConversation] Setting conversation:', conversations[0].id);
-        setConversation(conversations[0]);
+        // Transform database record to match interface
+        const transformedConversation = {
+          id: conversations[0].id,
+          title: conversations[0].title,
+          status: conversations[0].status,
+          createdAt: conversations[0].createdat,
+          updatedAt: conversations[0].updatedat,
+          projectId: conversations[0].projectid,
+          userId: conversations[0].userid
+        };
+        console.log('[useConversation] Transformed conversation:', transformedConversation);
+        setConversation(transformedConversation);
         await loadMessages(conversations[0].id);
       } else {
-        console.log('[useConversation] No conversations found for project');
-        setConversation(null);
-        setMessages([]);
+        console.log('[useConversation] No conversations found for project, creating new one...');
+        try {
+          const newConversation = await createConversation(`Project ${projectId} Chat`);
+          console.log('[useConversation] Created new conversation:', newConversation.id);
+          setConversation(newConversation);
+          setMessages([]);
+        } catch (createError) {
+          console.error('[useConversation] Failed to create new conversation:', createError);
+          setConversation(null);
+          setMessages([]);
+        }
       }
     } catch (err) {
       console.error('[useConversation] Error loading project conversation:', err);
@@ -164,6 +183,8 @@ export function useConversation(projectId?: string): UseConversationReturn {
         status: 'ACTIVE'
       };
 
+      console.log('[useConversation] Creating conversation with data:', conversationData);
+
       const { data, error: createError } = await supabase
         .from('conversations')
         .insert([conversationData])
@@ -178,9 +199,20 @@ export function useConversation(projectId?: string): UseConversationReturn {
         throw new Error('No conversation data returned from insert');
       }
 
-      setConversation(data);
+      // Transform database record to match interface
+      const transformedConversation = {
+        id: data.id,
+        title: data.title,
+        status: data.status,
+        createdAt: data.createdat,
+        updatedAt: data.updatedat,
+        projectId: data.projectid,
+        userId: data.userid
+      };
+      
+      setConversation(transformedConversation);
       setMessages([]);
-      return data; // Return the created conversation
+      return transformedConversation; // Return the transformed conversation
     } catch (err) {
       console.error('Error creating conversation:', err);
       setError(err instanceof Error ? err.message : 'Failed to create conversation');
@@ -291,6 +323,7 @@ export function useConversation(projectId?: string): UseConversationReturn {
           content: msg.content
         }));
 
+        console.log('[useConversation] Active conversation:', activeConversation);
         console.log('[useConversation] Making AI API call to:', `http://localhost:4000/projects/${activeConversation.projectId}/chat`);
         console.log('[useConversation] Auth token length:', authToken.length);
         console.log('[useConversation] Request body:', {
@@ -436,7 +469,18 @@ export function useConversation(projectId?: string): UseConversationReturn {
         throw convError;
       }
 
-      setConversation(data);
+      // Transform database record to match interface
+      const transformedConversation = {
+        id: data.id,
+        title: data.title,
+        status: data.status,
+        createdAt: data.createdat,
+        updatedAt: data.updatedat,
+        projectId: data.projectid,
+        userId: data.userid
+      };
+      
+      setConversation(transformedConversation);
       await loadMessages(conversationId);
     } catch (err) {
       console.error('Error loading conversation:', err);

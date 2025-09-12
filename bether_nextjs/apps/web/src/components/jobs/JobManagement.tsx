@@ -193,8 +193,8 @@ export function JobManagement({ projectId, userId, onJobCreated, onJobUpdated }:
         const errorText = await response.text();
         error('Job Retry Failed', errorText);
       }
-    } catch (error) {
-      console.error('Failed to retry job:', error);
+    } catch (err) {
+      console.error('Failed to retry job:', err);
       error('Job Retry Failed', 'An unexpected error occurred while retrying the job');
     }
   };

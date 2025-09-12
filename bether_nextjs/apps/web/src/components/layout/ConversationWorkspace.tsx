@@ -90,7 +90,7 @@ export function ConversationWorkspace({ selectedProject }: ConversationWorkspace
       setActiveTab('chat');
       
       // Send the command as a message with appropriate type
-      const messageType = commandType === 'voice' ? 'voice' : 'text';
+      const messageType = 'text'; // Always send as text since voice isn't supported yet
       console.log('ConversationWorkspace: Sending message with type:', messageType);
       await sendMessage(commandText, messageType);
       console.log('ConversationWorkspace: Message sent successfully');

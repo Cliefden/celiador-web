@@ -82,23 +82,56 @@ export function PreviewFrame({
     setUrlReady(false);
   }, [preview?.id]);
 
-  // Effect to handle URL readiness with a delay approach
+  // Effect to handle URL readiness with health check approach
   useEffect(() => {
     let timeoutId: NodeJS.Timeout | null = null;
+    let intervalId: NodeJS.Timeout | null = null;
+
+    const checkServerHealth = async (url: string): Promise<boolean> => {
+      try {
+        const response = await fetch(url, { 
+          method: 'HEAD',
+          mode: 'no-cors',
+          cache: 'no-cache'
+        });
+        return true; // If no error thrown, server is responding
+      } catch (error) {
+        return false; // Server not ready yet
+      }
+    };
 
     if (preview?.status === 'running' && preview.url && !urlReady) {
-      // Give the preview server a few seconds to be fully ready after status becomes "running"
-      console.log('[PreviewFrame] Preview running, waiting for server readiness...');
-      timeoutId = setTimeout(() => {
-        setUrlReady(true);
-        console.log('[PreviewFrame] Server should be ready, showing iframe');
-      }, 3000); // Wait 3 seconds after status becomes "running"
+      console.log('[PreviewFrame] Preview running, checking server readiness...');
+      
+      let attempts = 0;
+      const maxAttempts = 20; // 20 attempts over 10 seconds
+      
+      intervalId = setInterval(async () => {
+        attempts++;
+        console.log(`[PreviewFrame] Health check attempt ${attempts}/${maxAttempts}`);
+        
+        const isReady = await checkServerHealth(preview.url!);
+        
+        if (isReady || attempts >= maxAttempts) {
+          if (intervalId) clearInterval(intervalId);
+          
+          if (isReady) {
+            console.log('[PreviewFrame] Server is ready, showing iframe');
+            setUrlReady(true);
+          } else {
+            console.log('[PreviewFrame] Server not ready after max attempts, showing anyway');
+            // Fallback: show iframe anyway after max attempts
+            timeoutId = setTimeout(() => {
+              setUrlReady(true);
+            }, 2000); // Additional 2 second fallback
+          }
+        }
+      }, 500); // Check every 500ms
     }
 
     return () => {
-      if (timeoutId) {
-        clearTimeout(timeoutId);
-      }
+      if (timeoutId) clearTimeout(timeoutId);
+      if (intervalId) clearInterval(intervalId);
     };
   }, [preview?.status, preview?.url, urlReady]); // Only depend on status and url changes
 

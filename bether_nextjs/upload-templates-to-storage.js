@@ -19,14 +19,14 @@ const templates = [
 async function getContentType(filePath) {
   const ext = path.extname(filePath).toLowerCase();
   const contentTypes = {
-    '.js': 'application/javascript',
-    '.jsx': 'application/javascript',
-    '.ts': 'text/plain', // Use text/plain for TypeScript files
+    '.js': 'text/plain', // Change to text/plain for JS files too
+    '.jsx': 'text/plain',
+    '.ts': 'text/plain',
     '.tsx': 'text/plain',
     '.json': 'application/json',
     '.css': 'text/css',
     '.scss': 'text/css',
-    '.md': 'text/plain', // Use text/plain for markdown
+    '.md': 'text/plain',
     '.html': 'text/html',
     '.txt': 'text/plain',
     '.png': 'image/png',
@@ -37,7 +37,7 @@ async function getContentType(filePath) {
     '.ico': 'image/x-icon',
     '.prisma': 'text/plain'
   };
-  return contentTypes[ext] || 'text/plain'; // Default to text/plain instead of octet-stream
+  return contentTypes[ext] || 'text/plain';
 }
 
 async function uploadFileRecursively(localPath, storagePath, relativePath = '') {

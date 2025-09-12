@@ -227,14 +227,191 @@ export class FileSyncManager {
     // Create directory structure
     await fs.mkdir(directory, { recursive: true });
 
+    let content = file.content;
+
+    // TEMPORARILY DISABLED - Inject inspection script into layout files
+    // TODO: Fix JSX parsing issues with script injection
+    // if (typeof content === 'string' && this.shouldInjectInspectionScript(file.path)) {
+    //   content = await this.injectInspectionScript(content, file.path);
+    //   console.log(`[FileSyncManager] Injected inspection script into ${file.path}`);
+    // }
+
+    // TEMPORARILY DISABLED - Add inspection markers to JSX/TSX files
+    // TODO: Fix JSX parsing issues with inspection markers
+    // if (typeof content === 'string' && this.shouldAddInspectionMarkers(file.path)) {
+    //   content = this.addInspectionMarkers(content, file.path);
+    //   console.log(`[FileSyncManager] Added inspection markers to ${file.path}`);
+    // }
+
     // Write file content
-    if (typeof file.content === 'string') {
-      await fs.writeFile(fullPath, file.content, 'utf8');
+    if (typeof content === 'string') {
+      await fs.writeFile(fullPath, content, 'utf8');
     } else {
-      await fs.writeFile(fullPath, file.content);
+      await fs.writeFile(fullPath, content);
     }
 
     console.log(`[FileSyncManager] Wrote file: ${file.path}`);
+  }
+
+  /**
+   * Check if inspection script should be injected into this file
+   */
+  private shouldInjectInspectionScript(filePath: string): boolean {
+    // Inject into Next.js layout files
+    const layoutFiles = [
+      'src/app/layout.tsx',
+      'app/layout.tsx',
+      'src/app/layout.js',
+      'app/layout.js',
+      'pages/_app.tsx',
+      'pages/_app.js'
+    ];
+    
+    return layoutFiles.some(layout => filePath.endsWith(layout));
+  }
+
+  /**
+   * Check if file should have inspection markers added
+   */
+  private shouldAddInspectionMarkers(filePath: string): boolean {
+    return (filePath.endsWith('.tsx') || filePath.endsWith('.jsx')) && 
+           !filePath.includes('node_modules') &&
+           !filePath.includes('_app.') &&
+           !filePath.includes('_document.') &&
+           !filePath.includes('.d.ts');
+  }
+
+  /**
+   * Add inspection markers to JSX/TSX content for precise element targeting
+   */
+  private addInspectionMarkers(content: string, filePath: string): string {
+    try {
+      const lines = content.split('\n');
+      const fileName = path.basename(filePath, path.extname(filePath));
+      
+      let transformedLines = lines.map((line, lineIndex) => {
+        const lineNumber = lineIndex + 1;
+        
+        // Skip lines that are comments, imports, or already have markers
+        if (line.trim().startsWith('//') || 
+            line.trim().startsWith('/*') || 
+            line.trim().startsWith('import') ||
+            line.includes('data-celiador-id')) {
+          return line;
+        }
+        
+        // Look for JSX elements (opening tags) that should have inspection markers
+        const jsxElementRegex = /<(h[1-6]|button|input|textarea|select|a|div|span|section|header|footer|nav|main|article|form)(\s[^>]*?)?(\/?>)/gi;
+        
+        return line.replace(jsxElementRegex, (match, tagName, attributes = '', closeTag) => {
+          // Generate unique inspection ID
+          const inspectionId = `${fileName}_${tagName}_L${lineNumber}_${Math.random().toString(36).substr(2, 4)}`;
+          
+          // Create inspection attributes
+          const inspectionAttrs = [
+            `data-celiador-id="${inspectionId}"`,
+            `data-source-file="${filePath}"`, 
+            `data-source-line="${lineNumber}"`
+          ];
+          
+          // Handle different attribute scenarios
+          const trimmedAttrs = attributes.trim();
+          let newAttributes;
+          
+          if (trimmedAttrs) {
+            // Existing attributes - add inspection attrs
+            newAttributes = `${trimmedAttrs} ${inspectionAttrs.join(' ')}`;
+          } else {
+            // No existing attributes - just add inspection attrs
+            newAttributes = ` ${inspectionAttrs.join(' ')}`;
+          }
+          
+          return `<${tagName}${newAttributes}${closeTag}`;
+        });
+      });
+      
+      return transformedLines.join('\n');
+    } catch (error) {
+      console.error(`[FileSyncManager] Failed to add inspection markers to ${filePath}:`, error);
+      return content;
+    }
+  }
+
+  /**
+   * Inject the inspection script into layout files
+   */
+  private async injectInspectionScript(content: string, filePath: string): Promise<string> {
+    try {
+      // Read the inspection client script
+      const scriptPath = path.join(__dirname, '../inspection-client.js');
+      const inspectionScript = await fs.readFile(scriptPath, 'utf8');
+      
+      // For Next.js App Router layout.tsx
+      if (filePath.includes('layout.tsx') || filePath.includes('layout.js')) {
+        // Look for the opening <body> tag and inject script after it
+        const bodyRegex = /(<body[^>]*>)/i;
+        if (bodyRegex.test(content)) {
+          // Clean the inspection script and properly escape it for JSX
+          const cleanedScript = inspectionScript
+            .replace(/\\/g, '\\\\')  // Escape backslashes first
+            .replace(/`/g, '\\`')    // Escape backticks
+            .replace(/\${/g, '\\${') // Escape template literals
+            .replace(/\r?\n/g, '\\n'); // Escape newlines for JSX string
+          
+          const scriptTag = `
+        <script
+          dangerouslySetInnerHTML={{
+            __html: \`${cleanedScript}\`
+          }}
+        />`;
+          
+          return content.replace(bodyRegex, `$1${scriptTag}`);
+        }
+        
+        // If no body tag found, try to inject before the closing </html>
+        if (content.includes('</html>')) {
+          const scriptTag = `
+  <script>
+    ${inspectionScript}
+  </script>
+</html>`;
+          return content.replace('</html>', scriptTag);
+        }
+      }
+      
+      // For Next.js Pages Router _app.tsx
+      if (filePath.includes('_app.tsx') || filePath.includes('_app.js')) {
+        // Inject script using Next.js Head component
+        const headImport = "import Head from 'next/head';";
+        const scriptTag = `
+          <Head>
+            <script
+              dangerouslySetInnerHTML={{
+                __html: \`${inspectionScript.replace(/`/g, '\\`').replace(/\${/g, '\\${')}\`
+              }}
+            />
+          </Head>`;
+        
+        if (!content.includes("import Head from 'next/head'")) {
+          // Add Head import
+          const importRegex = /(import.*from.*['"].*['"];?\s*)/;
+          content = content.replace(importRegex, `$1\n${headImport}\n`);
+        }
+        
+        // Inject script in Component return
+        const returnRegex = /(return\s*\(?\s*<)/;
+        if (returnRegex.test(content)) {
+          return content.replace(returnRegex, `$1>\n${scriptTag}\n<`);
+        }
+      }
+      
+      console.log(`[FileSyncManager] Could not find injection point in ${filePath}`);
+      return content;
+      
+    } catch (error) {
+      console.error(`[FileSyncManager] Failed to inject inspection script: ${error}`);
+      return content;
+    }
   }
 
   /**

@@ -1533,19 +1533,27 @@ app.post('/projects/:id/chat', authenticateUser, async (req, res) => {
         projectFiles = extractFilePaths(fileTree);
       }
 
-      // Get content for important files (package.json, README.md, and other key config files)
-      const importantFiles = projectFiles.filter(file => 
-        file.match(/\.(json|md|js|ts|tsx|jsx|yaml|yml|toml)$/i) && 
-        file.split('/').length <= 2 && // Only root and one level deep
-        !file.includes('node_modules') &&
-        !file.includes('dist') &&
-        !file.includes('build') &&
-        !file.includes('pnpm-lock.yaml') // Skip large lock files
-      );
+      // Get content for important files (source files, config files, docs)
+      const importantFiles = projectFiles.filter(file => {
+        // Include all source code files (tsx, jsx, ts, js) regardless of depth
+        if (file.match(/\.(tsx|jsx|ts|js)$/i) && !file.includes('node_modules') && !file.includes('dist') && !file.includes('build')) {
+          return true;
+        }
+        // Include config and doc files at root level
+        if (file.match(/\.(json|md|yaml|yml|toml|css)$/i) && 
+            file.split('/').length <= 2 && 
+            !file.includes('node_modules') &&
+            !file.includes('dist') &&
+            !file.includes('build') &&
+            !file.includes('pnpm-lock.yaml')) {
+          return true;
+        }
+        return false;
+      });
 
       console.log(`[orchestrator] Loading content for ${importantFiles.length} important files:`, importantFiles);
 
-      for (const filePath of importantFiles.slice(0, 5)) { // Limit to 5 files to avoid token limits
+      for (const filePath of importantFiles.slice(0, 15)) { // Increase limit to 15 files for better context
         try {
           const fileData = await storageService.getFile(id, user.id, filePath);
           if (fileData && fileData.content && typeof fileData.content === 'string') {

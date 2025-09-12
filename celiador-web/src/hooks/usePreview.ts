@@ -148,9 +148,16 @@ export function usePreview(projectId: string | null) {
     setTimeout(poll, 1000);
   }, [projectId]);
 
-  // Load preview on project change
+  // Clear preview immediately when project changes, then load new one
   useEffect(() => {
-    loadPreview();
+    // Immediately clear current preview to avoid showing old project
+    setPreview(null);
+    setError(null);
+    
+    // Load new project's preview if projectId exists
+    if (projectId) {
+      loadPreview();
+    }
   }, [loadPreview]);
 
   // Cleanup on unmount

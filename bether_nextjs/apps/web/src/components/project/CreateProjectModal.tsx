@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
-import { X, Plus, Code, Sparkles, Zap, Palette, ShoppingCart, MessageSquare, BarChart3, Globe, Briefcase, Rocket } from 'lucide-react';
+import { X, Sparkles, MessageSquare, Code } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 
 interface Project {
@@ -31,42 +31,11 @@ interface Template {
   template_key: string;
   name: string;
   description: string;
-  long_description?: string;
   difficulty: 'beginner' | 'intermediate' | 'advanced';
-  icon: string;
   emoji: string;
   color_primary: string;
   color_secondary?: string;
   rating: number;
-  version: string;
-  storage_path: string;
-  is_active: boolean;
-  sort_order: number;
-  categories: Array<{
-    id: string;
-    key: string;
-    name: string;
-    icon: string;
-    color_primary: string;
-    is_primary_category: boolean;
-  }>;
-  features: Array<{
-    id: string;
-    name: string;
-    description?: string;
-    icon?: string;
-    category?: string;
-    is_core_feature: boolean;
-  }>;
-  tech_stack: Array<{
-    id: string;
-    name: string;
-    description?: string;
-    icon?: string;
-    category?: string;
-    website_url?: string;
-    is_primary_tech: boolean;
-  }>;
 }
 
 export function CreateProjectModal({ isOpen, onClose, onProjectCreated, userId }: CreateProjectModalProps) {
@@ -75,69 +44,41 @@ export function CreateProjectModal({ isOpen, onClose, onProjectCreated, userId }
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [templates, setTemplates] = useState<Template[]>([]);
-  const [loadingTemplates, setLoadingTemplates] = useState(true);
+  const [loadingTemplates, setLoadingTemplates] = useState(false);
 
-  // Fetch templates from Supabase
+  // Fetch templates when modal opens
   useEffect(() => {
-    const fetchTemplates = async () => {
-      try {
+    if (isOpen && templates.length === 0) {
+      const fetchTemplates = async () => {
         setLoadingTemplates(true);
-        
-        // Fetch templates first
-        const { data: templatesData, error: templatesError } = await supabase
-          .from('templates')
-          .select('*')
-          .eq('is_active', true)
-          .is('deleted_at', null)
-          .order('sort_order');
+        try {
+          const { data, error } = await supabase
+            .from('templates')
+            .select('id, template_key, name, description, difficulty, emoji, color_primary, color_secondary, rating')
+            .eq('is_active', true)
+            .is('deleted_at', null)
+            .order('sort_order');
 
-        if (templatesError) {
-          throw templatesError;
+          if (error) throw error;
+
+          const templateList = data || [];
+          setTemplates(templateList);
+          
+          // Set first template as default
+          if (templateList.length > 0 && !templateKey) {
+            setTemplateKey(templateList[0].template_key);
+          }
+        } catch (err) {
+          console.error('Error fetching templates:', err);
+          setError('Failed to load templates');
+        } finally {
+          setLoadingTemplates(false);
         }
-
-        // For now, use basic template data without junction relationships
-        // TODO: Add junction table loading for features and tech stack
-        const transformedTemplates = templatesData?.map(template => ({
-          id: template.id,
-          template_key: template.template_key,
-          name: template.name,
-          description: template.description,
-          long_description: template.long_description,
-          difficulty: template.difficulty,
-          icon: template.icon,
-          emoji: template.emoji,
-          color_primary: template.color_primary,
-          color_secondary: template.color_secondary,
-          rating: template.rating,
-          version: template.version,
-          storage_path: template.storage_path,
-          is_active: template.is_active,
-          sort_order: template.sort_order,
-          categories: [], // TODO: Load from junction table
-          features: [], // TODO: Load from junction table
-          tech_stack: [] // TODO: Load from junction table
-        })) || [];
-
-        setTemplates(transformedTemplates);
-        
-        // Set default template if none selected
-        if (transformedTemplates.length > 0 && !templateKey) {
-          setTemplateKey(transformedTemplates[0].template_key);
-        }
-        
-      } catch (error) {
-        console.error('Error fetching templates:', error);
-        // Fallback to empty array on error
-        setTemplates([]);
-      } finally {
-        setLoadingTemplates(false);
-      }
-    };
-
-    if (isOpen) {
+      };
+      
       fetchTemplates();
     }
-  }, [isOpen, templateKey]);
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -156,7 +97,6 @@ export function CreateProjectModal({ isOpen, onClose, onProjectCreated, userId }
         throw new Error('No access token available');
       }
 
-      // Transform the data to match what the orchestrator expects
       const projectData = {
         name,
         templateKey,
@@ -178,7 +118,7 @@ export function CreateProjectModal({ isOpen, onClose, onProjectCreated, userId }
         
         // Clear fields
         setName('');
-        setTemplateKey('');
+        setTemplateKey(templates.length > 0 ? templates[0].template_key : '');
         onClose();
       } else {
         const errorText = await response.text();
@@ -190,24 +130,6 @@ export function CreateProjectModal({ isOpen, onClose, onProjectCreated, userId }
     } finally {
       setIsSubmitting(false);
     }
-  };
-
-  // Map icon names to React components
-  const getTemplateIcon = (iconName: string) => {
-    const iconMap: { [key: string]: React.ReactNode } = {
-      'Sparkles': <Sparkles className="w-5 h-5" />,
-      'ShoppingCart': <ShoppingCart className="w-5 h-5" />,
-      'MessageSquare': <MessageSquare className="w-5 h-5" />,
-      'BarChart3': <BarChart3 className="w-5 h-5" />,
-      'Palette': <Palette className="w-5 h-5" />,
-      'Briefcase': <Briefcase className="w-5 h-5" />,
-      'Globe': <Globe className="w-5 h-5" />,
-      'Zap': <Zap className="w-5 h-5" />,
-      'Rocket': <Rocket className="w-5 h-5" />,
-      'Code': <Code className="w-5 h-5" />
-    };
-    
-    return iconMap[iconName] || <Code className="w-5 h-5" />;
   };
 
   return (
@@ -274,93 +196,71 @@ export function CreateProjectModal({ isOpen, onClose, onProjectCreated, userId }
                 </p>
               </div>
               
-
               <div className="grid gap-3 max-h-64 overflow-y-auto pr-2">
                 {loadingTemplates ? (
                   <div className="text-center py-8 text-muted-foreground">
-                    Loading templates...
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+                    <p>Loading templates...</p>
                   </div>
                 ) : templates.length === 0 ? (
                   <div className="text-center py-8 text-muted-foreground">
-                    No templates available
+                    <p>No templates available</p>
                   </div>
                 ) : (
                   templates.map((template) => (
-                    <div
-                      key={template.template_key}
-                      className={`relative border rounded-xl p-4 cursor-pointer transition-all duration-200 hover:shadow-md ${
-                        templateKey === template.template_key
-                          ? 'border-primary text-white shadow-lg'
-                          : 'border-muted hover:border-muted-foreground/30 bg-white'
-                      }`}
-                      style={{
-                        background: templateKey === template.template_key 
-                          ? `linear-gradient(135deg, ${template.color_primary}, ${template.color_secondary || template.color_primary})`
-                          : undefined
-                      }}
-                      onClick={() => setTemplateKey(template.template_key)}
-                    >
-                      <div className="flex items-start space-x-3">
-                        <div className="flex-shrink-0 mt-0.5">
-                          <span className="text-lg">{template.emoji}</span>
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 mb-1">
-                            <h3 className="text-sm font-semibold">{template.name}</h3>
-                            <span className={`text-xs px-2 py-1 rounded-full ${
-                              templateKey === template.template_key
-                                ? 'bg-white/20 text-white'
-                                : 'bg-muted text-muted-foreground'
-                            }`}>
-                              {template.difficulty}
-                            </span>
-                            {template.rating > 0 && (
-                              <span className={`text-xs ${
-                                templateKey === template.template_key ? 'text-white/90' : 'text-muted-foreground'
-                              }`}>
-                                ⭐ {template.rating}
-                              </span>
-                            )}
-                          </div>
-                          <p className={`text-xs mb-3 ${
+                  <div
+                    key={template.template_key}
+                    className={`relative border rounded-xl p-4 cursor-pointer transition-all duration-200 hover:shadow-md ${
+                      templateKey === template.template_key
+                        ? 'border-primary text-white shadow-lg'
+                        : 'border-muted hover:border-muted-foreground/30 bg-white'
+                    }`}
+                    style={{
+                      background: templateKey === template.template_key 
+                        ? `linear-gradient(135deg, ${template.color_primary}, ${template.color_secondary})`
+                        : undefined
+                    }}
+                    onClick={() => setTemplateKey(template.template_key)}
+                  >
+                    <div className="flex items-start space-x-3">
+                      <div className="flex-shrink-0 mt-0.5">
+                        <span className="text-lg">{template.emoji}</span>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1">
+                          <h3 className="text-sm font-semibold">{template.name}</h3>
+                          <span className={`text-xs px-2 py-1 rounded-full ${
+                            templateKey === template.template_key
+                              ? 'bg-white/20 text-white'
+                              : 'bg-muted text-muted-foreground'
+                          }`}>
+                            {template.difficulty}
+                          </span>
+                          <span className={`text-xs ${
                             templateKey === template.template_key ? 'text-white/90' : 'text-muted-foreground'
                           }`}>
-                            {template.description}
-                          </p>
-                          <div className="flex flex-wrap gap-1 mb-2">
-                            <span
-                              className={`text-xs px-2 py-1 rounded-full ${
-                                templateKey === template.template_key
-                                  ? 'bg-white/20 text-white'
-                                  : 'bg-muted text-muted-foreground'
-                              }`}
-                            >
-                              {template.difficulty}
-                            </span>
-                            <span
-                              className={`text-xs px-2 py-1 rounded-full ${
-                                templateKey === template.template_key
-                                  ? 'bg-white/20 text-white'
-                                  : 'bg-muted text-muted-foreground'
-                              }`}
-                            >
-                              v{template.version}
-                            </span>
-                          </div>
+                            ⭐ {template.rating}
+                          </span>
                         </div>
-                        <div className="flex-shrink-0">
-                          <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
-                            templateKey === template.template_key
-                              ? 'border-white bg-white'
-                              : 'border-muted-foreground/30'
-                          }`}>
-                            {templateKey === template.template_key && (
-                              <div className="w-2 h-2 rounded-full bg-gradient-to-r from-purple-500 to-pink-500" />
-                            )}
-                          </div>
+                        <p className={`text-xs mb-3 ${
+                          templateKey === template.template_key ? 'text-white/90' : 'text-muted-foreground'
+                        }`}>
+                          {template.description}
+                        </p>
+                      </div>
+                      <div className="flex-shrink-0">
+                        <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
+                          templateKey === template.template_key
+                            ? 'border-white bg-white'
+                            : 'border-muted-foreground/30'
+                        }`}>
+                          {templateKey === template.template_key && (
+                            <div className="w-2 h-2 rounded-full bg-gradient-to-r from-purple-500 to-pink-500" />
+                          )}
                         </div>
                       </div>
                     </div>
+                  </div>
                   ))
                 )}
               </div>

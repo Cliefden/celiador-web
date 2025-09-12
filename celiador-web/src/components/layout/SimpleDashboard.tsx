@@ -5,6 +5,7 @@ import { supabase } from '../../lib/supabase';
 import { CreateProjectModal } from '../project/CreateProjectModal';
 import { useConversation } from '../conversation/useConversation';
 import { usePreview } from '../../hooks/usePreview';
+import { PreviewOverlay } from '../inspection/PreviewOverlay';
 import { 
   Plus, 
   Send, 
@@ -19,7 +20,9 @@ import {
   User,
   AlertCircle,
   MoreHorizontal,
-  Trash2
+  Trash2,
+  Search,
+  MousePointer
 } from 'lucide-react';
 
 interface User {
@@ -47,6 +50,24 @@ interface SimpleDashboardProps {
 
 type PreviewDevice = 'mobile' | 'tablet' | 'desktop';
 
+interface UIElement {
+  id: string;
+  type: string;
+  selector: string;
+  componentName?: string;
+  boundingBox: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  };
+  metadata?: {
+    filePath?: string;
+    lineNumber?: number;
+    props?: Record<string, any>;
+  };
+}
+
 export function SimpleDashboard({ initialUser, onLogout }: SimpleDashboardProps) {
   const [user] = useState<User>(initialUser);
   const [projects, setProjects] = useState<Project[]>([]);
@@ -59,8 +80,13 @@ export function SimpleDashboard({ initialUser, onLogout }: SimpleDashboardProps)
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showProjectDropdown, setShowProjectDropdown] = useState(false);
   const [showProjectMenu, setShowProjectMenu] = useState<string | null>(null);
+  const [inspectionMode, setInspectionMode] = useState(false);
+  const [selectedElement, setSelectedElement] = useState<UIElement | null>(null);
+  const [uiElements, setUIElements] = useState<UIElement[]>([]);
+  const [iframeLoaded, setIframeLoaded] = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
   const projectDropdownRef = useRef<HTMLDivElement>(null);
+  const previewIframeRef = useRef<HTMLIFrameElement>(null);
 
   // Close menus when clicking outside
   useEffect(() => {
@@ -115,12 +141,62 @@ export function SimpleDashboard({ initialUser, onLogout }: SimpleDashboardProps)
     loadProjects();
   }, []);
 
+  // Reset iframe loaded state when preview or project changes
+  useEffect(() => {
+    setIframeLoaded(false);
+  }, [preview?.url, selectedProject?.id]);
+
+  // Listen for messages from preview iframe
+  useEffect(() => {
+    const handleIframeMessage = (event: MessageEvent) => {
+      if (event.data.type === 'ELEMENT_SELECTED') {
+        const element: UIElement = event.data.element;
+        handleElementSelection(element);
+      } else if (event.data.type === 'ELEMENTS_MAPPED') {
+        const elements: UIElement[] = event.data.elements;
+        setUIElements(elements);
+      }
+    };
+
+    window.addEventListener('message', handleIframeMessage);
+    return () => window.removeEventListener('message', handleIframeMessage);
+  }, []);
+
+  // Reset inspection mode when project changes
+  useEffect(() => {
+    if (selectedProject) {
+      setInspectionMode(false);
+      setSelectedElement(null);
+      setUIElements([]);
+    }
+  }, [selectedProject?.id]);
+
   const handleSendMessage = async () => {
     if (!currentMessage.trim() || !selectedProject || conversationLoading || !sendMessage) return;
     
     setIsBuilding(true);
-    await sendMessage(currentMessage);
+    
+    // Enhanced message with element context if an element is selected
+    let enhancedMessage = currentMessage;
+    if (selectedElement) {
+      const elementContext = `
+
+SELECTED UI ELEMENT CONTEXT:
+- Element Type: ${selectedElement.type}
+- Component Name: ${selectedElement.componentName || 'Unknown'}
+- CSS Selector: ${selectedElement.selector}
+- Position: x=${selectedElement.boundingBox.x}, y=${selectedElement.boundingBox.y}
+- Size: ${selectedElement.boundingBox.width}x${selectedElement.boundingBox.height}px
+${selectedElement.metadata?.props ? `- Properties: ${JSON.stringify(selectedElement.metadata.props, null, 2)}` : ''}
+
+The user has visually selected this specific UI element and wants to modify it. Please focus your changes on this element specifically.`;
+      
+      enhancedMessage += elementContext;
+    }
+    
+    await sendMessage(enhancedMessage);
     setCurrentMessage('');
+    setSelectedElement(null); // Clear selection after sending
     setIsBuilding(false);
   };
 
@@ -155,6 +231,39 @@ export function SimpleDashboard({ initialUser, onLogout }: SimpleDashboardProps)
     } catch (error) {
       console.error('Error deleting project:', error);
     }
+  };
+
+
+  const toggleInspectionMode = () => {
+    const newMode = !inspectionMode;
+    console.log(`🔄 Toggling inspection mode: ${inspectionMode} -> ${newMode}`);
+    
+    try {
+      setInspectionMode(newMode);
+      setSelectedElement(null);
+      
+      if (newMode) {
+        console.log('✅ Inspection mode enabled');
+      } else {
+        console.log('❌ Inspection mode disabled'); 
+      }
+      
+      // Force a small re-render to ensure state updates
+      setTimeout(() => {
+        console.log(`🔍 Current inspection mode after toggle: ${newMode}`);
+      }, 100);
+      
+    } catch (error) {
+      console.error('❌ Error toggling inspection mode:', error);
+    }
+  };
+
+  const handleElementSelection = (element: UIElement) => {
+    setSelectedElement(element);
+    
+    // Update the current message to indicate selected element
+    const elementDescription = element.componentName || element.type;
+    setCurrentMessage(`Modify ${elementDescription}: `);
   };
 
   const getPreviewUrl = () => {
@@ -401,13 +510,38 @@ export function SimpleDashboard({ initialUser, onLogout }: SimpleDashboardProps)
 
               {/* Message Input */}
               <div className="p-4 border-t border-gray-100">
+                {/* Selected Element Indicator */}
+                {selectedElement && (
+                  <div className="mb-3 p-3 bg-purple-50 border border-purple-200 rounded-lg">
+                    <div className="flex items-center space-x-2 text-purple-700">
+                      <MousePointer className="h-4 w-4" />
+                      <span className="text-sm font-medium">Selected Element:</span>
+                      <code className="bg-purple-100 px-2 py-1 rounded text-xs">
+                        {selectedElement.componentName || selectedElement.type}
+                      </code>
+                      <button 
+                        onClick={() => setSelectedElement(null)}
+                        className="ml-auto text-purple-600 hover:text-purple-800"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  </div>
+                )}
+                
                 <div className="flex space-x-3">
                   <input
                     type="text"
                     value={currentMessage}
                     onChange={(e) => setCurrentMessage(e.target.value)}
                     onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
-                    placeholder="Describe what you want to build or change..."
+                    placeholder={
+                      selectedElement 
+                        ? `Modify ${selectedElement.componentName || selectedElement.type}...`
+                        : inspectionMode
+                        ? "Click an element in the preview to modify it..."
+                        : "Describe what you want to build or change..."
+                    }
                     className="flex-1 p-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     disabled={conversationLoading || isBuilding}
                   />
@@ -463,6 +597,34 @@ export function SimpleDashboard({ initialUser, onLogout }: SimpleDashboardProps)
                       </button>
                     </div>
                     
+                    {/* Inspection Mode Toggle */}
+                    <button 
+                      onClick={(e) => {
+                        e.preventDefault();
+                        console.log('🖱️ Inspect button clicked!', { inspectionMode });
+                        toggleInspectionMode();
+                      }}
+                      className={`flex items-center space-x-2 px-3 py-2 rounded-lg transition-all text-sm font-medium ${
+                        inspectionMode 
+                          ? 'bg-purple-600 text-white shadow-md' 
+                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      }`}
+                      title={inspectionMode ? 'Exit Inspection Mode' : 'Inspect UI Elements'}
+                      type="button"
+                    >
+                      {inspectionMode ? (
+                        <>
+                          <MousePointer className="h-4 w-4" />
+                          <span>Inspecting</span>
+                        </>
+                      ) : (
+                        <>
+                          <Search className="h-4 w-4" />
+                          <span>Inspect</span>
+                        </>
+                      )}
+                    </button>
+                    
                     {/* Deploy Button */}
                     <button className="flex items-center space-x-2 bg-gradient-to-r from-green-600 to-emerald-600 text-white px-4 py-2 rounded-lg hover:from-green-700 hover:to-emerald-700 transition-all shadow-md">
                       <Rocket className="h-4 w-4" />
@@ -475,12 +637,34 @@ export function SimpleDashboard({ initialUser, onLogout }: SimpleDashboardProps)
               {/* Preview Content */}
               <div className="flex-1 bg-gray-100 p-6 flex items-center justify-center overflow-hidden">
                 {getPreviewUrl() ? (
-                  <div className={`bg-white rounded-xl shadow-lg overflow-hidden transition-all ${getDeviceClasses()}`}>
+                  <div className={`bg-white rounded-xl shadow-lg overflow-hidden transition-all ${getDeviceClasses()} relative`}>
                     <iframe
+                      ref={previewIframeRef}
                       src={getPreviewUrl()!}
                       className="w-full h-full border-0"
                       title="App Preview"
+                      onLoad={() => {
+                        console.log('🎬 Preview iframe loaded');
+                        // Faster response - reduced delay since we now have better preview readiness detection
+                        setTimeout(() => {
+                          console.log('✅ Preview content should be ready');
+                          setIframeLoaded(true);
+                        }, 500);
+                      }}
                     />
+                    {!iframeLoaded && (
+                      <div className="absolute inset-0 bg-white bg-opacity-90 flex items-center justify-center">
+                        <div className="text-center">
+                          <div className="w-16 h-16 bg-gradient-to-br from-blue-100 to-purple-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                            <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+                          </div>
+                          <h4 className="font-semibold text-gray-900 mb-2">Loading Preview</h4>
+                          <p className="text-gray-600 text-sm">
+                            Waiting for app to render...
+                          </p>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 ) : preview?.status === 'starting' || preview?.status === 'syncing' || previewLoading ? (
                   <div className="text-center">
@@ -540,6 +724,14 @@ export function SimpleDashboard({ initialUser, onLogout }: SimpleDashboardProps)
           userId={user.id}
         />
       )}
+
+      {/* Preview Inspection Overlay */}
+      <PreviewOverlay
+        isActive={inspectionMode}
+        previewIframeRef={previewIframeRef}
+        onElementSelect={handleElementSelection}
+        deviceClasses={getDeviceClasses()}
+      />
     </div>
   );
 }

@@ -3,8 +3,8 @@ import Anthropic from '@anthropic-ai/sdk';
 import dotenv from 'dotenv';
 import path from 'path';
 
-// Load environment variables from root .env file
-dotenv.config({ path: path.resolve(process.cwd(), '../../.env') });
+// Load environment variables from local .env file
+dotenv.config();
 
 // AI Service Configuration
 interface AIConfig {
@@ -183,6 +183,23 @@ Guidelines:
 - Ask clarifying questions when needed
 - Provide code examples when helpful
 
+UI Element Inspection:
+When the user provides "SELECTED UI ELEMENT CONTEXT" in their message, they have visually selected a specific element in their project preview. You MUST:
+
+1. **Use Inspection ID for Precise Targeting**: Look for the \`inspectionId\` or \`data-celiador-id\` in the element metadata - this gives you the EXACT location
+2. **Check Source Location Metadata**: Use \`sourceFile\`, \`sourceLine\` properties to know exactly which file and line to modify  
+3. **Search by Unique Markers**: If inspection metadata is available, search for \`data-celiador-id="[id]"\` in the source files
+4. **Fallback to Content Matching**: Only if inspection markers are missing, fall back to CSS selector and text content matching
+5. **Make Precise Changes**: Modify the exact file and line indicated by the inspection markers
+
+Example inspection context with markers:
+\`\`\`
+- inspectionId: "page_h1_L15_ab3x"  
+- sourceFile: "src/app/page.tsx"
+- sourceLine: "15"
+\`\`\`
+This means: Find \`data-celiador-id="page_h1_L15_ab3x"\` in file \`src/app/page.tsx\` around line 15.
+
 File Operations:
 You can create, update, or delete files in the project. Use this special format for file operations:
 
@@ -196,7 +213,7 @@ updated file content here
 
 \`\`\`action:delete_file:path/to/unwanted.ext\`\`\`
 
-When you create or suggest files, use this format and I'll automatically create them in the project.`;
+CRITICAL: Always use the EXACT file paths from the project files provided to you. Never use placeholder paths like "path/to/your/component.tsx". Look through the actual project files to find the correct file path.`;
 
     if (projectContext) {
       prompt += `\n\nCurrent Project Context:`;
