@@ -39,6 +39,9 @@ export function PreviewOverlay({
   const [mappedElements, setMappedElements] = useState<UIElement[]>([]);
   const overlayRef = useRef<HTMLDivElement>(null);
 
+  // Use conditional rendering at the end instead of early return
+  // This ensures hooks are always called in the same order
+
   // Request elements from injected script and return fallback for immediate display
   const scanIframeElements = (): UIElement[] => {
     if (!previewIframeRef.current) {
@@ -49,15 +52,10 @@ export function PreviewOverlay({
     const iframe = previewIframeRef.current;
     const iframeRect = iframe.getBoundingClientRect();
 
-    // Request elements from the injected script (async)
-    if (iframe.contentWindow) {
-      console.log('🔄 Requesting elements from injected inspection script...');
-      iframe.contentWindow.postMessage({ type: 'GET_ELEMENTS' }, '*');
-    }
-
-    // Return fallback elements for immediate display (will be replaced when real elements arrive)
-    console.log('🔧 Using fallback elements while waiting for real element data...');
-    return createFallbackElements(iframe, iframeRect);
+    // The injected script automatically sends elements when inspection is enabled,
+    // so we don't need to request them separately
+    console.log('🔧 Attempting fallback element extraction while waiting for injected script...');
+    return extractRealElements(iframe, iframeRect);
   };
 
   // Get a smart name for the element
@@ -113,68 +111,167 @@ export function PreviewOverlay({
     return props;
   };
 
-  // Fallback: create reasonable mock elements when CORS blocks iframe access
-  const createFallbackElements = (iframe: HTMLIFrameElement, iframeRect: DOMRect): UIElement[] => {
-    console.log('🔧 Creating fallback elements due to CORS restrictions');
+  // Try to extract meaningful elements from the iframe DOM (limited by CORS)
+  const extractRealElements = (iframe: HTMLIFrameElement, iframeRect: DOMRect): UIElement[] => {
+    console.log('🔍 Attempting to extract meaningful elements from iframe');
     
-    // Create elements based on typical Next.js starter page layout
-    const elements: UIElement[] = [
-      {
-        id: 'title-heading',
-        type: 'h1',
-        selector: 'h1',
-        componentName: 'WelcomeHeading',
-        boundingBox: {
-          x: iframeRect.left + 40,
-          y: iframeRect.top + 180,
-          width: 300,
-          height: 80,
-        }
-      },
-      {
-        id: 'learn-nextjs-button',
-        type: 'a',
-        selector: 'a[href*="nextjs"]',
-        componentName: 'LearnNextjsButton',
-        boundingBox: {
-          x: iframeRect.left + 40,
-          y: iframeRect.top + 340,
-          width: 140,
-          height: 36,
-        }
-      },
-      {
-        id: 'deploy-button',
-        type: 'a', 
-        selector: 'a[href*="vercel"]',
-        componentName: 'DeployButton',
-        boundingBox: {
-          x: iframeRect.left + 200,
-          y: iframeRect.top + 340,
-          width: 120,
-          height: 36,
-        }
-      },
-      {
-        id: 'docs-section',
-        type: 'div',
-        selector: '.grid',
-        componentName: 'DocsSection',
-        boundingBox: {
-          x: iframeRect.left + 20,
-          y: iframeRect.top + 400,
-          width: iframeRect.width - 40,
-          height: 100,
-        }
+    try {
+      // Test if we can access the iframe before proceeding
+      let iframeDocument;
+      try {
+        iframeDocument = iframe.contentDocument || iframe.contentWindow?.document;
+      } catch (corsError) {
+        console.warn('🚫 CORS restriction prevents iframe access:', corsError.message);
+        return []; // Return empty array instead of crashing
       }
-    ];
-
-    return elements;
+      
+      if (!iframeDocument) {
+        console.warn('🚫 Cannot access iframe document - may be cross-origin');
+        return [];
+      }
+      
+      const elements: UIElement[] = [];
+      
+      // Get meaningful elements in priority order - much broader detection
+      const elementQueries = [
+        { selector: 'h1', priority: 1, minSize: 15 },
+        { selector: 'h2, h3, h4, h5, h6', priority: 2, minSize: 15 },
+        { selector: 'button', priority: 3, minSize: 10 }, // Much lower threshold
+        { selector: 'a[href]', priority: 4, minSize: 10 }, 
+        { selector: 'input, textarea, select', priority: 5, minSize: 10 },
+        { selector: '[role="button"]', priority: 6, minSize: 10 },
+        { selector: '.btn, .button, [class*="btn"], [class*="button"]', priority: 7, minSize: 10 },
+        { selector: '[onclick], [data-testid], [data-component]', priority: 8, minSize: 10 },
+        // Even broader selectors with lower thresholds
+        { selector: 'div[class*="shop"], div[class*="browse"], div[class*="nav"]', priority: 9, minSize: 20 }, // Specific patterns
+        { selector: 'div[class], span[class]', priority: 10, minSize: 30 }, // Any div/span with classes
+        { selector: '*[style*="cursor: pointer"], *[style*="cursor:pointer"]', priority: 11, minSize: 15 }, // Pointer cursor
+        { selector: '*', priority: 12, minSize: 50 } // Catch-all for large elements
+      ];
+      
+      elementQueries.forEach(({ selector, priority, minSize }) => {
+        const domElements = iframeDocument.querySelectorAll(selector);
+        console.log(`🔍 Found ${domElements.length} elements for selector: ${selector}`);
+        
+        domElements.forEach((element, index) => {
+          const rect = element.getBoundingClientRect();
+          const elementText = element.textContent?.trim().substring(0, 30) || '';
+          
+          console.log(`🔍 Checking element ${selector}[${index}]:`, {
+            text: elementText,
+            rect: { width: rect.width, height: rect.height, x: rect.x, y: rect.y },
+            minSize: minSize,
+            passes: rect.width >= minSize && rect.height >= minSize
+          });
+          
+          // Filter out tiny, hidden, or poorly positioned elements
+          if (rect.width < minSize || rect.height < minSize) {
+            console.log(`❌ Skipping ${elementText}: too small (${rect.width}x${rect.height} < ${minSize})`);
+            return;
+          }
+          
+          // More lenient viewport filtering - allow elements slightly off-screen
+          const viewportBuffer = 50;
+          if (rect.bottom < -viewportBuffer) return; // Too far above
+          if (rect.top > iframeDocument.documentElement.scrollHeight + viewportBuffer) return; // Too far below
+          if (rect.right < -viewportBuffer) return; // Too far left
+          if (rect.left > iframeDocument.documentElement.scrollWidth + viewportBuffer) return; // Too far right
+          
+          // Skip links that are just icons or very small
+          if (element.tagName === 'A') {
+            const text = element.textContent?.trim() || '';
+            if (text.length < 2) return; // Skip icon-only links
+          }
+          
+          // For broad selectors (div, span), be more permissive
+          if ((element.tagName === 'DIV' || element.tagName === 'SPAN') && priority >= 10) {
+            const text = element.textContent?.trim() || '';
+            const hasClickableText = text.length > 2 && text.length < 100; // More lenient text length
+            const hasInteractiveClasses = /btn|button|click|link|nav|menu|action|cta|card|shop|browse/i.test(element.className);
+            const hasInteractiveStyle = element.style.cursor === 'pointer' || getComputedStyle(element).cursor === 'pointer';
+            const hasAriaRole = element.getAttribute('role') === 'button' || element.getAttribute('role') === 'link';
+            const hasEventHandlers = element.onclick || element.getAttribute('onclick');
+            
+            // Be much more permissive - only skip if clearly not interactive
+            if (!hasClickableText && !hasInteractiveClasses && !hasInteractiveStyle && !hasAriaRole && !hasEventHandlers) {
+              console.log(`❌ Skipping non-interactive div/span: "${text.substring(0, 30)}"`);
+              return;
+            }
+          }
+          
+          const elementName = getElementName(element);
+          const elementProps = extractElementProps(element);
+          
+          // Calculate position relative to viewport, not adding scroll since we're positioning absolutely
+          const absoluteX = iframeRect.left + rect.left;
+          const absoluteY = iframeRect.top + rect.top;
+          
+          // Ensure overlay doesn't extend outside the iframe bounds
+          const maxX = iframeRect.right;
+          const maxY = iframeRect.bottom;
+          
+          // Skip elements that start outside the iframe bounds
+          if (absoluteX >= maxX || absoluteY >= maxY || absoluteX + rect.width < iframeRect.left || absoluteY + rect.height < iframeRect.top) {
+            console.log(`🚫 Skipping element outside iframe bounds: ${elementText} at (${absoluteX}, ${absoluteY})`);
+            return;
+          }
+          
+          // Clamp dimensions to iframe bounds
+          const clampedWidth = Math.min(rect.width, maxX - absoluteX);
+          const clampedHeight = Math.min(rect.height, maxY - absoluteY);
+          
+          // Skip elements that would be too small after clamping
+          if (clampedWidth <= 10 || clampedHeight <= 10) {
+            console.log(`🚫 Skipping element too small after clamping: ${elementText}`);
+            return;
+          }
+          
+          elements.push({
+            id: `${element.tagName.toLowerCase()}_${priority}_${index}`,
+            type: element.tagName.toLowerCase(),
+            selector: selector,
+            componentName: elementName,
+            boundingBox: {
+              x: absoluteX,
+              y: absoluteY,
+              width: clampedWidth,
+              height: clampedHeight,
+            },
+            metadata: {
+              props: elementProps,
+              priority: priority
+            }
+          });
+        });
+      });
+      
+      // Sort by priority and limit to most important elements
+      elements.sort((a, b) => (a.metadata?.priority || 10) - (b.metadata?.priority || 10));
+      const limitedElements = elements.slice(0, 50); // Max 50 elements with broader detection
+      
+      console.log(`🎯 Extracted ${limitedElements.length} meaningful elements from iframe`);
+      console.log('🎯 Elements found:', limitedElements.map(el => ({ 
+        type: el.type, 
+        text: el.metadata?.props?.textContent?.substring(0, 20) || el.componentName,
+        priority: el.metadata?.priority 
+      })));
+      return limitedElements;
+      
+    } catch (error) {
+      console.warn('🚫 Error extracting real elements:', error);
+      return [];
+    }
   };
 
   // Handle communication with injected inspection script
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
+      try {
+        // Only handle messages from the preview iframe
+        if (!previewIframeRef.current || event.source !== previewIframeRef.current.contentWindow) {
+          return;
+        }
+
       if (event.data.type === 'ELEMENTS_MAPPED') {
         console.log('🎯 Received elements from injected script:', event.data.elements);
         setMappedElements(event.data.elements);
@@ -189,46 +286,84 @@ export function PreviewOverlay({
               y: iframeRect.top + el.boundingBox.y,
               width: el.boundingBox.width,
               height: el.boundingBox.height,
+            },
+            metadata: {
+              ...el.metadata,
+              fromInjectedScript: true // Mark as from injected script
             }
           }));
           console.log(`🎨 Setting ${processedElements.length} real elements from iframe`);
           
-          // Smooth transition for element updates
-          setElements(prev => {
-            // If this is the first load, set immediately
-            if (prev.length === 0) {
-              return processedElements;
-            }
-            // For updates, we could add animation logic here
-            return processedElements;
-          });
+          // Use the elements from the injected script instead of fallback
+          setElements(processedElements);
+        } else {
+          console.log('🔍 No elements received from injected script, keeping existing elements');
         }
+      } else if (event.data.type === 'ELEMENT_SELECTED') {
+        console.log('🎯 Element selected in iframe:', event.data.element);
+        // Handle element selection from iframe
+      }
+      } catch (error) {
+        console.warn('🚫 Error handling message in PreviewOverlay:', error);
       }
     };
 
     window.addEventListener('message', handleMessage);
     return () => window.removeEventListener('message', handleMessage);
-  }, [previewIframeRef]);
+  }, []); // Remove problematic ref dependency
 
   // Update elements when iframe position changes or inspection is activated
   useEffect(() => {
     if (isActive) {
       // Enable inspection in the injected script
       if (previewIframeRef.current?.contentWindow) {
-        console.log('🚀 Enabling inspection mode in iframe');
+        console.log('🚀 Enabling inspection mode in iframe', previewIframeRef.current.src);
+        console.log('🚀 Sending ENABLE_INSPECTION message to iframe');
         previewIframeRef.current.contentWindow.postMessage({ type: 'ENABLE_INSPECTION' }, '*');
+        
+        // Also check if the inspector is available in the iframe
+        setTimeout(() => {
+          if (previewIframeRef.current?.contentWindow) {
+            try {
+              const hasInspector = 'celiadorInspector' in previewIframeRef.current.contentWindow;
+              console.log('🔍 Inspector availability check:', hasInspector);
+            } catch (error) {
+              console.log('🔍 Cannot check inspector due to CORS:', error.message);
+            }
+          }
+        }, 1000);
       }
 
       const updateElements = () => {
-        const foundElements = scanIframeElements();
-        setElements(foundElements);
+        try {
+          const foundElements = scanIframeElements();
+          console.log(`🔍 Fallback scan found ${foundElements.length} elements`);
+          
+          // Only set elements if we don't have any yet to avoid infinite loops
+          setElements(prev => {
+            // If we already have elements from injected script, don't override
+            if (prev.length > 0 && prev[0]?.metadata?.fromInjectedScript) {
+              console.log('🎯 Keeping existing elements from injected script');
+              return prev;
+            }
+            // Only update if we actually found different elements
+            if (foundElements.length !== prev.length) {
+              console.log(`🔄 Using ${foundElements.length} fallback elements`);
+              return foundElements;
+            }
+            return prev; // No change needed
+          });
+        } catch (error) {
+          console.warn('🚫 Error in updateElements:', error);
+          // Don't crash the component, just skip this update
+        }
       };
 
       // Initial scan with small delay to ensure iframe is ready
       setTimeout(updateElements, 200);
 
-      // Re-scan periodically in case iframe content changes
-      const interval = setInterval(updateElements, 2000);
+      // Re-scan periodically in case iframe content changes - less frequent since we prioritize injected script
+      const interval = setInterval(updateElements, 5000);
 
       // Update on scroll/resize to maintain positioning
       const handleUpdate = () => {
@@ -256,13 +391,13 @@ export function PreviewOverlay({
   }, [isActive, previewIframeRef]);
 
   if (!isActive) {
-    return null;
+    return <div style={{ display: 'none' }} />;
   }
 
   return (
     <div 
       ref={overlayRef}
-      className="fixed inset-0 pointer-events-none z-50"
+      className="fixed inset-0 pointer-events-none z-50 overflow-hidden"
     >
       {elements.map((element) => (
         <div
@@ -276,6 +411,8 @@ export function PreviewOverlay({
             width: element.boundingBox.width,
             height: element.boundingBox.height,
             pointerEvents: 'auto',
+            minWidth: '20px',
+            minHeight: '20px',
           }}
           onMouseEnter={() => setHoveredElement(element)}
           onMouseLeave={() => setHoveredElement(null)}
@@ -286,11 +423,21 @@ export function PreviewOverlay({
             onElementSelect(element);
           }}
         >
-          {/* Tooltip */}
-          <div className="absolute -top-8 left-0 bg-gray-900 text-white text-xs px-2 py-1 rounded whitespace-nowrap pointer-events-none">
-            <MousePointer className="inline w-3 h-3 mr-1" />
-            {element.componentName || element.type}
+          {/* Element type indicator */}
+          <div className="absolute -top-6 -left-1 bg-purple-600 text-white text-xs px-1 py-0.5 rounded text-center min-w-[20px] font-medium pointer-events-none">
+            {element.type.toUpperCase()}
           </div>
+          
+          {/* Tooltip with element info */}
+          {hoveredElement?.id === element.id && (
+            <div className="absolute -top-12 left-0 bg-gray-900 text-white text-xs px-2 py-1 rounded whitespace-nowrap pointer-events-none z-50 max-w-xs">
+              <MousePointer className="inline w-3 h-3 mr-1" />
+              <span className="font-medium">{element.componentName || element.type}</span>
+              {element.metadata?.props?.textContent && (
+                <span className="ml-1 opacity-75">- "{element.metadata.props.textContent.slice(0, 20)}..."</span>
+              )}
+            </div>
+          )}
           
           {/* Selection indicator */}
           {hoveredElement?.id === element.id && (

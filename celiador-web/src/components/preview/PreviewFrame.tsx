@@ -11,7 +11,9 @@ import {
   Loader2,
   Play,
   Square,
-  RotateCcw
+  RotateCcw,
+  MousePointer,
+  Search
 } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Card } from '../ui/card';
@@ -48,6 +50,9 @@ interface PreviewFrameProps {
   onRestart: () => void;
   loading: boolean;
   error: string | null;
+  // Inspection mode props
+  inspectionMode?: boolean;
+  onToggleInspection?: () => void;
 }
 
 const deviceConfig = {
@@ -65,7 +70,9 @@ export function PreviewFrame({
   onStop,
   onRestart,
   loading,
-  error
+  error,
+  inspectionMode = false,
+  onToggleInspection
 }: PreviewFrameProps) {
   const [iframeKey, setIframeKey] = useState(0);
   const [iframeLoading, setIframeLoading] = useState(false);
@@ -168,9 +175,9 @@ export function PreviewFrame({
   return (
     <Card className="flex-1 flex flex-col overflow-hidden">
       {/* Preview Controls */}
-      <div className="flex items-center justify-between p-4 border-b bg-muted/30">
-        <div className="flex items-center space-x-4">
-          <h3 className="font-semibold">Live Preview</h3>
+      <div className="flex items-center justify-between p-3 border-b bg-muted/30 min-h-[60px]">
+        <div className="flex items-center space-x-3 flex-1">
+          <h3 className="font-semibold text-sm">Live Preview</h3>
           
           {preview && (
             <div className="flex items-center space-x-2">
@@ -187,14 +194,15 @@ export function PreviewFrame({
           )}
         </div>
 
-        <div className="flex items-center space-x-2">
+        <div className="flex items-center space-x-2 flex-shrink-0">
           {/* Device Selection */}
-          <div className="flex items-center space-x-1 mr-4">
+          <div className="flex items-center border border-gray-200 rounded-md">
             <Button
               variant={device === 'desktop' ? 'default' : 'ghost'}
               size="sm"
               onClick={() => onDeviceChange('desktop')}
-              className="p-2"
+              className="p-2 rounded-r-none border-r"
+              title="Desktop View"
             >
               <Monitor className="w-4 h-4" />
             </Button>
@@ -202,7 +210,8 @@ export function PreviewFrame({
               variant={device === 'tablet' ? 'default' : 'ghost'}
               size="sm"
               onClick={() => onDeviceChange('tablet')}
-              className="p-2"
+              className="p-2 rounded-none border-r"
+              title="Tablet View"
             >
               <Tablet className="w-4 h-4" />
             </Button>
@@ -210,21 +219,40 @@ export function PreviewFrame({
               variant={device === 'mobile' ? 'default' : 'ghost'}
               size="sm"
               onClick={() => onDeviceChange('mobile')}
-              className="p-2"
+              className="p-2 rounded-l-none"
+              title="Mobile View"
             >
               <Smartphone className="w-4 h-4" />
             </Button>
           </div>
 
+          {/* Inspection Toggle */}
+          {onToggleInspection && preview?.status === 'running' && (
+            <Button
+              variant={inspectionMode ? 'default' : 'ghost'}
+              size="sm"
+              onClick={onToggleInspection}
+              className={`p-2 ${inspectionMode ? 'bg-purple-600 hover:bg-purple-700 text-white' : ''}`}
+              title={inspectionMode ? 'Exit Inspection Mode' : 'Inspect UI Elements'}
+            >
+              {inspectionMode ? (
+                <MousePointer className="w-4 h-4" />
+              ) : (
+                <Search className="w-4 h-4" />
+              )}
+            </Button>
+          )}
+
           {/* Preview Actions */}
           {preview?.status === 'running' && (
-            <>
+            <div className="flex items-center border border-gray-200 rounded-md">
               <Button
                 variant="ghost"
                 size="sm"
                 onClick={refreshPreview}
                 disabled={iframeLoading}
-                className="p-2"
+                className="p-2 rounded-r-none border-r"
+                title="Refresh Preview"
               >
                 <RefreshCw className={`w-4 h-4 ${iframeLoading ? 'animate-spin' : ''}`} />
               </Button>
@@ -232,43 +260,46 @@ export function PreviewFrame({
                 variant="ghost"
                 size="sm"
                 onClick={openInNewTab}
-                className="p-2"
+                className="p-2 rounded-l-none"
+                title="Open in New Tab"
               >
                 <ExternalLink className="w-4 h-4" />
               </Button>
-            </>
+            </div>
           )}
 
           {/* Start/Stop Controls */}
-          {preview?.status === 'running' ? (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={onStop}
-              disabled={loading}
-              className="flex items-center space-x-1"
-            >
-              <Square className="w-3 h-3" />
-              <span>Stop</span>
-            </Button>
-          ) : (
-            <Button
-              variant="default"
-              size="sm"
-              onClick={preview ? onRestart : onStart}
-              disabled={loading}
-              className="flex items-center space-x-1"
-            >
-              {loading ? (
-                <Loader2 className="w-3 h-3 animate-spin" />
-              ) : preview ? (
-                <RotateCcw className="w-3 h-3" />
-              ) : (
-                <Play className="w-3 h-3" />
-              )}
-              <span>{loading ? 'Loading...' : preview ? 'Restart' : 'Start Preview'}</span>
-            </Button>
-          )}
+          <div className="ml-2">
+            {preview?.status === 'running' ? (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={onStop}
+                disabled={loading}
+                className="flex items-center space-x-1 px-3"
+              >
+                <Square className="w-3 h-3" />
+                <span>Stop</span>
+              </Button>
+            ) : (
+              <Button
+                variant="default"
+                size="sm"
+                onClick={preview ? onRestart : onStart}
+                disabled={loading}
+                className="flex items-center space-x-1 px-3"
+              >
+                {loading ? (
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                ) : preview ? (
+                  <RotateCcw className="w-3 h-3" />
+                ) : (
+                  <Play className="w-3 h-3" />
+                )}
+                <span>{loading ? 'Loading...' : preview ? 'Restart' : 'Start Preview'}</span>
+              </Button>
+            )}
+          </div>
         </div>
       </div>
 

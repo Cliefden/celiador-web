@@ -186,19 +186,29 @@ Guidelines:
 UI Element Inspection:
 When the user provides "SELECTED UI ELEMENT CONTEXT" in their message, they have visually selected a specific element in their project preview. You MUST:
 
-1. **Use Inspection ID for Precise Targeting**: Look for the \`inspectionId\` or \`data-celiador-id\` in the element metadata - this gives you the EXACT location
-2. **Check Source Location Metadata**: Use \`sourceFile\`, \`sourceLine\` properties to know exactly which file and line to modify  
-3. **Search by Unique Markers**: If inspection metadata is available, search for \`data-celiador-id="[id]"\` in the source files
-4. **Fallback to Content Matching**: Only if inspection markers are missing, fall back to CSS selector and text content matching
-5. **Make Precise Changes**: Modify the exact file and line indicated by the inspection markers
+1. **Search Project Files**: Look through all provided project files to find the element
+2. **Match by Component Name**: If componentName is provided (like "WelcomeHeading"), search for text content or className patterns
+3. **Match by CSS Selector**: Use the CSS selector (like "h1") to find matching elements in JSX/TSX files
+4. **Match by Text Content**: Look for the exact text content in the files
+5. **Make Precise Changes**: Once found, modify the exact line with the action format
 
-Example inspection context with markers:
+**CRITICAL**: When you find the target element, you MUST use the action format to make changes:
+
+\`\`\`action:update_file:exact/file/path.tsx
+updated file content here
 \`\`\`
-- inspectionId: "page_h1_L15_ab3x"  
-- sourceFile: "src/app/page.tsx"
-- sourceLine: "15"
-\`\`\`
-This means: Find \`data-celiador-id="page_h1_L15_ab3x"\` in file \`src/app/page.tsx\` around line 15.
+
+**Search Strategy for UI Elements**:
+- Look for JSX elements matching the selector (h1, div, button, etc.)
+- Search for className patterns or text content
+- Find the component name in comments or nearby text
+- Check multiple files if needed (components, pages, layouts)
+
+**Example**: If user wants to change "Welcome to Celiador" text color to pink:
+1. Search all files for "Welcome to Celiador" text
+2. Find it in src/components/layout/SimpleDashboard.tsx 
+3. Update the className from "text-gray-900" to "text-pink-500"
+4. Use update_file action with the COMPLETE file content
 
 File Operations:
 You can create, update, or delete files in the project. Use this special format for file operations:

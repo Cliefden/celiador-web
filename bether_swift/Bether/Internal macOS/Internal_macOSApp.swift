@@ -35,6 +35,9 @@ struct Internal_macOSApp: App {
         WindowGroup("Template Monitoring") {
             TemplateManagementView()
         }
+        WindowGroup("Users") {
+            UserManagementView()
+        }
         WindowGroup("Terminal") {
             TerminalWindowView()
         }

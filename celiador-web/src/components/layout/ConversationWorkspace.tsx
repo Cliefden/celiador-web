@@ -59,7 +59,13 @@ export function ConversationWorkspace({ selectedProject }: ConversationWorkspace
   const [previewDevice, setPreviewDevice] = useState<PreviewDevice>('desktop');
   const [fullscreenEditor, setFullscreenEditor] = useState(false);
   const [previewCollapsed, setPreviewCollapsed] = useState(false);
+  const [inspectionMode, setInspectionMode] = useState(false);
   const [commandsCollapsed, setCommandsCollapsed] = useState(false);
+
+  // Inspection mode toggle
+  const toggleInspectionMode = () => {
+    setInspectionMode(prev => !prev);
+  };
   const [claudeCodeCollapsed, setClaudeCodeCollapsed] = useState(false);
 
   // Use preview hook
@@ -258,6 +264,8 @@ export function ConversationWorkspace({ selectedProject }: ConversationWorkspace
               onRestart={restartPreview}
               loading={previewLoading}
               error={previewError}
+              inspectionMode={inspectionMode}
+              onToggleInspection={toggleInspectionMode}
             />
           </TabsContent>
 
@@ -498,6 +506,8 @@ export function ConversationWorkspace({ selectedProject }: ConversationWorkspace
               onRestart={restartPreview}
               loading={previewLoading}
               error={previewError}
+              inspectionMode={inspectionMode}
+              onToggleInspection={toggleInspectionMode}
             />
           </div>
         )}

@@ -11,6 +11,9 @@
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "dependencies": {
+    "@celiador/shared": "^1.0.0",
+    "@celiador/agent-tools": "^1.0.0",
+    "@celiador/templates": "^1.0.0",
     "@anthropic-ai/sdk": "^0.60.0",
     "@octokit/oauth-app": "^8.0.1",
     "@octokit/rest": "^22.0.0",

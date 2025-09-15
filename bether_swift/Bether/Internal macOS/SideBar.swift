@@ -22,6 +22,7 @@ struct SideBar: View {
                     editView: { AnyView(JobAddOrEdit(itemToEdit: $0)) }
                 )
             }
+            
             NavigationLink("Profiles") {
                 NamedEntityList(
                     detailView: { AnyView(ProfileDetail(item: $0)) },

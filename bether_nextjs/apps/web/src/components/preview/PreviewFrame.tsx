@@ -11,7 +11,9 @@ import {
   Loader2,
   Play,
   Square,
-  RotateCcw
+  RotateCcw,
+  MousePointer,
+  Search
 } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Card } from '../ui/card';
@@ -47,6 +49,11 @@ interface PreviewFrameProps {
   onRestart: () => void;
   loading: boolean;
   error: string | null;
+  // Inspection mode props
+  inspectionMode?: boolean;
+  onToggleInspection?: () => void;
+  selectedElement?: any;
+  availableElements?: any[];
 }
 
 const deviceConfig = {
@@ -64,7 +71,11 @@ export function PreviewFrame({
   onStop,
   onRestart,
   loading,
-  error
+  error,
+  inspectionMode = false,
+  onToggleInspection,
+  selectedElement,
+  availableElements = []
 }: PreviewFrameProps) {
   const [iframeKey, setIframeKey] = useState(0);
   const [iframeLoading, setIframeLoading] = useState(false);
@@ -75,6 +86,44 @@ export function PreviewFrame({
     setIframeLoading(true);
     setUrlReady(false); // Reset URL readiness to trigger re-check
   };
+
+  // Effect to communicate inspection mode changes to iframe
+  useEffect(() => {
+    console.log(`[PreviewFrame] Inspection mode change effect triggered:`, {
+      inspectionMode,
+      previewStatus: preview?.status,
+      urlReady,
+      previewUrl: preview?.url
+    });
+
+    if (preview?.status === 'running' && urlReady) {
+      const iframe = document.querySelector('iframe[title*="Preview"]') as HTMLIFrameElement;
+      console.log(`[PreviewFrame] Looking for iframe, found:`, iframe);
+      
+      if (iframe?.contentWindow) {
+        const message = {
+          type: inspectionMode ? 'ENABLE_INSPECTION' : 'DISABLE_INSPECTION'
+        };
+        
+        console.log(`[PreviewFrame] Sending message to iframe:`, message);
+        iframe.contentWindow.postMessage(message, '*');
+        
+        // Also try with specific origin
+        setTimeout(() => {
+          try {
+            iframe.contentWindow.postMessage(message, preview.url);
+            console.log(`[PreviewFrame] Also sent message with specific origin: ${preview.url}`);
+          } catch (error) {
+            console.warn(`[PreviewFrame] Failed to send with specific origin:`, error);
+          }
+        }, 100);
+      } else {
+        console.warn(`[PreviewFrame] No iframe or contentWindow found`);
+      }
+    } else {
+      console.log(`[PreviewFrame] Conditions not met for sending message - preview status: ${preview?.status}, urlReady: ${urlReady}`);
+    }
+  }, [inspectionMode, preview?.status, urlReady, preview?.url]);
 
   // Effect to reset URL readiness when preview changes
   useEffect(() => {
@@ -134,9 +183,9 @@ export function PreviewFrame({
   return (
     <Card className="flex-1 flex flex-col overflow-hidden">
       {/* Preview Controls */}
-      <div className="flex items-center justify-between p-4 border-b bg-muted/30">
-        <div className="flex items-center space-x-4">
-          <h3 className="font-semibold">Live Preview</h3>
+      <div className="flex items-center justify-between p-3 border-b bg-muted/30 min-h-[60px]">
+        <div className="flex items-center space-x-3 flex-1">
+          <h3 className="font-semibold text-sm">Live Preview</h3>
           
           {preview && (
             <div className="flex items-center space-x-2">
@@ -149,18 +198,23 @@ export function PreviewFrame({
                   {preview.syncResult.filesDownloaded} files
                 </Badge>
               )}
+              {inspectionMode && availableElements.length > 0 && (
+                <Badge variant="outline" className="text-xs bg-purple-50 text-purple-700 border-purple-200">
+                  {availableElements.length} elements
+                </Badge>
+              )}
             </div>
           )}
         </div>
 
-        <div className="flex items-center space-x-2">
+        <div className="flex items-center space-x-2 flex-shrink-0">
           {/* Device Selection */}
-          <div className="flex items-center space-x-1 mr-4">
+          <div className="flex items-center border border-gray-200 rounded-md">
             <Button
               variant={device === 'desktop' ? 'default' : 'ghost'}
               size="sm"
               onClick={() => onDeviceChange('desktop')}
-              className="p-2"
+              className="p-2 rounded-r-none border-r"
             >
               <Monitor className="w-4 h-4" />
             </Button>
@@ -168,7 +222,7 @@ export function PreviewFrame({
               variant={device === 'tablet' ? 'default' : 'ghost'}
               size="sm"
               onClick={() => onDeviceChange('tablet')}
-              className="p-2"
+              className="p-2 rounded-none border-r"
             >
               <Tablet className="w-4 h-4" />
             </Button>
@@ -176,21 +230,52 @@ export function PreviewFrame({
               variant={device === 'mobile' ? 'default' : 'ghost'}
               size="sm"
               onClick={() => onDeviceChange('mobile')}
-              className="p-2"
+              className="p-2 rounded-l-none"
             >
               <Smartphone className="w-4 h-4" />
             </Button>
           </div>
 
+          {/* Inspection Toggle */}
+          {onToggleInspection && preview?.status === 'running' && (
+            <Button
+              variant={inspectionMode ? 'default' : 'ghost'}
+              size="sm"
+              onClick={onToggleInspection}
+              className={`p-2 ${inspectionMode ? 'bg-purple-600 hover:bg-purple-700 text-white' : ''}`}
+              title={inspectionMode 
+                ? `Exit Inspection Mode (${availableElements.length} elements found)` 
+                : 'Inspect UI Elements - Click to highlight clickable elements'
+              }
+            >
+              {inspectionMode ? (
+                <MousePointer className="w-4 h-4" />
+              ) : (
+                <Search className="w-4 h-4" />
+              )}
+            </Button>
+          )}
+
+          {/* Selected Element Indicator */}
+          {selectedElement && inspectionMode && (
+            <div className="flex items-center space-x-2 px-2 py-1 bg-purple-100 border border-purple-200 rounded-md max-w-[200px]">
+              <MousePointer className="w-3 h-3 text-purple-600 flex-shrink-0" />
+              <span className="text-xs font-medium text-purple-700 truncate">
+                {selectedElement.componentName || selectedElement.type}
+              </span>
+            </div>
+          )}
+
           {/* Preview Actions */}
           {preview?.status === 'running' && (
-            <>
+            <div className="flex items-center space-x-1 border border-gray-200 rounded-md">
               <Button
                 variant="ghost"
                 size="sm"
                 onClick={refreshPreview}
                 disabled={iframeLoading}
-                className="p-2"
+                className="p-2 rounded-r-none border-r"
+                title="Refresh Preview"
               >
                 <RefreshCw className={`w-4 h-4 ${iframeLoading ? 'animate-spin' : ''}`} />
               </Button>
@@ -198,43 +283,46 @@ export function PreviewFrame({
                 variant="ghost"
                 size="sm"
                 onClick={openInNewTab}
-                className="p-2"
+                className="p-2 rounded-l-none"
+                title="Open in New Tab"
               >
                 <ExternalLink className="w-4 h-4" />
               </Button>
-            </>
+            </div>
           )}
 
           {/* Start/Stop Controls */}
-          {preview?.status === 'running' ? (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={onStop}
-              disabled={loading}
-              className="flex items-center space-x-1"
-            >
-              <Square className="w-3 h-3" />
-              <span>Stop</span>
-            </Button>
-          ) : (
-            <Button
-              variant="default"
-              size="sm"
-              onClick={preview ? onRestart : onStart}
-              disabled={loading}
-              className="flex items-center space-x-1"
-            >
-              {loading ? (
-                <Loader2 className="w-3 h-3 animate-spin" />
-              ) : preview ? (
-                <RotateCcw className="w-3 h-3" />
-              ) : (
-                <Play className="w-3 h-3" />
-              )}
-              <span>{loading ? 'Loading...' : preview ? 'Restart' : 'Start Preview'}</span>
-            </Button>
-          )}
+          <div className="ml-2">
+            {preview?.status === 'running' ? (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={onStop}
+                disabled={loading}
+                className="flex items-center space-x-1 px-3"
+              >
+                <Square className="w-3 h-3" />
+                <span>Stop</span>
+              </Button>
+            ) : (
+              <Button
+                variant="default"
+                size="sm"
+                onClick={preview ? onRestart : onStart}
+                disabled={loading}
+                className="flex items-center space-x-1 px-3"
+              >
+                {loading ? (
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                ) : preview ? (
+                  <RotateCcw className="w-3 h-3" />
+                ) : (
+                  <Play className="w-3 h-3" />
+                )}
+                <span>{loading ? 'Loading...' : preview ? 'Restart' : 'Start Preview'}</span>
+              </Button>
+            )}
+          </div>
         </div>
       </div>
 

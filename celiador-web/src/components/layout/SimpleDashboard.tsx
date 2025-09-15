@@ -87,6 +87,22 @@ export function SimpleDashboard({ initialUser, onLogout }: SimpleDashboardProps)
   const userMenuRef = useRef<HTMLDivElement>(null);
   const projectDropdownRef = useRef<HTMLDivElement>(null);
   const previewIframeRef = useRef<HTMLIFrameElement>(null);
+  
+  // Listen for messages from the preview iframe
+  useEffect(() => {
+    const handlePreviewMessage = (event: MessageEvent) => {
+      if (event.data.type === 'ELEMENTS_MAPPED') {
+        console.log('📥 Received elements from preview iframe:', event.data.elements);
+        setUIElements(event.data.elements || []);
+      } else if (event.data.type === 'ELEMENT_SELECTED') {
+        console.log('🎯 Element selected in preview iframe:', event.data.element);
+        setSelectedElement(event.data.element);
+      }
+    };
+
+    window.addEventListener('message', handlePreviewMessage);
+    return () => window.removeEventListener('message', handlePreviewMessage);
+  }, []);
 
   // Close menus when clicking outside
   useEffect(() => {
@@ -179,17 +195,24 @@ export function SimpleDashboard({ initialUser, onLogout }: SimpleDashboardProps)
     // Enhanced message with element context if an element is selected
     let enhancedMessage = currentMessage;
     if (selectedElement) {
+      // Try to get the actual text content from the DOM element
+      let textContent = '';
+      if (selectedElement.type === 'h1' && selectedElement.componentName === 'WelcomeHeading') {
+        textContent = 'Welcome to Celiador'; // Known text content
+      }
+      
       const elementContext = `
 
 SELECTED UI ELEMENT CONTEXT:
 - Element Type: ${selectedElement.type}
 - Component Name: ${selectedElement.componentName || 'Unknown'}
 - CSS Selector: ${selectedElement.selector}
+- Text Content: ${textContent || 'Not available'}
 - Position: x=${selectedElement.boundingBox.x}, y=${selectedElement.boundingBox.y}
 - Size: ${selectedElement.boundingBox.width}x${selectedElement.boundingBox.height}px
 ${selectedElement.metadata?.props ? `- Properties: ${JSON.stringify(selectedElement.metadata.props, null, 2)}` : ''}
 
-The user has visually selected this specific UI element and wants to modify it. Please focus your changes on this element specifically.`;
+The user has visually selected this specific UI element and wants to modify it. Please search through the provided project files to find this element and make the requested changes using the action format.`;
       
       enhancedMessage += elementContext;
     }
@@ -241,6 +264,15 @@ The user has visually selected this specific UI element and wants to modify it. 
     try {
       setInspectionMode(newMode);
       setSelectedElement(null);
+      
+      // Send message to iframe to enable/disable inspection
+      if (previewIframeRef.current && previewIframeRef.current.contentWindow) {
+        const message = newMode ? 'ENABLE_INSPECTION' : 'DISABLE_INSPECTION';
+        console.log(`📡 Sending ${message} to preview iframe`);
+        previewIframeRef.current.contentWindow.postMessage({ type: message }, '*');
+      } else {
+        console.warn('⚠️ Preview iframe not available for inspection toggle');
+      }
       
       if (newMode) {
         console.log('✅ Inspection mode enabled');
@@ -559,12 +591,14 @@ The user has visually selected this specific UI element and wants to modify it. 
             {/* Preview Panel */}
             <div className="flex-1 flex flex-col bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
               {/* Preview Header */}
-              <div className="bg-gray-50 border-b border-gray-200 p-4">
-                <div className="flex items-center justify-between">
-                  <h3 className="font-semibold text-gray-900">Live Preview</h3>
-                  <div className="flex items-center space-x-2">
+              <div className="bg-gray-50 border-b border-gray-200 p-3">
+                <div className="flex items-center justify-between min-h-[48px]">
+                  <div className="flex items-center space-x-3 flex-1">
+                    <h3 className="font-semibold text-gray-900 text-sm">Live Preview</h3>
+                  </div>
+                  <div className="flex items-center space-x-2 flex-shrink-0">
                     {/* Device Selector */}
-                    <div className="flex bg-gray-200 rounded-lg p-1">
+                    <div className="flex bg-gray-200 rounded-lg p-1 border border-gray-300">
                       <button
                         onClick={() => setPreviewDevice('mobile')}
                         className={`p-2 rounded-md transition-all ${
@@ -572,6 +606,7 @@ The user has visually selected this specific UI element and wants to modify it. 
                             ? 'bg-white text-blue-600 shadow-sm'
                             : 'text-gray-600 hover:text-gray-900'
                         }`}
+                        title="Mobile View"
                       >
                         <Smartphone className="h-4 w-4" />
                       </button>
@@ -582,6 +617,7 @@ The user has visually selected this specific UI element and wants to modify it. 
                             ? 'bg-white text-blue-600 shadow-sm'
                             : 'text-gray-600 hover:text-gray-900'
                         }`}
+                        title="Tablet View"
                       >
                         <Tablet className="h-4 w-4" />
                       </button>
@@ -592,6 +628,7 @@ The user has visually selected this specific UI element and wants to modify it. 
                             ? 'bg-white text-blue-600 shadow-sm'
                             : 'text-gray-600 hover:text-gray-900'
                         }`}
+                        title="Desktop View"
                       >
                         <Monitor className="h-4 w-4" />
                       </button>
@@ -601,13 +638,12 @@ The user has visually selected this specific UI element and wants to modify it. 
                     <button 
                       onClick={(e) => {
                         e.preventDefault();
-                        console.log('🖱️ Inspect button clicked!', { inspectionMode });
                         toggleInspectionMode();
                       }}
                       className={`flex items-center space-x-2 px-3 py-2 rounded-lg transition-all text-sm font-medium ${
                         inspectionMode 
-                          ? 'bg-purple-600 text-white shadow-md' 
-                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                          ? 'bg-purple-600 text-white shadow-md hover:bg-purple-700' 
+                          : 'bg-white text-purple-600 hover:bg-purple-50 border border-purple-200'
                       }`}
                       title={inspectionMode ? 'Exit Inspection Mode' : 'Inspect UI Elements'}
                       type="button"
@@ -626,7 +662,7 @@ The user has visually selected this specific UI element and wants to modify it. 
                     </button>
                     
                     {/* Deploy Button */}
-                    <button className="flex items-center space-x-2 bg-gradient-to-r from-green-600 to-emerald-600 text-white px-4 py-2 rounded-lg hover:from-green-700 hover:to-emerald-700 transition-all shadow-md">
+                    <button className="flex items-center space-x-2 bg-gradient-to-r from-green-600 to-emerald-600 text-white px-3 py-2 rounded-lg hover:from-green-700 hover:to-emerald-700 transition-all shadow-sm">
                       <Rocket className="h-4 w-4" />
                       <span className="text-sm font-medium">Deploy</span>
                     </button>

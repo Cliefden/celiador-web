@@ -113,9 +113,10 @@ export class ProjectRunner {
 
       console.log(`[ProjectRunner] Detected project type: ${projectType}`);
 
-      // Apply iframe-friendly configuration for Next.js projects
+      // Apply iframe-friendly configuration and inspection for Next.js projects
       if (projectType === 'nextjs') {
         await this.addNextjsMiddleware(syncResult.localPath);
+        await this.injectInspectionLayer(syncResult.localPath);
       }
 
       // Start the appropriate development server
@@ -406,6 +407,134 @@ export const config = {
       console.error('[ProjectRunner] Failed to add Next.js middleware:', error);
       // Don't throw - this is not a critical failure, preview can still work
     }
+  }
+
+  /**
+   * Inject inspection layer into Next.js project
+   */
+  private async injectInspectionLayer(projectDir: string): Promise<void> {
+    try {
+      console.log('[ProjectRunner] Injecting inspection layer into Next.js project');
+      
+      // Read the inspection script from our source
+      const inspectionScriptPath = path.join(__dirname, '..', 'inspection-client.js');
+      const inspectionScript = await fs.readFile(inspectionScriptPath, 'utf8');
+      
+      // Modify the main layout to include the inspection script
+      await this.injectInspectionIntoLayout(projectDir, inspectionScript);
+      
+      console.log('[ProjectRunner] Successfully injected inspection layer');
+    } catch (error) {
+      console.error('[ProjectRunner] Failed to inject inspection layer:', error);
+      // Don't throw - this is not a critical failure, preview can still work
+    }
+  }
+
+  /**
+   * Inject inspection script into the Next.js layout
+   */
+  private async injectInspectionIntoLayout(projectDir: string, inspectionScript: string): Promise<void> {
+    // Create a client component for the inspection script
+    const componentDir = path.join(projectDir, 'components');
+    
+    // Ensure components directory exists
+    try {
+      await fs.mkdir(componentDir, { recursive: true });
+    } catch (error) {
+      // Directory might already exist
+    }
+
+    // Create the InspectionClient component
+    const inspectionComponentPath = path.join(componentDir, 'InspectionClient.tsx');
+    const inspectionComponent = `'use client'
+
+import { useEffect } from 'react'
+
+export default function InspectionClient() {
+  useEffect(() => {
+    // Inject Celiador inspection script
+    const script = document.createElement('script');
+    script.type = 'text/javascript';
+    script.innerHTML = \`${inspectionScript.replace(/`/g, '\\`').replace(/\$/g, '\\$')}\`;
+    document.head.appendChild(script);
+    
+    return () => {
+      // Cleanup on unmount
+      if (window.celiadorInspector) {
+        window.celiadorInspector.disableInspection();
+      }
+    };
+  }, []);
+
+  return null; // This component only injects scripts, no UI
+}`;
+
+    await fs.writeFile(inspectionComponentPath, inspectionComponent, 'utf8');
+    console.log('[ProjectRunner] Created InspectionClient component');
+
+    // Now modify the layout to include this component
+    const layoutPaths = [
+      path.join(projectDir, 'app', 'layout.tsx'),
+      path.join(projectDir, 'src', 'app', 'layout.tsx'),
+      path.join(projectDir, 'pages', '_app.tsx'),
+      path.join(projectDir, 'src', 'pages', '_app.tsx')
+    ];
+
+    let layoutPath: string | null = null;
+    for (const layoutFile of layoutPaths) {
+      if (await this.fileExists(layoutFile)) {
+        layoutPath = layoutFile;
+        break;
+      }
+    }
+
+    if (!layoutPath) {
+      console.warn('[ProjectRunner] No layout file found, inspection component created but not integrated');
+      return;
+    }
+
+    // Read the layout file
+    let layoutContent = await fs.readFile(layoutPath, 'utf8');
+    
+    // Check if inspection is already injected
+    if (layoutContent.includes('InspectionClient') || layoutContent.includes('celiadorInspector')) {
+      console.log('[ProjectRunner] Inspection already injected into layout, skipping');
+      return;
+    }
+
+    // Add the import for InspectionClient
+    const importLine = `import InspectionClient from '@/components/InspectionClient';\n`;
+    
+    // Find the last import line and add our import after it
+    const importRegex = /import\s+.*?from\s+['"][^'"]+['"];?\s*\n/g;
+    let lastImportEnd = 0;
+    let match;
+    
+    while ((match = importRegex.exec(layoutContent)) !== null) {
+      lastImportEnd = match.index + match[0].length;
+    }
+    
+    // Insert the import after the last import
+    layoutContent = layoutContent.slice(0, lastImportEnd) + 
+                  importLine + 
+                  layoutContent.slice(lastImportEnd);
+
+    // Find where to insert the component in the JSX
+    // Look for the body tag and insert the component inside it
+    const bodyMatch = layoutContent.match(/<body[^>]*>/);
+    if (bodyMatch && bodyMatch.index !== undefined) {
+      const insertPosition = bodyMatch.index + bodyMatch[0].length;
+      layoutContent = layoutContent.slice(0, insertPosition) + 
+                    '\n        <InspectionClient />' + 
+                    layoutContent.slice(insertPosition);
+    } else {
+      console.warn('[ProjectRunner] Could not find body tag to insert InspectionClient');
+      return;
+    }
+
+    // Write the modified layout
+    await fs.writeFile(layoutPath, layoutContent, 'utf8');
+    console.log(`[ProjectRunner] Successfully integrated InspectionClient into ${layoutPath}`);
   }
 }
 

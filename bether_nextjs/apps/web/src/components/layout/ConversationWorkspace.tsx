@@ -61,6 +61,42 @@ export function ConversationWorkspace({ selectedProject }: ConversationWorkspace
   const [previewCollapsed, setPreviewCollapsed] = useState(false);
   const [commandsCollapsed, setCommandsCollapsed] = useState(false);
   const [claudeCodeCollapsed, setClaudeCodeCollapsed] = useState(false);
+  const [inspectionMode, setInspectionMode] = useState(false);
+  const [selectedElement, setSelectedElement] = useState<any>(null);
+  const [availableElements, setAvailableElements] = useState<any[]>([]);
+
+  // Inspection mode toggle
+  const toggleInspectionMode = () => {
+    const newMode = !inspectionMode;
+    setInspectionMode(newMode);
+    
+    // Clear selection when disabling inspection mode
+    if (!newMode) {
+      setSelectedElement(null);
+    }
+  };
+
+  // Listen for messages from preview iframe
+  useEffect(() => {
+    const handleIframeMessage = (event: MessageEvent) => {
+      if (event.data.type === 'ELEMENT_SELECTED') {
+        console.log('[ConversationWorkspace] Element selected:', event.data.element);
+        setSelectedElement(event.data.element);
+        
+        // Show a visual indicator that element was selected
+        const element = event.data.element;
+        const elementName = element.componentName || element.type;
+        console.log(`✅ Selected element: ${elementName} (${element.selector})`);
+        
+      } else if (event.data.type === 'ELEMENTS_MAPPED') {
+        console.log('[ConversationWorkspace] Elements mapped:', event.data.elements.length);
+        setAvailableElements(event.data.elements);
+      }
+    };
+
+    window.addEventListener('message', handleIframeMessage);
+    return () => window.removeEventListener('message', handleIframeMessage);
+  }, []);
 
   // Use preview hook
   const { 
@@ -258,6 +294,10 @@ export function ConversationWorkspace({ selectedProject }: ConversationWorkspace
               onRestart={restartPreview}
               loading={previewLoading}
               error={previewError}
+              inspectionMode={inspectionMode}
+              onToggleInspection={toggleInspectionMode}
+              selectedElement={selectedElement}
+              availableElements={availableElements}
             />
           </TabsContent>
 
@@ -498,6 +538,10 @@ export function ConversationWorkspace({ selectedProject }: ConversationWorkspace
               onRestart={restartPreview}
               loading={previewLoading}
               error={previewError}
+              inspectionMode={inspectionMode}
+              onToggleInspection={toggleInspectionMode}
+              selectedElement={selectedElement}
+              availableElements={availableElements}
             />
           </div>
         )}
