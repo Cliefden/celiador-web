@@ -134,18 +134,19 @@ class CeliadorInspector {
       bodySize: { width: document.body?.scrollWidth, height: document.body?.scrollHeight }
     });
     
-    // Find meaningful elements in priority order - broader detection
+    // Find meaningful elements in priority order - broader detection with lower thresholds
     const priorityElements = [
-      { selector: 'h1', priority: 1, minSize: 20 },
-      { selector: 'h2, h3, h4, h5, h6', priority: 2, minSize: 16 },
-      { selector: 'button', priority: 3, minSize: 15 },
-      { selector: '.btn, .button, [role="button"]', priority: 4, minSize: 15 },
-      { selector: 'input, textarea, select', priority: 5, minSize: 15 },
-      { selector: 'a[href]', priority: 6, minSize: 15 }, // Much lower threshold
-      { selector: '[data-testid], [data-component]', priority: 7, minSize: 15 },
-      { selector: '[class*="btn"], [class*="button"]', priority: 8, minSize: 15 }, // Catch styled buttons
-      { selector: 'div[class], span[class]', priority: 9, minSize: 30 }, // Styled interactive elements
-      { selector: '*[onclick], *[style*="cursor: pointer"]', priority: 10, minSize: 20 } // Interactive elements
+      { selector: 'h1', priority: 1, minSize: 15 },
+      { selector: 'h2, h3, h4, h5, h6', priority: 2, minSize: 12 },
+      { selector: 'button', priority: 3, minSize: 10 }, // Lower for smaller buttons
+      { selector: '.btn, .button, [role="button"]', priority: 4, minSize: 10 },
+      { selector: 'input, textarea, select', priority: 5, minSize: 10 },
+      { selector: 'a[href]', priority: 6, minSize: 10 }, // Even lower threshold
+      { selector: '[data-testid], [data-component]', priority: 7, minSize: 10 },
+      { selector: '[class*="btn"], [class*="button"], [class*="cta"]', priority: 8, minSize: 10 }, // Include CTA classes
+      { selector: 'div[class*="shop"], div[class*="browse"], div[class*="hero"]', priority: 9, minSize: 20 }, // Hero section specific
+      { selector: 'div[class], span[class]', priority: 10, minSize: 25 }, // Styled interactive elements
+      { selector: '*[onclick], *[style*="cursor: pointer"]', priority: 11, minSize: 15 } // Interactive elements
     ];
 
     priorityElements.forEach(({ selector, priority, minSize }) => {
@@ -169,13 +170,21 @@ class CeliadorInspector {
           return;
         }
         
-        // Better viewport filtering with buffer
-        const viewportBuffer = 50;
-        if (rect.bottom < -viewportBuffer || rect.top > window.innerHeight + viewportBuffer || 
-            rect.right < -viewportBuffer || rect.left > window.innerWidth + viewportBuffer) {
-          console.log(`[CeliadorInspector] Skipping ${selector}[${index}] - outside viewport with buffer`);
+        // Skip elements that are completely off the page (not just viewport)
+        // Allow elements below the fold to be detected for inspection
+        const pageWidth = Math.max(document.documentElement.scrollWidth, window.innerWidth);
+        const pageHeight = Math.max(document.documentElement.scrollHeight, window.innerHeight);
+        
+        if (rect.right < 0 || rect.left > pageWidth || rect.bottom < 0 || rect.top > pageHeight) {
+          console.log(`[CeliadorInspector] Skipping ${selector}[${index}] - completely outside page bounds`);
           return;
         }
+        
+        console.log(`[CeliadorInspector] Including ${selector}[${index}] - within page bounds:`, {
+          rect: { top: rect.top, left: rect.left, bottom: rect.bottom, right: rect.right },
+          pageSize: { width: pageWidth, height: pageHeight },
+          viewport: { width: window.innerWidth, height: window.innerHeight }
+        });
             
         // Additional filtering for links
         if (el.tagName === 'A') {
@@ -190,16 +199,21 @@ class CeliadorInspector {
         if (isNested) return;
         
         // For broad selectors (div, span), only include likely interactive elements
-        if ((el.tagName === 'DIV' || el.tagName === 'SPAN') && priority >= 9) {
+        if ((el.tagName === 'DIV' || el.tagName === 'SPAN') && priority >= 10) {
           const text = el.textContent?.trim() || '';
-          const hasClickableText = text.length > 3 && text.length < 50; // Reasonable text length
-          const hasInteractiveClasses = /btn|button|click|link|nav|menu|action|cta|card/i.test(el.className);
+          const hasClickableText = text.length > 3 && text.length < 100; // More lenient text length
+          const hasInteractiveClasses = /btn|button|click|link|nav|menu|action|cta|card|shop|browse|hero/i.test(el.className);
           const hasInteractiveStyle = el.style.cursor === 'pointer' || getComputedStyle(el).cursor === 'pointer';
+          const hasEventHandlers = el.onclick || el.getAttribute('onclick') || el.getAttribute('data-action');
+          const hasAriaRole = ['button', 'link', 'menuitem'].includes(el.getAttribute('role'));
           
-          if (!hasClickableText && !hasInteractiveClasses && !hasInteractiveStyle) {
-            console.log(`[CeliadorInspector] Skipping non-interactive div/span: "${text.substring(0, 30)}"`);
+          // Be more permissive - include if it has ANY interactive indicator
+          if (!hasClickableText && !hasInteractiveClasses && !hasInteractiveStyle && !hasEventHandlers && !hasAriaRole) {
+            console.log(`[CeliadorInspector] Skipping non-interactive div/span: "${text.substring(0, 30)}" (class: ${el.className})`);
             return;
           }
+          
+          console.log(`[CeliadorInspector] Including interactive div/span: "${text.substring(0, 30)}" (class: ${el.className})`);
         }
 
         const element = {
@@ -208,10 +222,10 @@ class CeliadorInspector {
           selector: this.generateSelector(el),
           componentName: this.guessComponentName(el),
           boundingBox: {
-            x: Math.max(0, rect.left + window.scrollX), // Don't allow negative positions
-            y: Math.max(0, rect.top + window.scrollY),
-            width: Math.min(rect.width, Math.min(400, window.innerWidth - rect.left)), // Clamp to viewport
-            height: Math.min(rect.height, Math.min(200, window.innerHeight - rect.top)),
+            x: rect.left + window.scrollX,
+            y: rect.top + window.scrollY,
+            width: rect.width,
+            height: rect.height,
           },
           metadata: {
             props: this.extractProps(el),
@@ -219,6 +233,13 @@ class CeliadorInspector {
             textContent: el.textContent?.trim().substring(0, 50) || ''
           }
         };
+
+        console.log(`[CeliadorInspector] Added element:`, {
+          id: element.id,
+          type: element.type,
+          text: element.metadata.textContent,
+          boundingBox: element.boundingBox
+        });
 
         this.elements.push(element);
       });
