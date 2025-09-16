@@ -13,6 +13,8 @@ import { useAuth } from '../contexts/AuthContext';
 export default function HomePage() {
   const { user, isLoading } = useAuth();
   const router = useRouter();
+  
+  // Force Vercel redeploy to fix TypeError: Load failed
 
   useEffect(() => {
     console.log('HomePage: Auth state changed', { user: !!user, isLoading });
