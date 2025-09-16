@@ -323,7 +323,7 @@ export function useConversation(projectId?: string): UseConversationReturn {
           content: msg.content
         }));
 
-        const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+        const apiUrl = process.env.NEXT_PUBLIC_ORCHESTRATOR_URL || 'http://localhost:4000';
         console.log('[useConversation] Active conversation:', activeConversation);
         console.log('[useConversation] Making AI API call to:', `${apiUrl}/projects/${activeConversation.projectId}/chat`);
         console.log('[useConversation] Auth token length:', authToken.length);

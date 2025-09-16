@@ -135,7 +135,7 @@ export function SimpleDashboard({ initialUser, onLogout }: SimpleDashboardProps)
         const { data: { session } } = await supabase.auth.getSession();
         if (!session) return;
 
-        const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+        const apiUrl = process.env.NEXT_PUBLIC_ORCHESTRATOR_URL || 'http://localhost:4000';
         const response = await fetch(`${apiUrl}/projects`, {
           headers: { 'Authorization': `Bearer ${session.access_token}` }
         });
@@ -239,7 +239,7 @@ The user has visually selected this specific UI element and wants to modify it. 
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) return;
 
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+      const apiUrl = process.env.NEXT_PUBLIC_ORCHESTRATOR_URL || 'http://localhost:4000';
       const response = await fetch(`${apiUrl}/projects/${project.id}`, {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${session.access_token}` }
