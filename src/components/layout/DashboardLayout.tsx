@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
+import { ApiClient } from '../../lib/api';
 import { ProjectSidebar } from './ProjectSidebar';
 import { ContextBar } from './ContextBar';
 import { ConversationWorkspace } from './ConversationWorkspace';
@@ -65,24 +66,14 @@ export function DashboardLayout({ initialUser, onLogout }: DashboardLayoutProps)
         }
 
         console.log('[dashboard] Loading projects...');
-        const response = await fetch('http://localhost:4000/projects', {
-          headers: {
-            'Authorization': `Bearer ${session.access_token}`
-          }
-        });
-
-        if (response.ok) {
-          const projectsData = await response.json();
-          console.log('[dashboard] Projects loaded:', projectsData.length);
-          setProjects(projectsData);
+        const projectsData = await ApiClient.getProjects();
+        console.log('[dashboard] Projects loaded:', projectsData.length);
+        setProjects(projectsData);
           
-          // Auto-select first project if none selected
-          if (projectsData.length > 0 && !selectedProject) {
-            console.log('[dashboard] Auto-selecting first project:', projectsData[0].name);
-            setSelectedProject(projectsData[0]);
-          }
-        } else {
-          console.error('[dashboard] Failed to load projects:', response.status);
+        // Auto-select first project if none selected
+        if (projectsData.length > 0 && !selectedProject) {
+          console.log('[dashboard] Auto-selecting first project:', projectsData[0].name);
+          setSelectedProject(projectsData[0]);
         }
       } catch (error) {
         console.error('[dashboard] Error loading projects:', error);
@@ -154,31 +145,15 @@ export function DashboardLayout({ initialUser, onLogout }: DashboardLayoutProps)
 
       console.log('[dashboard] Deleting project:', project.name);
       
-      const response = await fetch(`http://localhost:4000/projects/${project.id}`, {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${session.access_token}`
-        }
-      });
-
-      if (response.ok) {
-        console.log('[dashboard] Project deleted successfully');
-        
-        // Remove project from state
-        setProjects(prev => prev.filter(p => p.id !== project.id));
-        
-        // If this was the selected project, clear selection
-        if (selectedProject?.id === project.id) {
-          setSelectedProject(null);
-        }
-        
-        // Show success message (optional)
-        // You could add a toast notification here
-        
-      } else {
-        const errorData = await response.text();
-        console.error('[dashboard] Failed to delete project:', response.status, errorData);
-        alert('Failed to delete project. Please try again.');
+      await ApiClient.deleteProject(project.id);
+      console.log('[dashboard] Project deleted successfully');
+      
+      // Remove project from state
+      setProjects(prev => prev.filter(p => p.id !== project.id));
+      
+      // If this was the selected project, clear selection
+      if (selectedProject?.id === project.id) {
+        setSelectedProject(null);
       }
     } catch (error) {
       console.error('[dashboard] Error deleting project:', error);

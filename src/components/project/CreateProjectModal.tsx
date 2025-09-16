@@ -6,6 +6,7 @@ import { Input } from '../ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { X, Plus, Code, Sparkles, Zap, Palette, ShoppingCart, MessageSquare, BarChart3, Globe, Briefcase, Rocket } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
+import { ApiClient } from '../../lib/api';
 
 interface Project {
   id: string;
@@ -160,27 +161,13 @@ export function CreateProjectModal({ isOpen, onClose, onProjectCreated, userId }
         userId
       };
 
-      const response = await fetch('http://localhost:4000/projects', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session.access_token}`
-        },
-        body: JSON.stringify(projectData)
-      });
-
-      if (response.ok) {
-        const newProject = await response.json();
-        onProjectCreated(newProject);
-        
-        // Clear fields
-        setName('');
-        setTemplateKey('');
-        onClose();
-      } else {
-        const errorText = await response.text();
-        throw new Error(`Failed to create project: ${response.status} ${errorText}`);
-      }
+      const newProject = await ApiClient.createProject(projectData);
+      onProjectCreated(newProject);
+      
+      // Clear fields
+      setName('');
+      setTemplateKey('');
+      onClose();
     } catch (error) {
       console.error('Failed to create project:', error);
       setError(error instanceof Error ? error.message : 'Failed to create project');

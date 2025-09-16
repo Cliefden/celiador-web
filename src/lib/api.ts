@@ -96,4 +96,124 @@ export class ApiClient {
 
     return response.json();
   }
+
+  // Project methods
+  static async getProjects() {
+    const headers = await this.getAuthHeaders();
+    const response = await fetch(`${this.baseUrl}/projects`, {
+      headers
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'Failed to fetch projects');
+    }
+
+    return response.json();
+  }
+
+  static async getProject(projectId: string) {
+    const headers = await this.getAuthHeaders();
+    const response = await fetch(`${this.baseUrl}/projects/${projectId}`, {
+      headers
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'Failed to fetch project');
+    }
+
+    return response.json();
+  }
+
+  static async createProject(projectData: any) {
+    const headers = await this.getAuthHeaders();
+    const response = await fetch(`${this.baseUrl}/projects`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(projectData)
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'Failed to create project');
+    }
+
+    return response.json();
+  }
+
+  static async deleteProject(projectId: string) {
+    const headers = await this.getAuthHeaders();
+    const response = await fetch(`${this.baseUrl}/projects/${projectId}`, {
+      method: 'DELETE',
+      headers
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'Failed to delete project');
+    }
+
+    return response.json();
+  }
+
+  // Job methods
+  static async getJobs(projectId: string, type?: string, status?: string) {
+    const headers = await this.getAuthHeaders();
+    const params = new URLSearchParams();
+    if (type) params.append('type', type);
+    if (status) params.append('status', status);
+    
+    const queryString = params.toString();
+    const url = `${this.baseUrl}/projects/${projectId}/jobs${queryString ? `?${queryString}` : ''}`;
+    
+    const response = await fetch(url, { headers });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'Failed to fetch jobs');
+    }
+
+    return response.json();
+  }
+
+  static async createJob(projectId: string, jobData: { type: string; prompt: string }) {
+    const headers = await this.getAuthHeaders();
+    const response = await fetch(`${this.baseUrl}/projects/${projectId}/jobs`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(jobData)
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'Failed to create job');
+    }
+
+    return response.json();
+  }
+
+  // Utility method to get base URL
+  static getBaseUrl() {
+    return this.baseUrl;
+  }
+
+  // Generic authenticated fetch method
+  static async authenticatedFetch(endpoint: string, options: RequestInit = {}) {
+    const headers = await this.getAuthHeaders();
+    const response = await fetch(`${this.baseUrl}${endpoint}`, {
+      ...options,
+      headers: {
+        ...headers,
+        ...options.headers
+      }
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ error: 'Request failed' }));
+      throw new Error(error.error || `Request failed with status ${response.status}`);
+    }
+
+    return response.json();
+  }
 }
