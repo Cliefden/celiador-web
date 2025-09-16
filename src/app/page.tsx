@@ -14,7 +14,7 @@ export default function HomePage() {
   const { user, isLoading } = useAuth();
   const router = useRouter();
   
-  // Force Vercel redeploy to fix TypeError: Load failed
+  // Testing Vercel deployment - 2025-09-16
 
   useEffect(() => {
     console.log('HomePage: Auth state changed', { user: !!user, isLoading });
