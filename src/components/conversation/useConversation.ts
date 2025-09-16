@@ -323,8 +323,9 @@ export function useConversation(projectId?: string): UseConversationReturn {
           content: msg.content
         }));
 
+        const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
         console.log('[useConversation] Active conversation:', activeConversation);
-        console.log('[useConversation] Making AI API call to:', `http://localhost:4000/projects/${activeConversation.projectId}/chat`);
+        console.log('[useConversation] Making AI API call to:', `${apiUrl}/projects/${activeConversation.projectId}/chat`);
         console.log('[useConversation] Auth token length:', authToken.length);
         console.log('[useConversation] Request body:', {
           message: content,
@@ -333,7 +334,7 @@ export function useConversation(projectId?: string): UseConversationReturn {
           provider: 'openai'
         });
 
-        const aiResponse = await fetch(`http://localhost:4000/projects/${activeConversation.projectId}/chat`, {
+        const aiResponse = await fetch(`${apiUrl}/projects/${activeConversation.projectId}/chat`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',

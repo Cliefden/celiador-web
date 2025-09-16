@@ -1,7 +1,7 @@
 import { supabase } from './supabase';
 
 export class ApiClient {
-  private static baseUrl = 'http://localhost:4000';
+  private static baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
 
   private static async getAuthHeaders() {
     const { data: { session } } = await supabase.auth.getSession();
