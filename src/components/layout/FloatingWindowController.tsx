@@ -1,0 +1,65 @@
+'use client';
+
+import { useState } from 'react';
+import { FloatingWindow, FloatingActionButton, FloatingWindowContent } from './FloatingWindow';
+import { Files, MessageSquare, Activity, Settings, Code2 } from 'lucide-react';
+
+interface FloatingWindowControllerProps {
+  projectId?: string;
+  onFileSelect?: (filePath: string) => void;
+  selectedFile?: string | null;
+  className?: string;
+}
+
+export function FloatingWindowController({
+  projectId,
+  onFileSelect,
+  selectedFile,
+  className = ''
+}: FloatingWindowControllerProps) {
+  const [activeWindow, setActiveWindow] = useState<FloatingWindowContent | null>(null);
+
+  const openWindow = (content: FloatingWindowContent) => {
+    setActiveWindow(content);
+  };
+
+  const closeWindow = () => {
+    setActiveWindow(null);
+  };
+
+  const availableWindows: FloatingWindowContent[] = ['files', 'chat', 'activity', 'code', 'settings'];
+
+  return (
+    <div className={className}>
+      {/* Floating Action Buttons - Stack vertically from bottom */}
+      <div className="fixed right-6 bottom-6 z-[80]">
+        <div className="flex flex-col-reverse space-y-reverse space-y-3">
+          {availableWindows.map((content, index) => (
+            <FloatingActionButton
+              key={content}
+              content={content}
+              onClick={() => openWindow(content)}
+              className={`
+                transition-all duration-200 ease-out
+                ${activeWindow === content ? 'ring-2 ring-blue-300 ring-offset-2' : ''}
+                ${index > 0 ? 'opacity-80 hover:opacity-100' : ''}
+              `}
+            />
+          ))}
+        </div>
+      </div>
+
+      {/* Floating Window */}
+      {activeWindow && (
+        <FloatingWindow
+          isOpen={true}
+          onClose={closeWindow}
+          content={activeWindow}
+          projectId={projectId}
+          onFileSelect={onFileSelect}
+          selectedFile={selectedFile}
+        />
+      )}
+    </div>
+  );
+}

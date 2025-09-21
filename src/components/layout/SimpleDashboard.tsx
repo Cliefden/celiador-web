@@ -6,6 +6,7 @@ import { CreateProjectModal } from '../project/CreateProjectModal';
 import { useConversation } from '../conversation/useConversation';
 import { usePreview } from '../../hooks/usePreview';
 import { PreviewOverlay } from '../inspection/PreviewOverlay';
+import { FloatingWindowController } from './FloatingWindowController';
 import { 
   Plus, 
   Send, 
@@ -24,6 +25,7 @@ import {
   Search,
   MousePointer
 } from 'lucide-react';
+import { SettingsPanel } from '../settings/SettingsPanel';
 
 interface User {
   id: string;
@@ -84,6 +86,7 @@ export function SimpleDashboard({ initialUser, onLogout }: SimpleDashboardProps)
   const [selectedElement, setSelectedElement] = useState<UIElement | null>(null);
   const [uiElements, setUIElements] = useState<UIElement[]>([]);
   const [iframeLoaded, setIframeLoaded] = useState(false);
+  const [selectedFile, setSelectedFile] = useState<string | null>(null);
   const userMenuRef = useRef<HTMLDivElement>(null);
   const projectDropdownRef = useRef<HTMLDivElement>(null);
   const previewIframeRef = useRef<HTMLIFrameElement>(null);
@@ -300,6 +303,12 @@ The user has visually selected this specific UI element and wants to modify it. 
     setCurrentMessage(`Modify ${elementDescription}: `);
   };
 
+  const handleFileSelect = (filePath: string) => {
+    setSelectedFile(filePath);
+    console.log('[SimpleDashboard] File selected:', filePath);
+    // TODO: Open file in editor or show file details
+  };
+
   const getPreviewUrl = () => {
     if (!preview || preview.status !== 'running') return null;
     return preview.url;
@@ -325,7 +334,15 @@ The user has visually selected this specific UI element and wants to modify it. 
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50">
+    <>
+      {/* Floating Window Controller - At top level */}
+      <FloatingWindowController
+        projectId={selectedProject?.id}
+        onFileSelect={handleFileSelect}
+        selectedFile={selectedFile}
+      />
+      
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50">
       {/* Header */}
       <header className="bg-white/80 backdrop-blur-xl border-b border-white/20 sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
@@ -376,6 +393,9 @@ The user has visually selected this specific UI element and wants to modify it. 
             
             {showUserMenu && (
               <div className="absolute top-12 right-0 bg-white rounded-lg shadow-lg border border-gray-200 py-2 min-w-48">
+                <div className="px-4 py-2 border-b border-gray-100">
+                  <SettingsPanel />
+                </div>
                 <button
                   onClick={onLogout}
                   className="flex items-center space-x-2 w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
@@ -770,6 +790,7 @@ The user has visually selected this specific UI element and wants to modify it. 
         onElementSelect={handleElementSelection}
         deviceClasses={getDeviceClasses()}
       />
-    </div>
+      </div>
+    </>
   );
 }

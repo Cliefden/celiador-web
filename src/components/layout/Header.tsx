@@ -4,6 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { Button } from '../ui/button';
 import { useAuth } from '../../contexts/AuthContext';
+import { SettingsPanel } from '../settings/SettingsPanel';
 import SignInModal from '../auth/SignInModal';
 import SignUpModal from '../auth/SignUpModal';
 
@@ -72,6 +73,7 @@ export default function Header() {
                       </span>
                     </div>
                   </div>
+                  <SettingsPanel />
                   <Button 
                     variant="ghost" 
                     className="text-gray-700 hover:text-blue-600"
@@ -142,12 +144,17 @@ export default function Header() {
                   {user ? (
                     <>
                       <div className="px-3 py-2 border-t border-gray-200">
-                        <p className="text-sm font-medium text-gray-900">
-                          {profile?.full_name || profile?.username || user.email}
-                        </p>
-                        <p className="text-xs text-gray-500 capitalize">
-                          {profile?.role || 'user'}
-                        </p>
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="text-sm font-medium text-gray-900">
+                              {profile?.full_name || profile?.username || user.email}
+                            </p>
+                            <p className="text-xs text-gray-500 capitalize">
+                              {profile?.role || 'user'}
+                            </p>
+                          </div>
+                          <SettingsPanel />
+                        </div>
                       </div>
                       <Button 
                         variant="ghost" 

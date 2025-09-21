@@ -1,0 +1,376 @@
+'use client';
+
+import { useState, useEffect } from 'react';
+import { 
+  Activity, 
+  CheckCircle, 
+  Clock, 
+  AlertCircle, 
+  Loader2,
+  MessageCircle,
+  FileText,
+  GitCommit,
+  RefreshCw,
+  Code,
+  Settings,
+  Zap,
+  Play,
+  Package,
+  Rocket,
+  ChevronDown,
+  ChevronRight
+} from 'lucide-react';
+import { supabase } from '../../lib/supabase';
+
+interface ActivityItem {
+  id: string;
+  type: 'job' | 'conversation' | 'file' | 'system';
+  title: string;
+  description: string;
+  status?: 'PENDING' | 'RUNNING' | 'COMPLETED' | 'FAILED' | 'CANCELLED';
+  timestamp: string;
+  metadata?: {
+    jobId?: string;
+    conversationId?: string;
+    filePath?: string;
+    messageId?: string;
+    jobType?: string;
+    output?: string;
+    error?: string;
+    jobMetadata?: any;
+    userId?: string;
+  };
+}
+
+interface ActivityFeedProps {
+  projectId: string;
+  className?: string;
+}
+
+export function ActivityFeed({ projectId, className = '' }: ActivityFeedProps) {
+  const [activities, setActivities] = useState<ActivityItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [expandedCards, setExpandedCards] = useState<Set<string>>(new Set());
+
+  const loadActivities = async (silent = false) => {
+    if (!projectId) {
+      setActivities([]);
+      setLoading(false);
+      return;
+    }
+
+    try {
+      if (!silent) setLoading(true);
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        setActivities([]);
+        return;
+      }
+      
+      const response = await fetch(`${process.env.NEXT_PUBLIC_ORCHESTRATOR_URL || 'http://localhost:4000'}/projects/${projectId}/activity?showAll=false&_t=${Date.now()}&_debug=true`, {
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`
+        }
+      });
+
+      if (!response.ok) {
+        console.error('[ActivityFeed] Failed to load activities:', response.status);
+        setActivities([]);
+        return;
+      }
+
+      const data = await response.json();
+      const activities = data.activities || data || [];
+      setActivities(activities);
+    } catch (error) {
+      console.error('[ActivityFeed] Error loading activities:', error);
+      setActivities([]);
+    } finally {
+      if (!silent) setLoading(false);
+      setIsRefreshing(false);
+    }
+  };
+
+  useEffect(() => {
+    loadActivities();
+  }, [projectId]);
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    await loadActivities(true);
+  };
+
+  const getActivityIcon = (activity: ActivityItem) => {
+    if (activity.type === 'job') {
+      // First show status icon for running/failed states
+      if (activity.status === 'RUNNING') {
+        return <Loader2 className="w-4 h-4 text-blue-500 animate-spin" />;
+      }
+      if (activity.status === 'FAILED') {
+        return <AlertCircle className="w-4 h-4 text-red-500" />;
+      }
+      
+      // Then show job type specific icons
+      const jobType = activity.metadata?.jobType;
+      switch (jobType) {
+        case 'SCAFFOLD':
+          return <Settings className="w-4 h-4 text-purple-500" />;
+        case 'AI_ACTION':
+          return <Zap className="w-4 h-4 text-yellow-500" />;
+        case 'EDIT':
+          return <Code className="w-4 h-4 text-blue-500" />;
+        case 'TEST':
+          return <Play className="w-4 h-4 text-green-500" />;
+        case 'BUILD':
+          return <Package className="w-4 h-4 text-orange-500" />;
+        case 'DEPLOY':
+          return <Rocket className="w-4 h-4 text-indigo-500" />;
+        default:
+          return activity.status === 'COMPLETED' 
+            ? <CheckCircle className="w-4 h-4 text-green-500" />
+            : <Clock className="w-4 h-4 text-gray-500" />;
+      }
+    }
+    
+    switch (activity.type) {
+      case 'conversation':
+        return <MessageCircle className="w-4 h-4 text-blue-500" />;
+      case 'file':
+        return <FileText className="w-4 h-4 text-purple-500" />;
+      case 'system':
+        return <GitCommit className="w-4 h-4 text-gray-500" />;
+      default:
+        return <Activity className="w-4 h-4 text-gray-500" />;
+    }
+  };
+
+  const getStatusColor = (activity: ActivityItem) => {
+    if (activity.type !== 'job' || !activity.status) return 'text-gray-600';
+    
+    switch (activity.status) {
+      case 'PENDING': return 'text-yellow-600';
+      case 'RUNNING': return 'text-blue-600';
+      case 'COMPLETED': return 'text-green-600';
+      case 'FAILED': return 'text-red-600';
+      case 'CANCELLED': return 'text-gray-600';
+      default: return 'text-gray-600';
+    }
+  };
+
+  const getRelativeTime = (timestamp: string) => {
+    const date = new Date(timestamp);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    
+    if (diffMins < 1) return 'now';
+    if (diffMins < 60) return `${diffMins}m`;
+    if (diffMins < 1440) return `${Math.floor(diffMins / 60)}h`;
+    return `${Math.floor(diffMins / 1440)}d`;
+  };
+
+  const toggleExpanded = (activityId: string) => {
+    const newExpanded = new Set(expandedCards);
+    if (newExpanded.has(activityId)) {
+      newExpanded.delete(activityId);
+    } else {
+      newExpanded.add(activityId);
+    }
+    setExpandedCards(newExpanded);
+  };
+
+  const getJobTypeDescription = (jobType: string) => {
+    const descriptions: { [key: string]: string } = {
+      'SCAFFOLD': 'Setting up project structure and dependencies',
+      'AI_ACTION': 'AI-powered code generation and modification',
+      'EDIT': 'Manual code editing and file modifications',
+      'TEST': 'Running tests and validation checks',
+      'BUILD': 'Compiling and building the project',
+      'DEPLOY': 'Deploying to production environment'
+    };
+    return descriptions[jobType] || jobType;
+  };
+
+  const formatOutput = (output: string | undefined) => {
+    if (!output) return null;
+    try {
+      const parsed = JSON.parse(output);
+      if (parsed.actions && Array.isArray(parsed.actions)) {
+        return `Generated ${parsed.actions.length} action(s)`;
+      }
+      if (parsed.files && Array.isArray(parsed.files)) {
+        return `Modified ${parsed.files.length} file(s)`;
+      }
+    } catch {
+      // Not JSON, return truncated string
+    }
+    return output.length > 100 ? output.substring(0, 100) + '...' : output;
+  };
+
+  if (loading) {
+    return (
+      <div className={`flex items-center justify-center h-32 ${className}`}>
+        <div className="text-center">
+          <Loader2 className="w-6 h-6 animate-spin text-gray-400 mx-auto mb-2" />
+          <p className="text-xs text-gray-500">Loading activity...</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className={`flex flex-col h-full ${className}`}>
+      {/* Header */}
+      <div className="flex items-center justify-between p-4 border-b border-gray-200">
+        <div className="flex items-center space-x-2">
+          <Activity className="w-4 h-4 text-gray-600" />
+          <h3 className="font-medium text-gray-900">Activity</h3>
+        </div>
+        <button
+          onClick={handleRefresh}
+          disabled={isRefreshing}
+          className="p-1 hover:bg-gray-100 rounded transition-colors"
+          title="Refresh activity"
+        >
+          <RefreshCw className={`w-4 h-4 text-gray-500 ${isRefreshing ? 'animate-spin' : ''}`} />
+        </button>
+      </div>
+
+      {/* Activity List */}
+      <div className="flex-1 overflow-y-auto">
+        {activities.length === 0 ? (
+          <div className="flex flex-col items-center justify-center h-full text-center p-6">
+            <Activity className="w-8 h-8 text-gray-300 mb-3" />
+            <p className="text-sm text-gray-500 mb-1">No recent activity</p>
+            <p className="text-xs text-gray-400">Start building to see activity here</p>
+          </div>
+        ) : (
+          <div className="p-2 space-y-2">
+            {activities.slice(0, 10).map((activity) => {
+              const isExpanded = expandedCards.has(activity.id);
+              const hasDetails = activity.metadata?.output || activity.metadata?.error || activity.metadata?.jobType;
+              
+              return (
+                <div
+                  key={activity.id}
+                  className="relative group bg-white rounded-lg border border-gray-100 hover:border-gray-200 transition-all duration-200 hover:shadow-sm overflow-hidden"
+                >
+                  {/* Status indicator bar */}
+                  <div className={`absolute left-0 top-0 bottom-0 w-1 ${
+                    activity.status === 'COMPLETED' ? 'bg-green-400' :
+                    activity.status === 'RUNNING' ? 'bg-blue-400' :
+                    activity.status === 'FAILED' ? 'bg-red-400' :
+                    activity.status === 'PENDING' ? 'bg-yellow-400' :
+                    'bg-gray-300'
+                  }`} />
+                  
+                  {/* Main card content */}
+                  <div 
+                    className={`p-3 ml-2 ${hasDetails ? 'cursor-pointer' : ''}`}
+                    onClick={() => hasDetails && toggleExpanded(activity.id)}
+                  >
+                    <div className="flex items-start space-x-3">
+                      <div className="flex-shrink-0 mt-1">
+                        {getActivityIcon(activity)}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-start justify-between mb-1">
+                          <div className="flex items-center space-x-2">
+                            <h4 className="text-sm font-semibold text-gray-900">
+                              {activity.title}
+                            </h4>
+                            {hasDetails && (
+                              <button className="text-gray-400 hover:text-gray-600">
+                                {isExpanded ? (
+                                  <ChevronDown className="w-3 h-3" />
+                                ) : (
+                                  <ChevronRight className="w-3 h-3" />
+                                )}
+                              </button>
+                            )}
+                          </div>
+                          <span className="text-xs text-gray-500 flex-shrink-0 mt-0.5">
+                            {getRelativeTime(activity.timestamp)}
+                          </span>
+                        </div>
+                        
+                        {/* Job type description for jobs */}
+                        {activity.metadata?.jobType && (
+                          <p className="text-xs text-gray-500 mb-1">
+                            {getJobTypeDescription(activity.metadata.jobType)}
+                          </p>
+                        )}
+                        
+                        <p className="text-xs text-gray-600 leading-relaxed mb-2">
+                          {activity.description}
+                        </p>
+                        
+                        {/* Status badge and quick info */}
+                        <div className="flex items-center justify-between">
+                          {activity.status && (
+                            <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                              activity.status === 'COMPLETED' ? 'bg-green-100 text-green-800' :
+                              activity.status === 'RUNNING' ? 'bg-blue-100 text-blue-800' :
+                              activity.status === 'FAILED' ? 'bg-red-100 text-red-800' :
+                              activity.status === 'PENDING' ? 'bg-yellow-100 text-yellow-800' :
+                              'bg-gray-100 text-gray-800'
+                            }`}>
+                              {activity.status.toLowerCase()}
+                            </span>
+                          )}
+                          
+                          {/* Quick output summary */}
+                          {activity.metadata?.output && !isExpanded && (
+                            <span className="text-xs text-gray-500">
+                              {formatOutput(activity.metadata.output)}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                    
+                    {/* Expanded details */}
+                    {isExpanded && hasDetails && (
+                      <div className="mt-3 pt-3 border-t border-gray-100 space-y-2">
+                        {activity.metadata?.output && (
+                          <div>
+                            <div className="text-xs font-medium text-gray-700 mb-1">Output:</div>
+                            <div className="text-xs text-gray-600 bg-gray-50 p-2 rounded font-mono">
+                              {activity.metadata.output.length > 500 
+                                ? activity.metadata.output.substring(0, 500) + '...'
+                                : activity.metadata.output
+                              }
+                            </div>
+                          </div>
+                        )}
+                        
+                        {activity.metadata?.error && (
+                          <div>
+                            <div className="text-xs font-medium text-red-700 mb-1">Error:</div>
+                            <div className="text-xs text-red-600 bg-red-50 p-2 rounded font-mono">
+                              {activity.metadata.error}
+                            </div>
+                          </div>
+                        )}
+                        
+                        {activity.metadata?.jobMetadata && (
+                          <div>
+                            <div className="text-xs font-medium text-gray-700 mb-1">Metadata:</div>
+                            <div className="text-xs text-gray-600 bg-gray-50 p-2 rounded font-mono">
+                              {JSON.stringify(activity.metadata.jobMetadata, null, 2)}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}

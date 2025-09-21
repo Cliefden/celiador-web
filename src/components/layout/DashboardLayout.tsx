@@ -8,6 +8,7 @@ import { ContextBar } from './ContextBar';
 import { ConversationWorkspace } from './ConversationWorkspace';
 import { ActivityStream } from './ActivityStream';
 import { CreateProjectModal } from '../project/CreateProjectModal';
+import { FloatingWindowController } from './FloatingWindowController';
 import { useConversation } from '../conversation/useConversation';
 
 interface User {
@@ -50,6 +51,7 @@ export function DashboardLayout({ initialUser, onLogout }: DashboardLayoutProps)
   const [showCreateProject, setShowCreateProject] = useState(false);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedFile, setSelectedFile] = useState<string | null>(null);
 
   // Use conversation hook for the selected project
   const { conversation, messages, createConversation } = useConversation(selectedProject?.id);
@@ -166,6 +168,12 @@ export function DashboardLayout({ initialUser, onLogout }: DashboardLayoutProps)
     // TODO: Implement search functionality across files and conversations
   };
 
+  const handleFileSelect = (filePath: string) => {
+    setSelectedFile(filePath);
+    console.log('[dashboard] File selected:', filePath);
+    // TODO: Open file in editor or show file details
+  };
+
   // Transform conversation for ContextBar
   const contextBarConversation: Conversation | null = conversation ? {
     id: conversation.id,
@@ -189,7 +197,15 @@ export function DashboardLayout({ initialUser, onLogout }: DashboardLayoutProps)
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <>
+      {/* Floating Window Controller - At top level */}
+      <FloatingWindowController
+        projectId={selectedProject?.id}
+        onFileSelect={handleFileSelect}
+        selectedFile={selectedFile}
+      />
+      
+      <div className="min-h-screen bg-gray-50">
       {/* Dashboard Header */}
       <header className="bg-white/80 backdrop-blur-md border-b border-gray-200/50 sticky top-0 z-40">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -340,6 +356,7 @@ export function DashboardLayout({ initialUser, onLogout }: DashboardLayoutProps)
           userId={user.id}
         />
       )}
-    </div>
+      </div>
+    </>
   );
 }

@@ -12,7 +12,15 @@ import {
   GitCommit,
   Loader2,
   ExternalLink,
-  Eye
+  Eye,
+  Code,
+  Settings,
+  Zap,
+  Package,
+  Rocket,
+  ChevronDown,
+  ChevronRight,
+  RefreshCw
 } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
@@ -32,6 +40,11 @@ interface ActivityItem {
     conversationId?: string;
     filePath?: string;
     messageId?: string;
+    jobType?: string;
+    output?: string;
+    error?: string;
+    jobMetadata?: any;
+    userId?: string;
   };
 }
 
@@ -46,6 +59,7 @@ export function ActivityStream({ selectedProject, className = '' }: ActivityStre
   const [showAll, setShowAll] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [hasInitialized, setHasInitialized] = useState(false);
+  const [expandedCards, setExpandedCards] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     const loadActivities = async () => {
@@ -64,7 +78,7 @@ export function ActivityStream({ selectedProject, className = '' }: ActivityStre
           return;
         }
         
-        const response = await fetch(`http://localhost:4000/projects/${selectedProject.id}/activity?showAll=${showAll}`, {
+        const response = await fetch(`${process.env.NEXT_PUBLIC_ORCHESTRATOR_URL || 'http://localhost:4000'}/projects/${selectedProject.id}/activity?showAll=${showAll}`, {
           headers: {
             'Authorization': `Bearer ${session.access_token}`
           }
@@ -122,17 +136,33 @@ export function ActivityStream({ selectedProject, className = '' }: ActivityStre
 
   const getActivityIcon = (activity: ActivityItem) => {
     if (activity.type === 'job') {
-      switch (activity.status) {
-        case 'RUNNING':
-          return <Loader2 className="w-4 h-4 text-blue-500 animate-spin" />;
-        case 'COMPLETED':
-          return <CheckCircle className="w-4 h-4 text-green-500" />;
-        case 'FAILED':
-          return <AlertCircle className="w-4 h-4 text-red-500" />;
-        case 'CANCELLED':
-          return <Clock className="w-4 h-4 text-gray-500" />;
+      // First show status icon for running/failed states
+      if (activity.status === 'RUNNING') {
+        return <Loader2 className="w-4 h-4 text-blue-500 animate-spin" />;
+      }
+      if (activity.status === 'FAILED') {
+        return <AlertCircle className="w-4 h-4 text-red-500" />;
+      }
+      
+      // Then show job type specific icons
+      const jobType = activity.metadata?.jobType;
+      switch (jobType) {
+        case 'SCAFFOLD':
+          return <Settings className="w-4 h-4 text-purple-500" />;
+        case 'AI_ACTION':
+          return <Zap className="w-4 h-4 text-yellow-500" />;
+        case 'EDIT':
+          return <Code className="w-4 h-4 text-blue-500" />;
+        case 'TEST':
+          return <Play className="w-4 h-4 text-green-500" />;
+        case 'BUILD':
+          return <Package className="w-4 h-4 text-orange-500" />;
+        case 'DEPLOY':
+          return <Rocket className="w-4 h-4 text-indigo-500" />;
         default:
-          return <Clock className="w-4 h-4 text-yellow-500" />;
+          return activity.status === 'COMPLETED' 
+            ? <CheckCircle className="w-4 h-4 text-green-500" />
+            : <Clock className="w-4 h-4 text-gray-500" />;
       }
     }
     
@@ -179,6 +209,44 @@ export function ActivityStream({ selectedProject, className = '' }: ActivityStre
     if (diffMins < 60) return `${diffMins}m ago`;
     if (diffMins < 1440) return `${Math.floor(diffMins / 60)}h ago`;
     return `${Math.floor(diffMins / 1440)}d ago`;
+  };
+
+  const toggleExpanded = (activityId: string) => {
+    const newExpanded = new Set(expandedCards);
+    if (newExpanded.has(activityId)) {
+      newExpanded.delete(activityId);
+    } else {
+      newExpanded.add(activityId);
+    }
+    setExpandedCards(newExpanded);
+  };
+
+  const getJobTypeDescription = (jobType: string) => {
+    const descriptions: { [key: string]: string } = {
+      'SCAFFOLD': 'Setting up project structure and dependencies',
+      'AI_ACTION': 'AI-powered code generation and modification',
+      'EDIT': 'Manual code editing and file modifications',
+      'TEST': 'Running tests and validation checks',
+      'BUILD': 'Compiling and building the project',
+      'DEPLOY': 'Deploying to production environment'
+    };
+    return descriptions[jobType] || jobType;
+  };
+
+  const formatOutput = (output: string | undefined) => {
+    if (!output) return null;
+    try {
+      const parsed = JSON.parse(output);
+      if (parsed.actions && Array.isArray(parsed.actions)) {
+        return `Generated ${parsed.actions.length} action(s)`;
+      }
+      if (parsed.files && Array.isArray(parsed.files)) {
+        return `Modified ${parsed.files.length} file(s)`;
+      }
+    } catch {
+      // Not JSON, return truncated string
+    }
+    return output.length > 100 ? output.substring(0, 100) + '...' : output;
   };
 
   const handleViewActivity = (activity: ActivityItem) => {
@@ -255,41 +323,126 @@ export function ActivityStream({ selectedProject, className = '' }: ActivityStre
           </div>
         ) : (
           <div className="space-y-2 flex-1 overflow-y-auto pr-2">
-            {displayedActivities.map((activity) => (
-              <Card key={activity.id} className="border-l-4 border-l-blue-500/20">
-                <CardContent className="!p-6">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-3 min-w-0 flex-1">
-                      {getActivityIcon(activity)}
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center space-x-2 mb-1">
-                          <p className="text-sm font-medium">{activity.title}</p>
-                          {getStatusBadge(activity)}
-                        </div>
-                        <p className="text-xs text-muted-foreground line-clamp-2">
-                          {activity.description}
-                        </p>
-                        <p className="text-xs text-muted-foreground mt-1">
-                          {getRelativeTime(activity.timestamp)}
-                        </p>
-                      </div>
-                    </div>
+            {displayedActivities.map((activity) => {
+              const isExpanded = expandedCards.has(activity.id);
+              const hasDetails = activity.metadata?.output || activity.metadata?.error || activity.metadata?.jobType;
+              
+              return (
+                <Card key={activity.id} className="border-l-4 border-l-blue-500/20 overflow-hidden">
+                  <CardContent className="!p-3">
+                    {/* Status indicator bar */}
+                    <div className={`absolute left-0 top-0 bottom-0 w-1 ${
+                      activity.status === 'COMPLETED' ? 'bg-green-400' :
+                      activity.status === 'RUNNING' ? 'bg-blue-400' :
+                      activity.status === 'FAILED' ? 'bg-red-400' :
+                      activity.status === 'PENDING' ? 'bg-yellow-400' :
+                      'bg-gray-300'
+                    }`} />
                     
-                    {activity.metadata?.jobId && (
-                      <Button 
-                        variant="ghost" 
-                        size="sm" 
-                        className="p-1"
-                        title="View details"
-                        onClick={() => handleViewActivity(activity)}
-                      >
-                        <Eye className="w-3 h-3" />
-                      </Button>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
+                    {/* Main card content */}
+                    <div 
+                      className={`${hasDetails ? 'cursor-pointer' : ''}`}
+                      onClick={() => hasDetails && toggleExpanded(activity.id)}
+                    >
+                      <div className="flex items-start space-x-3">
+                        <div className="flex-shrink-0 mt-1">
+                          {getActivityIcon(activity)}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-start justify-between mb-1">
+                            <div className="flex items-center space-x-2">
+                              <h4 className="text-sm font-semibold text-gray-900">
+                                {activity.title}
+                              </h4>
+                              {hasDetails && (
+                                <button className="text-gray-400 hover:text-gray-600">
+                                  {isExpanded ? (
+                                    <ChevronDown className="w-3 h-3" />
+                                  ) : (
+                                    <ChevronRight className="w-3 h-3" />
+                                  )}
+                                </button>
+                              )}
+                            </div>
+                            <span className="text-xs text-gray-500 flex-shrink-0 mt-0.5">
+                              {getRelativeTime(activity.timestamp)}
+                            </span>
+                          </div>
+                          
+                          {/* Job type description for jobs */}
+                          {activity.metadata?.jobType && (
+                            <p className="text-xs text-gray-500 mb-1">
+                              {getJobTypeDescription(activity.metadata.jobType)}
+                            </p>
+                          )}
+                          
+                          <p className="text-xs text-gray-600 leading-relaxed mb-2">
+                            {activity.description}
+                          </p>
+                          
+                          {/* Status badge and quick info */}
+                          <div className="flex items-center justify-between">
+                            {activity.status && (
+                              <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                                activity.status === 'COMPLETED' ? 'bg-green-100 text-green-800' :
+                                activity.status === 'RUNNING' ? 'bg-blue-100 text-blue-800' :
+                                activity.status === 'FAILED' ? 'bg-red-100 text-red-800' :
+                                activity.status === 'PENDING' ? 'bg-yellow-100 text-yellow-800' :
+                                'bg-gray-100 text-gray-800'
+                              }`}>
+                                {activity.status.toLowerCase()}
+                              </span>
+                            )}
+                            
+                            {/* Quick output summary */}
+                            {activity.metadata?.output && !isExpanded && (
+                              <span className="text-xs text-gray-500">
+                                {formatOutput(activity.metadata.output)}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                      
+                      {/* Expanded details */}
+                      {isExpanded && hasDetails && (
+                        <div className="mt-3 pt-3 border-t border-gray-100 space-y-2">
+                          {activity.metadata?.output && (
+                            <div>
+                              <div className="text-xs font-medium text-gray-700 mb-1">Output:</div>
+                              <div className="text-xs text-gray-600 bg-gray-50 p-2 rounded font-mono">
+                                {activity.metadata.output.length > 500 
+                                  ? activity.metadata.output.substring(0, 500) + '...'
+                                  : activity.metadata.output
+                                }
+                              </div>
+                            </div>
+                          )}
+                          
+                          {activity.metadata?.error && (
+                            <div>
+                              <div className="text-xs font-medium text-red-700 mb-1">Error:</div>
+                              <div className="text-xs text-red-600 bg-red-50 p-2 rounded font-mono">
+                                {activity.metadata.error}
+                              </div>
+                            </div>
+                          )}
+                          
+                          {activity.metadata?.jobMetadata && (
+                            <div>
+                              <div className="text-xs font-medium text-gray-700 mb-1">Metadata:</div>
+                              <div className="text-xs text-gray-600 bg-gray-50 p-2 rounded font-mono">
+                                {JSON.stringify(activity.metadata.jobMetadata, null, 2)}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
           </div>
         )}
       </div>

@@ -73,7 +73,7 @@ export function ProjectFileExplorer({
 
       const filePath = parentPath ? `${parentPath}/${fileName}` : fileName;
       
-      const response = await fetch(`http://localhost:4000/projects/${projectId}/files/create`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_ORCHESTRATOR_URL || 'http://localhost:4000'}/projects/${projectId}/files/create`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${session.access_token}`,
@@ -106,7 +106,7 @@ export function ProjectFileExplorer({
 
       const folderPath = parentPath ? `${parentPath}/${folderName}` : folderName;
       
-      const response = await fetch(`http://localhost:4000/projects/${projectId}/files/create`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_ORCHESTRATOR_URL || 'http://localhost:4000'}/projects/${projectId}/files/create`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${session.access_token}`,
@@ -133,7 +133,7 @@ export function ProjectFileExplorer({
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) return;
 
-      const response = await fetch(`http://localhost:4000/projects/${projectId}/files/${encodeURIComponent(filePath)}`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_ORCHESTRATOR_URL || 'http://localhost:4000'}/projects/${projectId}/files/${encodeURIComponent(filePath)}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${session.access_token}`,
@@ -156,7 +156,7 @@ export function ProjectFileExplorer({
       if (!session) return;
 
       // Delete the folder by deleting all files in it (Supabase doesn't have folder concept)
-      const response = await fetch(`http://localhost:4000/projects/${projectId}/files/delete-folder`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_ORCHESTRATOR_URL || 'http://localhost:4000'}/projects/${projectId}/files/delete-folder`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${session.access_token}`,
@@ -185,7 +185,7 @@ export function ProjectFileExplorer({
       if (!session) return;
 
       // Check for active scaffold jobs
-      const response = await fetch(`http://localhost:4000/projects/${projectId}/jobs?type=SCAFFOLD&status=PENDING,RUNNING`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_ORCHESTRATOR_URL || 'http://localhost:4000'}/projects/${projectId}/jobs?type=SCAFFOLD&status=PENDING,RUNNING`, {
         headers: {
           'Authorization': `Bearer ${session.access_token}`
         }
@@ -224,7 +224,7 @@ export function ProjectFileExplorer({
       }
 
       if (!silent) console.log('[ProjectFileExplorer] Making API request for files...');
-      const response = await fetch(`http://localhost:4000/projects/${projectId}/files/tree`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_ORCHESTRATOR_URL || 'http://localhost:4000'}/projects/${projectId}/files/tree`, {
         headers: {
           'Authorization': `Bearer ${session.access_token}`
         }
