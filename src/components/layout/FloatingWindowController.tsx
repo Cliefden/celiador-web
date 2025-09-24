@@ -21,6 +21,10 @@ export function FloatingWindowController({
 
   const openWindow = (content: FloatingWindowContent) => {
     setActiveWindow(content);
+    
+    // Dispatch event to notify other components that a floating window opened
+    const event = new CustomEvent('floating-window-opened', { detail: { content } });
+    window.dispatchEvent(event);
   };
 
   const closeWindow = () => {

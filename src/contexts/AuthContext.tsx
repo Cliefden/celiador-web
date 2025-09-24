@@ -137,12 +137,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           }
         );
 
+        // Auth initialization complete
+        if (isMounted) {
+          console.log('AuthContext: Auth initialization complete, setting loading to false');
+          setIsLoading(false);
+        }
+
         return () => subscription.unsubscribe();
       } catch (error) {
         console.error('AuthContext: Error initializing auth:', error);
-      } finally {
         if (isMounted) {
-          console.log('AuthContext: Auth initialization complete, setting loading to false');
+          console.log('AuthContext: Error occurred, setting loading to false');
           setIsLoading(false);
         }
       }
@@ -156,7 +161,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     }, 10000); // Increased to 10 seconds for debugging
 
-    initializeAuth().finally(() => {
+    initializeAuth().then(() => {
+      clearTimeout(timeoutId);
+    }).catch((error) => {
+      console.error('AuthContext: initializeAuth failed:', error);
       clearTimeout(timeoutId);
     });
     

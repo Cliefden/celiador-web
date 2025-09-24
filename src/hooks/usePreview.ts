@@ -29,14 +29,19 @@ export function usePreview(projectId: string | null) {
 
   // Load existing preview for project
   const loadPreview = useCallback(async () => {
-    if (!projectId) return;
+    if (!projectId) {
+      console.log('[usePreview] No projectId, skipping load');
+      return;
+    }
 
     try {
       setLoading(true);
       setError(null);
+      console.log('[usePreview] Loading preview for project:', projectId);
 
       const data = await ApiClient.listPreviews(projectId);
       const previews = data.previews || [];
+      console.log('[usePreview] Found previews:', previews.length);
       
       // Get the most recent active preview
       const activePreview = previews
@@ -47,7 +52,16 @@ export function usePreview(projectId: string | null) {
 
       if (activePreview) {
         setPreview(activePreview);
-        console.log('[usePreview] Loaded existing preview:', activePreview.id);
+        console.log('[usePreview] Loaded existing preview:', activePreview.id, 'status:', activePreview.status);
+        
+        // If preview is running, we're done. If it's starting/syncing, poll for updates
+        if (activePreview.status === 'starting' || activePreview.status === 'syncing') {
+          console.log('[usePreview] Preview is starting/syncing, polling for updates');
+          pollPreviewStatus(activePreview.id);
+        }
+      } else {
+        console.log('[usePreview] No active preview found');
+        setPreview(null);
       }
     } catch (error) {
       console.error('[usePreview] Error loading preview:', error);
@@ -58,7 +72,7 @@ export function usePreview(projectId: string | null) {
     } finally {
       setLoading(false);
     }
-  }, [projectId]);
+  }, [projectId]); // pollPreviewStatus is defined later, will be handled in the callback
 
   // Start a new preview
   const startPreview = useCallback(async () => {
@@ -158,7 +172,8 @@ export function usePreview(projectId: string | null) {
     if (projectId) {
       loadPreview();
     }
-  }, [loadPreview]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectId]); // Only depend on projectId, not loadPreview to avoid infinite re-renders
 
   // Cleanup on unmount
   useEffect(() => {

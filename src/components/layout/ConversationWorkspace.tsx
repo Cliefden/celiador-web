@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { ConversationPanel } from '../conversation/ConversationPanel';
 import { ProjectFileExplorer } from '../file-tree/ProjectFileExplorer';
 import { IntegrationSetup } from '../integrations/IntegrationSetup';
@@ -60,12 +60,49 @@ export function ConversationWorkspace({ selectedProject }: ConversationWorkspace
   const [fullscreenEditor, setFullscreenEditor] = useState(false);
   const [previewCollapsed, setPreviewCollapsed] = useState(false);
   const [inspectionMode, setInspectionMode] = useState(false);
+  const previewIframeRef = useRef<HTMLIFrameElement>(null);
   const [commandsCollapsed, setCommandsCollapsed] = useState(false);
 
   // Inspection mode toggle
   const toggleInspectionMode = () => {
-    setInspectionMode(prev => !prev);
+    const newMode = !inspectionMode;
+    setInspectionMode(newMode);
+    
+    // Clear selection when disabling inspection mode
+    if (!newMode) {
+      setSelectedElement(null);
+    }
+
+    console.log(`🔄 ConversationWorkspace: Toggling inspection mode to ${newMode}`);
   };
+
+  // Listen for messages from same-origin preview iframe
+  useEffect(() => {
+    const handleIframeMessage = (event: MessageEvent) => {
+      // Only accept messages from same origin
+      if (event.origin !== window.location.origin) {
+        console.log('🚫 ConversationWorkspace: Ignoring message from different origin:', event.origin);
+        return;
+      }
+
+      if (event.data.type === 'ELEMENT_SELECTED') {
+        console.log('[ConversationWorkspace] Element selected from same-origin iframe:', event.data.element);
+        setSelectedElement(event.data.element);
+        
+        const element = event.data.element;
+        const elementName = element.componentName || element.type;
+        console.log(`✅ Selected element: ${elementName} (${element.selector})`);
+        
+      } else if (event.data.type === 'ELEMENTS_MAPPED') {
+        console.log('[ConversationWorkspace] Elements mapped from same-origin iframe:', event.data.elements?.length || 0);
+        // Store available elements for inspection info display if needed
+      }
+    };
+
+    console.log('🎧 ConversationWorkspace: Setting up same-origin message listener');
+    window.addEventListener('message', handleIframeMessage);
+    return () => window.removeEventListener('message', handleIframeMessage);
+  }, []);
   const [claudeCodeCollapsed, setClaudeCodeCollapsed] = useState(false);
 
   // Use preview hook
@@ -266,6 +303,7 @@ export function ConversationWorkspace({ selectedProject }: ConversationWorkspace
               error={previewError}
               inspectionMode={inspectionMode}
               onToggleInspection={toggleInspectionMode}
+              iframeRef={previewIframeRef}
             />
           </TabsContent>
 
@@ -508,6 +546,7 @@ export function ConversationWorkspace({ selectedProject }: ConversationWorkspace
               error={previewError}
               inspectionMode={inspectionMode}
               onToggleInspection={toggleInspectionMode}
+              iframeRef={previewIframeRef}
             />
           </div>
         )}

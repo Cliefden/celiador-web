@@ -1,5 +1,7 @@
-// Inspection script that gets injected into the preview iframe
-// This script enables UI element detection and selection
+// DISABLED: Inspection script completely disabled to prevent CORS errors
+// This script was causing cross-origin violations when injected into preview iframe
+
+console.log('🚫 CeliadorInspector disabled to prevent CORS errors');
 
 interface UIElement {
   id: string;
@@ -27,162 +29,33 @@ class CeliadorInspector {
   private selectedElement: UIElement | null = null;
 
   constructor() {
-    this.setupMessageListener();
-    this.setupStyleOverrides();
+    console.log('🚫 CeliadorInspector constructor disabled');
+    // All functionality disabled to prevent CORS errors
   }
 
   private setupMessageListener(): void {
-    window.addEventListener('message', (event) => {
-      if (event.data.type === 'ENABLE_INSPECTION') {
-        this.enableInspection();
-      } else if (event.data.type === 'DISABLE_INSPECTION') {
-        this.disableInspection();
-      }
-    });
+    console.log('🚫 setupMessageListener disabled to prevent CORS errors');
+    // Message listener disabled to avoid cross-origin violations
   }
 
   private setupStyleOverrides(): void {
-    // Inject CSS for inspection overlay
-    const style = document.createElement('style');
-    style.textContent = `
-      .celiador-inspection-overlay {
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        pointer-events: none;
-        z-index: 9999;
-      }
-      
-      .celiador-element-highlight {
-        position: absolute;
-        border: 2px solid #8b5cf6;
-        background: rgba(139, 92, 246, 0.1);
-        cursor: pointer;
-        pointer-events: auto;
-        transition: all 0.2s ease;
-        box-sizing: border-box;
-      }
-      
-      .celiador-element-highlight:hover {
-        border-color: #7c3aed;
-        background: rgba(124, 58, 237, 0.2);
-        box-shadow: 0 0 0 2px rgba(124, 58, 237, 0.3);
-      }
-      
-      .celiador-element-highlight.selected {
-        border-color: #fbbf24;
-        background: rgba(251, 191, 36, 0.2);
-        box-shadow: 0 0 0 2px rgba(251, 191, 36, 0.5);
-      }
-      
-      .celiador-element-tooltip {
-        position: absolute;
-        top: -24px;
-        left: 0;
-        background: #1f2937;
-        color: white;
-        padding: 4px 8px;
-        border-radius: 4px;
-        font-size: 12px;
-        font-family: system-ui, sans-serif;
-        white-space: nowrap;
-        pointer-events: none;
-        z-index: 10000;
-      }
-      
-      .celiador-element-tooltip::before {
-        content: '';
-        position: absolute;
-        top: 100%;
-        left: 8px;
-        border: 4px solid transparent;
-        border-top-color: #1f2937;
-      }
-    `;
-    document.head.appendChild(style);
+    console.log('🚫 setupStyleOverrides disabled to prevent CORS errors');
+    // Style injection disabled to avoid DOM manipulation
   }
 
   private enableInspection(): void {
-    if (this.isEnabled) return;
-    
-    this.isEnabled = true;
-    this.mapDOMElements();
-    this.createOverlay();
-    this.sendElementsToParent();
+    console.log('🚫 enableInspection disabled to prevent CORS errors');
+    // All inspection functionality disabled to avoid DOM access
   }
 
   private disableInspection(): void {
-    if (!this.isEnabled) return;
-    
-    this.isEnabled = false;
-    this.removeOverlay();
-    this.elements = [];
-    this.hoveredElement = null;
-    this.selectedElement = null;
+    console.log('🚫 disableInspection disabled to prevent CORS errors');
+    // All inspection functionality disabled
   }
 
   private mapDOMElements(): void {
-    this.elements = [];
-    
-    // Find all interactive/significant elements
-    const selectors = [
-      'button',
-      'input',
-      'textarea',
-      'select',
-      'a[href]',
-      '[onclick]',
-      '[role="button"]',
-      '.btn',
-      '.button',
-      '[data-testid]',
-      '[data-component]',
-      'nav',
-      'header',
-      'footer',
-      'main',
-      'section',
-      'article',
-      'aside',
-      'div[class*="container"]',
-      'div[class*="wrapper"]',
-      'div[class*="card"]',
-      'div[class*="modal"]',
-      'form'
-    ];
-
-    const elements = document.querySelectorAll(selectors.join(', '));
-    
-    elements.forEach((el, index) => {
-      const rect = el.getBoundingClientRect();
-      
-      // Skip tiny or invisible elements
-      if (rect.width < 10 || rect.height < 10) return;
-      
-      // Skip elements that are completely outside viewport
-      if (rect.bottom < 0 || rect.top > window.innerHeight || 
-          rect.right < 0 || rect.left > window.innerWidth) return;
-
-      const element: UIElement = {
-        id: `celiador-element-${index}`,
-        type: el.tagName.toLowerCase(),
-        selector: this.generateSelector(el),
-        componentName: this.guessComponentName(el),
-        boundingBox: {
-          x: rect.left + window.scrollX,
-          y: rect.top + window.scrollY,
-          width: rect.width,
-          height: rect.height,
-        },
-        metadata: {
-          props: this.extractProps(el)
-        }
-      };
-
-      this.elements.push(element);
-    });
+    console.log('🚫 mapDOMElements disabled to prevent CORS errors');
+    // DOM element mapping disabled to avoid getBoundingClientRect and querySelectorAll calls
   }
 
   private generateSelector(element: Element): string {
@@ -324,32 +197,25 @@ class CeliadorInspector {
   }
 
   private selectElement(element: UIElement): void {
-    this.selectedElement = element;
-    this.renderElementHighlights(); // Re-render to show selection
-    
-    // Send selection to parent
-    window.parent.postMessage({
-      type: 'ELEMENT_SELECTED',
-      element: element
-    }, '*');
+    console.log('🚫 selectElement disabled to prevent CORS errors');
+    // Element selection and postMessage disabled to avoid cross-origin violations
   }
 
   private sendElementsToParent(): void {
-    window.parent.postMessage({
-      type: 'ELEMENTS_MAPPED',
-      elements: this.elements
-    }, '*');
+    console.log('🚫 sendElementsToParent disabled to prevent CORS errors');
+    // postMessage disabled to avoid cross-origin violations
   }
 }
 
-// Initialize inspector when DOM is ready
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', () => {
-    window.celiadorInspector = new CeliadorInspector();
-  });
-} else {
-  window.celiadorInspector = new CeliadorInspector();
-}
+// DISABLED: Inspector initialization completely disabled to prevent CORS errors
+console.log('🚫 CeliadorInspector initialization disabled to prevent CORS errors');
+
+// Mock inspector for compatibility
+window.celiadorInspector = {
+  isEnabled: false,
+  enableInspection: () => console.log('🚫 Inspector disabled'),
+  disableInspection: () => console.log('🚫 Inspector disabled')
+} as any;
 
 // Add to window for external access
 declare global {

@@ -25,7 +25,7 @@ import {
   Search,
   MousePointer
 } from 'lucide-react';
-import { SettingsPanel } from '../settings/SettingsPanel';
+import { SettingsMenuItem } from '../settings/SettingsPanel';
 
 interface User {
   id: string;
@@ -87,15 +87,18 @@ export function SimpleDashboard({ initialUser, onLogout }: SimpleDashboardProps)
   const [uiElements, setUIElements] = useState<UIElement[]>([]);
   const [iframeLoaded, setIframeLoaded] = useState(false);
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
+  const [currentPreviewUrl, setCurrentPreviewUrl] = useState<string | null>(null);
   const userMenuRef = useRef<HTMLDivElement>(null);
   const projectDropdownRef = useRef<HTMLDivElement>(null);
   const previewIframeRef = useRef<HTMLIFrameElement>(null);
   
-  // Listen for messages from the preview iframe
+  // Listen for messages from same-origin preview iframe
   useEffect(() => {
     const handlePreviewMessage = (event: MessageEvent) => {
+      console.log('📨 Received message from:', event.origin, 'Type:', event.data?.type);
+
       if (event.data.type === 'ELEMENTS_MAPPED') {
-        console.log('📥 Received elements from preview iframe:', event.data.elements);
+        console.log('📥 Received elements from preview iframe:', event.data.elements?.length || 0);
         setUIElements(event.data.elements || []);
       } else if (event.data.type === 'ELEMENT_SELECTED') {
         console.log('🎯 Element selected in preview iframe:', event.data.element);
@@ -103,6 +106,7 @@ export function SimpleDashboard({ initialUser, onLogout }: SimpleDashboardProps)
       }
     };
 
+    console.log('🎧 Setting up preview message listener');
     window.addEventListener('message', handlePreviewMessage);
     return () => window.removeEventListener('message', handlePreviewMessage);
   }, []);
@@ -166,9 +170,25 @@ export function SimpleDashboard({ initialUser, onLogout }: SimpleDashboardProps)
     setIframeLoaded(false);
   }, [preview?.url, selectedProject?.id]);
 
-  // Listen for messages from preview iframe
+  // Set preview URL when preview changes
+  useEffect(() => {
+    if (preview?.status === 'running') {
+      const url = getPreviewUrl();
+      setCurrentPreviewUrl(url);
+    } else {
+      setCurrentPreviewUrl(null);
+    }
+  }, [preview?.url, preview?.status]);
+
+
+  // Listen for messages from same-origin preview iframe (secondary handler)
   useEffect(() => {
     const handleIframeMessage = (event: MessageEvent) => {
+      // Only accept messages from same origin
+      if (event.origin !== window.location.origin) {
+        return;
+      }
+
       if (event.data.type === 'ELEMENT_SELECTED') {
         const element: UIElement = event.data.element;
         handleElementSelection(element);
@@ -270,25 +290,29 @@ The user has visually selected this specific UI element and wants to modify it. 
       setInspectionMode(newMode);
       setSelectedElement(null);
       
-      // Send message to iframe to enable/disable inspection
+      // Send message to same-origin iframe - no CORS issues!
       if (previewIframeRef.current && previewIframeRef.current.contentWindow) {
         const message = newMode ? 'ENABLE_INSPECTION' : 'DISABLE_INSPECTION';
-        console.log(`📡 Sending ${message} to preview iframe`);
-        previewIframeRef.current.contentWindow.postMessage({ type: message }, '*');
+        console.log(`📡 Sending ${message} to same-origin preview iframe`);
+        
+        try {
+          previewIframeRef.current.contentWindow.postMessage(
+            { type: message }, 
+            '*'
+          );
+          console.log('✅ Message sent to iframe successfully');
+        } catch (error) {
+          console.warn('⚠️ Failed to send message to same-origin iframe:', error);
+        }
       } else {
         console.warn('⚠️ Preview iframe not available for inspection toggle');
       }
       
       if (newMode) {
-        console.log('✅ Inspection mode enabled');
+        console.log('✅ Inspection mode enabled (real inspection)');
       } else {
         console.log('❌ Inspection mode disabled'); 
       }
-      
-      // Force a small re-render to ensure state updates
-      setTimeout(() => {
-        console.log(`🔍 Current inspection mode after toggle: ${newMode}`);
-      }, 100);
       
     } catch (error) {
       console.error('❌ Error toggling inspection mode:', error);
@@ -311,6 +335,9 @@ The user has visually selected this specific UI element and wants to modify it. 
 
   const getPreviewUrl = () => {
     if (!preview || preview.status !== 'running') return null;
+    
+    // Just return the direct URL to restore working state
+    console.log('📡 Using direct preview URL:', preview.url);
     return preview.url;
   };
 
@@ -393,9 +420,7 @@ The user has visually selected this specific UI element and wants to modify it. 
             
             {showUserMenu && (
               <div className="absolute top-12 right-0 bg-white rounded-lg shadow-lg border border-gray-200 py-2 min-w-48">
-                <div className="px-4 py-2 border-b border-gray-100">
-                  <SettingsPanel />
-                </div>
+                <SettingsMenuItem />
                 <button
                   onClick={onLogout}
                   className="flex items-center space-x-2 w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
@@ -694,16 +719,15 @@ The user has visually selected this specific UI element and wants to modify it. 
 
               {/* Preview Content */}
               <div className="flex-1 bg-gray-100 p-6 flex items-center justify-center overflow-hidden">
-                {getPreviewUrl() ? (
+                {currentPreviewUrl ? (
                   <div className={`bg-white rounded-xl shadow-lg overflow-hidden transition-all ${getDeviceClasses()} relative`}>
                     <iframe
                       ref={previewIframeRef}
-                      src={getPreviewUrl()!}
+                      src={currentPreviewUrl}
                       className="w-full h-full border-0"
                       title="App Preview"
                       onLoad={() => {
-                        console.log('🎬 Preview iframe loaded');
-                        // Faster response - reduced delay since we now have better preview readiness detection
+                        console.log('🎬 Preview iframe loaded with URL:', currentPreviewUrl);
                         setTimeout(() => {
                           console.log('✅ Preview content should be ready');
                           setIframeLoaded(true);

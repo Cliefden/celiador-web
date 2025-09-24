@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
@@ -77,10 +77,96 @@ export function CreateProjectModal({ isOpen, onClose, onProjectCreated, userId }
   const [error, setError] = useState('');
   const [templates, setTemplates] = useState<Template[]>([]);
   const [loadingTemplates, setLoadingTemplates] = useState(true);
+  
+  // Add authentication check
+  const [isAuthChecking, setIsAuthChecking] = useState(true);
+  
+  // Ref to maintain scroll position
+  const templateScrollRef = useRef<HTMLDivElement>(null);
+  
+  // Handle template selection with scroll position preservation
+  const handleTemplateSelect = (selectedTemplateKey: string) => {
+    // Store current scroll position
+    const currentScrollTop = templateScrollRef.current?.scrollTop || 0;
+    
+    // Update template selection
+    setTemplateKey(selectedTemplateKey);
+    
+    // Restore scroll position after re-render
+    setTimeout(() => {
+      if (templateScrollRef.current) {
+        templateScrollRef.current.scrollTop = currentScrollTop;
+      }
+    }, 0);
+  };
+
+  // Check authentication when modal opens
+  useEffect(() => {
+    const checkAuth = async () => {
+      if (!isOpen) {
+        setIsAuthChecking(false);
+        return;
+      }
+      
+      setIsAuthChecking(true);
+      setError(''); // Clear any previous errors
+      
+      try {
+        console.log('CreateProjectModal: Checking authentication...');
+        const { data: { session }, error } = await supabase.auth.getSession();
+        
+        console.log('CreateProjectModal: Auth check result:', { 
+          hasSession: !!session, 
+          hasUser: !!session?.user, 
+          error: error?.message 
+        });
+        
+        if (error) {
+          console.error('CreateProjectModal: Session error:', error);
+          setError('Authentication error. Please refresh the page and try again.');
+          setIsAuthChecking(false);
+          return;
+        }
+        
+        if (!session || !session.user) {
+          console.log('CreateProjectModal: No session found');
+          setError('You must be signed in to create a project. Please sign in and try again.');
+          setIsAuthChecking(false);
+          return;
+        }
+        
+        console.log('CreateProjectModal: Authentication successful');
+        setIsAuthChecking(false);
+      } catch (error) {
+        console.error('CreateProjectModal: Auth check failed:', error);
+        setError('Authentication check failed. Please refresh the page and try again.');
+        setIsAuthChecking(false);
+      }
+    };
+
+    // Add timeout to prevent infinite checking
+    const timeoutId = setTimeout(() => {
+      console.log('CreateProjectModal: Auth check timeout reached');
+      setError('Authentication check timed out. Please close the modal and try again.');
+      setIsAuthChecking(false);
+    }, 5000);
+
+    checkAuth().then(() => {
+      clearTimeout(timeoutId);
+    }).catch(() => {
+      clearTimeout(timeoutId);
+    });
+
+    return () => {
+      clearTimeout(timeoutId);
+    };
+  }, [isOpen]);
 
   // Fetch templates from Supabase
   useEffect(() => {
     const fetchTemplates = async () => {
+      if (isAuthChecking) return; // Don't fetch templates until auth is checked
+      
       try {
         setLoadingTemplates(true);
         
@@ -96,24 +182,24 @@ export function CreateProjectModal({ isOpen, onClose, onProjectCreated, userId }
 
         // Transform orchestrator template format to expected frontend format
         const transformedTemplates = orchestratorTemplates.map((template: any) => ({
-          id: template.key,
-          template_key: template.key,
+          id: template.template_key || template.key,
+          template_key: template.template_key || template.key,
           name: template.name,
           description: template.description,
-          long_description: template.description,
-          difficulty: 'intermediate',
+          long_description: template.long_description || template.description,
+          difficulty: template.difficulty || 'intermediate',
           icon: template.icon,
-          emoji: template.name.split(' ')[0],
-          color_primary: '#3B82F6',
-          color_secondary: '#8B5CF6',
-          rating: 0,
+          emoji: template.emoji,
+          color_primary: template.color_primary || '#3B82F6',
+          color_secondary: template.color_secondary || '#8B5CF6',
+          rating: template.rating || 0,
           version: template.version || '1.0.0',
-          storage_path: template.key,
-          is_active: template.isActive,
-          sort_order: 0,
-          categories: [],
+          storage_path: template.storage_path || template.key,
+          is_active: template.is_active !== undefined ? template.is_active : true,
+          sort_order: template.sort_order || 0,
+          categories: template.categories || [],
           features: template.features || [],
-          tech_stack: []
+          tech_stack: template.tech_stack || []
         }));
 
         setTemplates(transformedTemplates);
@@ -132,10 +218,10 @@ export function CreateProjectModal({ isOpen, onClose, onProjectCreated, userId }
       }
     };
 
-    if (isOpen) {
+    if (isOpen && !isAuthChecking && templates.length === 0) {
       fetchTemplates();
     }
-  }, [isOpen, templateKey]);
+  }, [isOpen, isAuthChecking, templates.length]);
 
   if (!isOpen) return null;
 
@@ -148,10 +234,18 @@ export function CreateProjectModal({ isOpen, onClose, onProjectCreated, userId }
     setError('');
     
     try {
-      const { data: { session } } = await supabase.auth.getSession();
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
       
-      if (!session?.access_token) {
-        throw new Error('No access token available');
+      if (sessionError) {
+        throw new Error(`Authentication error: ${sessionError.message}`);
+      }
+      
+      if (!session) {
+        throw new Error('Please sign in to create a project');
+      }
+      
+      if (!session.access_token) {
+        throw new Error('Invalid authentication session. Please sign in again.');
       }
 
       // Transform the data to match what the orchestrator expects
@@ -195,8 +289,8 @@ export function CreateProjectModal({ isOpen, onClose, onProjectCreated, userId }
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <Card className="w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      <Card className="w-full max-w-2xl max-h-[90vh] min-h-[600px] flex flex-col bg-white shadow-2xl border-0 overflow-hidden">
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4 bg-gradient-to-r from-blue-50 to-purple-50 rounded-t-lg">
           <div>
             <CardTitle className="text-xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
@@ -216,7 +310,7 @@ export function CreateProjectModal({ isOpen, onClose, onProjectCreated, userId }
             <X className="w-4 h-4" />
           </Button>
         </CardHeader>
-        <CardContent className="space-y-6">
+        <CardContent className="flex-1 overflow-y-auto space-y-6 bg-white">
           <form onSubmit={handleSubmit} className="space-y-6">
             {error && (
               <div className="bg-red-50 border border-red-200 rounded-md p-3">
@@ -259,30 +353,43 @@ export function CreateProjectModal({ isOpen, onClose, onProjectCreated, userId }
               </div>
               
 
-              <div className="grid gap-3 max-h-64 overflow-y-auto pr-2">
-                {loadingTemplates ? (
-                  <div className="text-center py-8 text-muted-foreground">
-                    Loading templates...
-                  </div>
-                ) : templates.length === 0 ? (
-                  <div className="text-center py-8 text-muted-foreground">
-                    No templates available
-                  </div>
-                ) : (
-                  templates.map((template) => (
+              <div className="flex-1 min-h-0 border border-gray-100 rounded-lg overflow-hidden">
+                <div ref={templateScrollRef} className="h-full overflow-y-auto p-3">
+                  {isAuthChecking ? (
+                    <div className="flex items-center justify-center h-48 text-muted-foreground">
+                      <div className="text-center">
+                        <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
+                        <p>Checking authentication...</p>
+                      </div>
+                    </div>
+                  ) : loadingTemplates ? (
+                    <div className="flex items-center justify-center h-48 text-muted-foreground">
+                      <div className="text-center">
+                        <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
+                        <p>Loading templates...</p>
+                      </div>
+                    </div>
+                  ) : templates.length === 0 ? (
+                    <div className="flex items-center justify-center h-48 text-muted-foreground">
+                      <p>No templates available</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {templates.map((template) => (
                     <div
                       key={template.template_key}
                       className={`relative border rounded-xl p-4 cursor-pointer transition-all duration-200 hover:shadow-md ${
                         templateKey === template.template_key
-                          ? 'border-primary text-white shadow-lg'
-                          : 'border-muted hover:border-muted-foreground/30 bg-white'
+                          ? 'border-white/30 text-white shadow-lg ring-2 ring-white/50'
+                          : 'border-white/20 text-white hover:border-white/40 hover:shadow-lg'
                       }`}
                       style={{
-                        background: templateKey === template.template_key 
-                          ? `linear-gradient(135deg, ${template.color_primary}, ${template.color_secondary || template.color_primary})`
-                          : undefined
+                        background: `linear-gradient(135deg, ${template.color_primary}, ${template.color_secondary || template.color_primary})`
                       }}
-                      onClick={() => setTemplateKey(template.template_key)}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        handleTemplateSelect(template.template_key);
+                      }}
                     >
                       <div className="flex items-start space-x-3">
                         <div className="flex-shrink-0 mt-0.5">
@@ -293,30 +400,26 @@ export function CreateProjectModal({ isOpen, onClose, onProjectCreated, userId }
                             <h3 className="text-sm font-semibold">{template.name}</h3>
                             <span className={`text-xs px-2 py-1 rounded-full ${
                               templateKey === template.template_key
-                                ? 'bg-white/20 text-white'
-                                : 'bg-muted text-muted-foreground'
+                                ? 'bg-white/30 text-white'
+                                : 'bg-white/20 text-white'
                             }`}>
                               {template.difficulty}
                             </span>
                             {template.rating > 0 && (
-                              <span className={`text-xs ${
-                                templateKey === template.template_key ? 'text-white/90' : 'text-muted-foreground'
-                              }`}>
+                              <span className="text-xs text-white/90">
                                 ⭐ {template.rating}
                               </span>
                             )}
                           </div>
-                          <p className={`text-xs mb-3 ${
-                            templateKey === template.template_key ? 'text-white/90' : 'text-muted-foreground'
-                          }`}>
+                          <p className="text-xs mb-3 text-white/90">
                             {template.description}
                           </p>
                           <div className="flex flex-wrap gap-1 mb-2">
                             <span
                               className={`text-xs px-2 py-1 rounded-full ${
                                 templateKey === template.template_key
-                                  ? 'bg-white/20 text-white'
-                                  : 'bg-muted text-muted-foreground'
+                                  ? 'bg-white/30 text-white'
+                                  : 'bg-white/20 text-white'
                               }`}
                             >
                               {template.difficulty}
@@ -324,8 +427,8 @@ export function CreateProjectModal({ isOpen, onClose, onProjectCreated, userId }
                             <span
                               className={`text-xs px-2 py-1 rounded-full ${
                                 templateKey === template.template_key
-                                  ? 'bg-white/20 text-white'
-                                  : 'bg-muted text-muted-foreground'
+                                  ? 'bg-white/30 text-white'
+                                  : 'bg-white/20 text-white'
                               }`}
                             >
                               v{template.version}
@@ -336,22 +439,26 @@ export function CreateProjectModal({ isOpen, onClose, onProjectCreated, userId }
                           <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
                             templateKey === template.template_key
                               ? 'border-white bg-white'
-                              : 'border-muted-foreground/30'
+                              : 'border-white/40'
                           }`}>
                             {templateKey === template.template_key && (
-                              <div className="w-2 h-2 rounded-full bg-gradient-to-r from-purple-500 to-pink-500" />
+                              <div className="w-2 h-2 rounded-full" style={{
+                                background: `linear-gradient(45deg, ${template.color_primary}, ${template.color_secondary || template.color_primary})`
+                              }} />
                             )}
                           </div>
                         </div>
                       </div>
                     </div>
-                  ))
-                )}
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
 
             {/* Submit Buttons */}
-            <div className="flex justify-end space-x-3 pt-4">
+            <div className="flex-shrink-0 flex justify-end space-x-3 pt-4 border-t border-gray-100 bg-white">
               <Button
                 type="button"
                 variant="outline"
@@ -363,7 +470,7 @@ export function CreateProjectModal({ isOpen, onClose, onProjectCreated, userId }
               </Button>
               <Button
                 type="submit"
-                disabled={isSubmitting || !name || !templateKey}
+                disabled={isSubmitting || !name || !templateKey || isAuthChecking || error.includes('sign')}
                 className="min-w-[140px] bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
               >
                 {isSubmitting ? (

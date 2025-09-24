@@ -1,268 +1,187 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { createPortal } from 'react-dom';
+import { useEffect, useState } from 'react';
 import { Settings, X } from 'lucide-react';
 import { Button } from '../ui/button';
 import { useSettings } from '../../contexts/SettingsContext';
+import { useSettingsPanel } from '../../contexts/SettingsPanelContext';
 
-function SettingsModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
+export function SettingsWindow() {
+  const { isOpen, closePanel } = useSettingsPanel();
   const { settings, updateSettings, isLoading, error } = useSettings();
+  const [isAnimating, setIsAnimating] = useState(true);
 
   useEffect(() => {
     if (isOpen) {
-      document.body.style.overflow = 'hidden';
-      return () => {
-        document.body.style.overflow = 'unset';
-      };
+      // Small delay to ensure DOM is ready, then slide in
+      const timer = setTimeout(() => setIsAnimating(false), 50);
+      return () => clearTimeout(timer);
     }
   }, [isOpen]);
 
-  if (!isOpen || typeof window === 'undefined') return null;
+  if (!isOpen) return null;
 
-  const handleClose = () => {
-    console.log('Modal closing via X button');
-    onClose();
-  };
-
-  const modalContent = (
-    <div 
-      style={{
-        position: 'fixed',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        backgroundColor: 'rgba(0, 0, 0, 0.8)',
-        zIndex: 2147483647,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: '20px'
-      }}
-    >
+  return (
+    <>
+      {/* Backdrop */}
       <div 
-        style={{
-          backgroundColor: 'white',
-          borderRadius: '12px',
-          width: '100%',
-          maxWidth: '900px',
-          maxHeight: '80vh',
-          display: 'flex',
-          flexDirection: 'column',
-          boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)'
-        }}
-        onClick={(e) => {
-          // Prevent any event bubbling that might trigger external close handlers
-          e.stopPropagation();
-          e.preventDefault();
-        }}
-      >
+        className={`fixed inset-0 bg-black/50 backdrop-blur-sm transition-opacity duration-300 z-[60] ${
+          isAnimating ? 'opacity-0' : 'opacity-100'
+        }`}
+        onClick={closePanel}
+      />
+      
+      {/* Settings Window */}
+      <div className={`
+        fixed right-0 top-0 h-full w-96 bg-white shadow-2xl z-[70]
+        transform transition-transform duration-300 ease-out
+        ${isAnimating ? 'translate-x-full' : 'translate-x-0'}
+        flex flex-col
+      `}>
         {/* Header */}
-        <div style={{
-          padding: '24px',
-          borderBottom: '1px solid #e5e7eb',
-          background: 'linear-gradient(to right, #dbeafe, #e0e7ff)',
-          borderRadius: '12px 12px 0 0',
-          position: 'relative'
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <div style={{
-              padding: '8px',
-              background: 'linear-gradient(to right, #2563eb, #4f46e5)',
-              borderRadius: '8px'
-            }}>
-              <Settings style={{ width: '20px', height: '20px', color: 'white' }} />
+        <div className="flex items-center justify-between p-4 border-b border-gray-200 bg-gray-50">
+          <div className="flex items-center space-x-3">
+            <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-500 rounded-lg flex items-center justify-center">
+              <Settings className="w-4 h-4 text-white" />
             </div>
             <div>
-              <h2 style={{ fontSize: '20px', fontWeight: '600', color: '#111827', margin: 0 }}>
-                Settings
-              </h2>
-              <p style={{ fontSize: '14px', color: '#6b7280', margin: 0 }}>
-                Customize your Celiador experience
-              </p>
+              <h2 className="font-semibold text-gray-900">Settings</h2>
+              <p className="text-xs text-gray-500">Customize your Celiador experience</p>
             </div>
           </div>
           <button
-            onClick={handleClose}
-            style={{
-              position: 'absolute',
-              top: '20px',
-              right: '20px',
-              width: '32px',
-              height: '32px',
-              border: 'none',
-              backgroundColor: 'rgba(255, 255, 255, 0.8)',
-              borderRadius: '6px',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontSize: '0'
-            }}
+            onClick={closePanel}
+            className="p-2 hover:bg-gray-200 rounded-lg transition-colors"
           >
-            <X style={{ width: '16px', height: '16px' }} />
+            <X className="w-4 h-4 text-gray-500" />
           </button>
         </div>
 
         {/* Content */}
-        <div style={{ 
-          flex: 1, 
-          overflow: 'auto', 
-          padding: '24px'
-        }}>
-          {isLoading ? (
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '200px' }}>
-              <p>Loading settings...</p>
-            </div>
-          ) : (
-            <div>
-              <h3 style={{ fontSize: '18px', fontWeight: '600', marginBottom: '16px', color: '#111827' }}>
-                🎨 Appearance Settings
-              </h3>
-              {error && (
-                <div style={{ 
-                  backgroundColor: '#fef2f2', 
-                  border: '1px solid #fecaca', 
-                  borderRadius: '8px', 
-                  padding: '12px', 
-                  marginBottom: '16px' 
-                }}>
-                  <p style={{ color: '#dc2626', fontSize: '14px', margin: 0 }}>
-                    ⚠️ API Connection Issue: {error}
-                  </p>
-                  <p style={{ color: '#7f1d1d', fontSize: '12px', margin: '4px 0 0 0' }}>
-                    Showing demo settings. Changes won't be saved until the API is connected.
-                  </p>
-                </div>
-              )}
-              
-              {/* Simple Theme Section */}
-              <div style={{ marginBottom: '32px' }}>
-                <h4 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '12px', color: '#111827' }}>
-                  Theme
-                </h4>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px' }}>
-                  {['light', 'dark', 'system'].map((theme) => (
-                    <button
-                      key={theme}
-                      onClick={() => updateSettings({ theme: theme as any })}
-                      style={{
-                        padding: '16px',
-                        borderRadius: '8px',
-                        border: '2px solid',
-                        borderColor: settings?.theme === theme ? '#3b82f6' : '#e5e7eb',
-                        backgroundColor: settings?.theme === theme ? '#eff6ff' : 'white',
-                        cursor: 'pointer',
-                        textAlign: 'center',
-                        fontSize: '14px',
-                        fontWeight: '500',
-                        textTransform: 'capitalize',
-                        color: settings?.theme === theme ? '#1e40af' : '#374151'
-                      }}
-                    >
-                      {theme}
-                    </button>
-                  ))}
-                </div>
+        <div className="flex-1 overflow-hidden">
+          <div className="h-full overflow-y-auto p-4">
+            {isLoading ? (
+              <div className="flex items-center justify-center h-64 text-gray-500">
+                <p>Loading settings...</p>
               </div>
-
-              {/* Font Size Section */}
-              <div style={{ marginBottom: '32px' }}>
-                <h4 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '12px', color: '#111827' }}>
-                  Editor Font Size: {settings?.editor_font_size || 14}px
-                </h4>
-                <input
-                  type="range"
-                  min="8"
-                  max="32"
-                  value={settings?.editor_font_size || 14}
-                  onChange={(e) => updateSettings({ editor_font_size: parseInt(e.target.value) })}
-                  style={{
-                    width: '100%',
-                    height: '6px',
-                    borderRadius: '3px',
-                    background: '#ddd',
-                    outline: 'none',
-                    cursor: 'pointer'
-                  }}
-                />
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: '#6b7280', marginTop: '4px' }}>
-                  <span>8px</span>
-                  <span>32px</span>
-                </div>
-              </div>
-
-              {/* Boolean Settings */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '16px' }}>
-                {[
-                  { key: 'editor_line_numbers', label: 'Line Numbers' },
-                  { key: 'editor_minimap', label: 'Minimap' },
-                  { key: 'auto_save_enabled', label: 'Auto Save' },
-                  { key: 'preview_auto_refresh', label: 'Auto Refresh' }
-                ].map(({ key, label }) => (
-                  <div key={key} style={{
-                    padding: '16px',
-                    border: '1px solid #e5e7eb',
-                    borderRadius: '8px',
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center'
-                  }}>
-                    <span style={{ fontSize: '14px', fontWeight: '500', color: '#374151' }}>
-                      {label}
-                    </span>
-                    <input
-                      type="checkbox"
-                      checked={settings?.[key] || false}
-                      onChange={(e) => updateSettings({ [key]: e.target.checked })}
-                      style={{
-                        width: '18px',
-                        height: '18px',
-                        cursor: 'pointer'
-                      }}
-                    />
+            ) : (
+              <div className="space-y-6">
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4">
+                    🎨 Appearance Settings
+                  </h3>
+                  {error && (
+                    <div className="bg-red-50 border border-red-200 rounded-lg p-3 mb-4">
+                      <p className="text-red-600 text-sm font-medium">
+                        ⚠️ API Connection Issue: {error}
+                      </p>
+                      <p className="text-red-500 text-xs mt-1">
+                        Showing demo settings. Changes won't be saved until the API is connected.
+                      </p>
+                    </div>
+                  )}
+                  
+                  {/* Theme Section */}
+                  <div className="mb-8">
+                    <h4 className="text-base font-semibold text-gray-900 mb-3">
+                      Theme
+                    </h4>
+                    <div className="grid grid-cols-3 gap-3">
+                      {['light', 'dark', 'system'].map((theme) => (
+                        <button
+                          key={theme}
+                          onClick={() => updateSettings({ theme: theme as any })}
+                          className={`p-4 rounded-lg border-2 text-center text-sm font-medium capitalize transition-all ${
+                            settings?.theme === theme 
+                              ? 'border-blue-500 bg-blue-50 text-blue-700' 
+                              : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300'
+                          }`}
+                        >
+                          {theme}
+                        </button>
+                      ))}
+                    </div>
                   </div>
-                ))}
+
+                  {/* Font Size Section */}
+                  <div className="mb-8">
+                    <h4 className="text-base font-semibold text-gray-900 mb-3">
+                      Editor Font Size: {settings?.editor_font_size || 14}px
+                    </h4>
+                    <input
+                      type="range"
+                      min="8"
+                      max="32"
+                      value={settings?.editor_font_size || 14}
+                      onChange={(e) => updateSettings({ editor_font_size: parseInt(e.target.value) })}
+                      className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                    />
+                    <div className="flex justify-between text-xs text-gray-500 mt-1">
+                      <span>8px</span>
+                      <span>32px</span>
+                    </div>
+                  </div>
+
+                  {/* Boolean Settings */}
+                  <div className="grid grid-cols-1 gap-3">
+                    {[
+                      { key: 'editor_line_numbers', label: 'Line Numbers' },
+                      { key: 'editor_minimap', label: 'Minimap' },
+                      { key: 'auto_save_enabled', label: 'Auto Save' },
+                      { key: 'preview_auto_refresh', label: 'Auto Refresh' }
+                    ].map(({ key, label }) => (
+                      <div key={key} className="p-4 border border-gray-200 rounded-lg flex justify-between items-center">
+                        <span className="text-sm font-medium text-gray-700">
+                          {label}
+                        </span>
+                        <input
+                          type="checkbox"
+                          checked={settings?.[key] || false}
+                          onChange={(e) => updateSettings({ [key]: e.target.checked })}
+                          className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded cursor-pointer"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
               </div>
-            </div>
-          )}
+            )}
+          </div>
         </div>
       </div>
-    </div>
-  );
-
-  return createPortal(modalContent, document.body);
-}
-
-export function SettingsPanel() {
-  const [isOpen, setIsOpen] = useState(false);
-
-  const handleCloseModal = () => {
-    console.log('SettingsPanel: Modal close requested');
-    setIsOpen(false);
-  };
-
-  const handleOpenModal = (e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    console.log('SettingsPanel: Opening modal');
-    setIsOpen(true);
-  };
-
-  return (
-    <>
-      <Button 
-        variant="ghost" 
-        size="sm" 
-        className="h-8 w-8 p-0 hover:bg-gray-100 rounded-md transition-colors"
-        onClick={handleOpenModal}
-      >
-        <Settings className="h-4 w-4" />
-        <span className="sr-only">Open settings</span>
-      </Button>
-
-      <SettingsModal isOpen={isOpen} onClose={handleCloseModal} />
     </>
   );
 }
+
+export function SettingsButton() {
+  const { openPanel } = useSettingsPanel();
+
+  return (
+    <Button 
+      variant="ghost" 
+      size="sm" 
+      className="h-8 w-8 p-0 hover:bg-gray-100 rounded-md transition-colors"
+      onClick={openPanel}
+    >
+      <Settings className="h-4 w-4" />
+      <span className="sr-only">Open settings</span>
+    </Button>
+  );
+}
+
+export function SettingsMenuItem() {
+  const { openPanel } = useSettingsPanel();
+
+  return (
+    <button
+      onClick={openPanel}
+      className="flex items-center space-x-2 w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+    >
+      <Settings className="h-4 w-4" />
+      <span>Settings</span>
+    </button>
+  );
+}
+
+// Legacy export for backwards compatibility
+export const SettingsPanel = SettingsButton;

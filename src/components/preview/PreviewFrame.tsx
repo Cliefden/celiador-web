@@ -53,6 +53,8 @@ interface PreviewFrameProps {
   // Inspection mode props
   inspectionMode?: boolean;
   onToggleInspection?: () => void;
+  // Iframe ref for inspection system
+  iframeRef?: React.RefObject<HTMLIFrameElement>;
 }
 
 const deviceConfig = {
@@ -72,7 +74,8 @@ export function PreviewFrame({
   loading,
   error,
   inspectionMode = false,
-  onToggleInspection
+  onToggleInspection,
+  iframeRef
 }: PreviewFrameProps) {
   const [iframeKey, setIframeKey] = useState(0);
   const [iframeLoading, setIframeLoading] = useState(false);
@@ -83,6 +86,98 @@ export function PreviewFrame({
     setIframeLoading(true);
     setUrlReady(false); // Reset URL readiness to trigger re-check
   };
+
+  // Generate same-origin preview URL with auth token
+  const getSameOriginPreviewUrl = async (originalUrl: string) => {
+    if (!originalUrl) return null;
+    
+    try {
+      // Get auth token for the API route
+      const { supabase } = await import('../../lib/supabase');
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (!session) {
+        console.warn('[PreviewFrame] No session available for preview proxy');
+        return null;
+      }
+      
+      // Create URL with auth token as query parameter for iframe
+      const currentOrigin = window.location.origin;
+      const proxyUrl = `${currentOrigin}/api/preview/${projectId}`;
+      const urlWithAuth = `${proxyUrl}?token=${encodeURIComponent(session.access_token)}`;
+      
+      console.log('[PreviewFrame] Generated auth URL successfully');
+      return urlWithAuth;
+    } catch (error) {
+      console.error('[PreviewFrame] Error generating same-origin URL:', error);
+      return null;
+    }
+  };
+
+  const [proxyUrl, setProxyUrl] = useState<string | null>(null);
+  const [authReady, setAuthReady] = useState(false);
+
+  // Generate proxy URL when preview is ready
+  useEffect(() => {
+    console.log('[PreviewFrame] Effect triggered - preview status:', preview?.status, 'URL:', preview?.url);
+    
+    if (preview?.url && preview.status === 'running') {
+      console.log('[PreviewFrame] ✅ Preview is running, generating proxy URL...');
+      getSameOriginPreviewUrl(preview.url).then(url => {
+        console.log('[PreviewFrame] ✅ Generated same-origin proxy URL:', url);
+        console.log('[PreviewFrame] 📍 Original preview URL was:', preview.url);
+        setProxyUrl(url);
+        setAuthReady(!!url);
+        console.log('[PreviewFrame] 🔄 Auth ready set to:', !!url);
+      }).catch(error => {
+        console.error('[PreviewFrame] ❌ Failed to generate proxy URL:', error);
+        setProxyUrl(null);
+        setAuthReady(false);
+      });
+    } else {
+      console.log('[PreviewFrame] ⏸️ Preview not ready - status:', preview?.status, 'URL exists:', !!preview?.url);
+      setProxyUrl(null);
+      setAuthReady(false);
+    }
+  }, [preview?.url, preview?.status, projectId]);
+
+  // Effect to communicate inspection mode changes to iframe
+  useEffect(() => {
+    console.log('[PreviewFrame] Inspection mode changed:', {
+      inspectionMode,
+      previewStatus: preview?.status,
+      urlReady,
+      projectId
+    });
+
+    if (preview?.status === 'running' && urlReady && iframeRef?.current) {
+      const iframe = iframeRef.current;
+      
+      if (iframe.contentWindow) {
+        const message = {
+          type: inspectionMode ? 'ENABLE_INSPECTION' : 'DISABLE_INSPECTION'
+        };
+        
+        console.log('[PreviewFrame] Sending message to same-origin iframe:', message);
+        
+        // Same-origin iframe - no CORS restrictions!
+        try {
+          iframe.contentWindow.postMessage(message, window.location.origin);
+          console.log('✅ Message sent successfully to same-origin iframe');
+        } catch (error) {
+          console.warn('⚠️ Failed to send message to iframe:', error);
+        }
+      } else {
+        console.warn('[PreviewFrame] No iframe contentWindow available');
+      }
+    } else {
+      console.log('[PreviewFrame] Conditions not met for sending message:', {
+        status: preview?.status,
+        urlReady,
+        hasIframe: !!iframeRef?.current
+      });
+    }
+  }, [inspectionMode, preview?.status, urlReady, iframeRef]);
 
   // Effect to reset URL readiness when preview changes
   useEffect(() => {
@@ -171,6 +266,35 @@ export function PreviewFrame({
   };
 
   const config = deviceConfig[device];
+
+  // Debug render state
+  console.log('[PreviewFrame] 🔍 Render state:', {
+    status: preview?.status,
+    urlReady,
+    authReady,
+    hasProxyUrl: !!proxyUrl,
+    proxyUrl: proxyUrl,
+    error,
+    previewExists: !!preview,
+    previewUrl: preview?.url
+  });
+
+  // Debug which condition will be taken
+  if (error) {
+    console.log('[PreviewFrame] 🔴 Will render: Error State');
+  } else if (!preview) {
+    console.log('[PreviewFrame] 🔴 Will render: No Preview State');
+  } else if (preview.status === 'syncing' || preview.status === 'starting') {
+    console.log('[PreviewFrame] 🟡 Will render: Loading State');
+  } else if (preview.status === 'running' && !authReady) {
+    console.log('[PreviewFrame] 🟣 Will render: Auth/Proxy Setup State');
+  } else if (preview.status === 'running' && authReady && proxyUrl) {
+    console.log('[PreviewFrame] 🟢 Will render: Preview Iframe WITH PROXY');
+  } else if (preview.status === 'running' && !urlReady) {
+    console.log('[PreviewFrame] 🟡 Will render: URL Not Ready State');
+  } else {
+    console.log('[PreviewFrame] 🔴 Will render: Stopped/Error State');
+  }
 
   return (
     <Card className="flex-1 flex flex-col overflow-hidden">
@@ -366,7 +490,18 @@ export function PreviewFrame({
               </Badge>
             )}
           </div>
-        ) : preview.status === 'running' && urlReady ? (
+        ) : preview.status === 'running' && !authReady ? (
+          /* Auth/Proxy Setup State */
+          <div className="text-center max-w-md">
+            <Loader2 className="w-12 h-12 animate-spin text-purple-500 mx-auto mb-4" />
+            <h3 className="text-lg font-medium text-gray-700 mb-2">
+              Setting up Same-Origin Preview...
+            </h3>
+            <p className="text-sm text-gray-500">
+              Configuring secure preview access for element inspection
+            </p>
+          </div>
+        ) : preview.status === 'running' && authReady && proxyUrl ? (
           /* Preview Iframe */
           <div 
             className="bg-white rounded-lg shadow-lg overflow-hidden transition-all duration-300"
@@ -383,12 +518,24 @@ export function PreviewFrame({
               </div>
             )}
             <iframe
-              key={iframeKey}
-              src={preview.url}
+              key={`${iframeKey}-${proxyUrl}`}
+              ref={iframeRef}
+              src={proxyUrl}
               className="w-full h-full border-0"
-              onLoad={() => setIframeLoading(false)}
-              onError={() => setIframeLoading(false)}
-              title={`Preview for ${projectId}`}
+              onLoad={() => {
+                setIframeLoading(false);
+                console.log('🎬 Same-origin preview iframe loaded successfully');
+                console.log('🔗 Iframe URL:', proxyUrl);
+                console.log('✅ Using same-origin proxy - inspection should work!');
+              }}
+              onError={() => {
+                setIframeLoading(false);
+                console.error('❌ Same-origin preview iframe failed to load');
+                console.error('❌ Failed URL:', proxyUrl);
+              }}
+              title={`Same-Origin Preview for ${projectId}`}
+              // Remove sandbox for same-origin - we need full access
+              allowFullScreen
             />
           </div>
         ) : preview.status === 'running' && !urlReady ? (

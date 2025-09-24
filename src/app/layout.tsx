@@ -1,6 +1,8 @@
 import './globals.css';
 import { AuthProvider } from '../contexts/AuthContext';
 import { SettingsProvider } from '../contexts/SettingsContext';
+import { SettingsPanelProvider } from '../contexts/SettingsPanelContext';
+import { SettingsWindow } from '../components/settings/SettingsPanel';
 
 export const metadata = { 
   title: 'Celiador Studio', 
@@ -37,7 +39,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body>
         <AuthProvider>
           <SettingsProvider>
-            {children}
+            <SettingsPanelProvider>
+              {children}
+              <SettingsWindow />
+            </SettingsPanelProvider>
           </SettingsProvider>
         </AuthProvider>
       </body>
