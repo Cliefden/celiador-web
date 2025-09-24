@@ -10,7 +10,7 @@ interface PreviewProxyRouteParams {
 const ORCHESTRATOR_URL = process.env.NEXT_PUBLIC_ORCHESTRATOR_URL || 'http://localhost:4000';
 
 export async function GET(request: NextRequest, { params }: PreviewProxyRouteParams) {
-  const { projectId } = params;
+  const { projectId } = await params;
   
   console.log(`🔄 [Preview Proxy] GET request for project ${projectId}`);
   console.log(`🔄 [Preview Proxy] Request URL: ${request.url}`);
@@ -57,8 +57,8 @@ export async function GET(request: NextRequest, { params }: PreviewProxyRoutePar
     console.log(`🔄 [Preview Proxy] Proxying preview from ${originalUrl} for project ${projectId}`);
 
     // Get any additional path from the request URL
-    const requestUrl = new URL(request.url);
-    const additionalPath = requestUrl.searchParams.get('path') || '';
+    const requestUrlParsed = new URL(request.url);
+    const additionalPath = requestUrlParsed.searchParams.get('path') || '';
     const fullOriginalUrl = additionalPath ? `${originalUrl}${additionalPath}` : originalUrl;
 
     console.log(`📡 [Preview Proxy] Fetching original content from: ${fullOriginalUrl}`);

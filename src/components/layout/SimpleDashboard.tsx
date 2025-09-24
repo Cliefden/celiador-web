@@ -170,31 +170,51 @@ export function SimpleDashboard({ initialUser, onLogout }: SimpleDashboardProps)
     setIframeLoaded(false);
   }, [preview?.url, selectedProject?.id]);
 
-  // Set preview URL when preview changes
+  // Set preview URL when preview or inspection mode changes
   useEffect(() => {
-    if (preview?.status === 'running') {
-      const url = getPreviewUrl();
-      setCurrentPreviewUrl(url);
-    } else {
-      setCurrentPreviewUrl(null);
-    }
-  }, [preview?.url, preview?.status]);
+    const updatePreviewUrl = async () => {
+      console.log('🔄 updatePreviewUrl called - preview status:', preview?.status);
+      if (preview?.status === 'running') {
+        console.log('🔄 Getting preview URL...');
+        const url = await getPreviewUrl();
+        console.log('🔄 Got URL from getPreviewUrl:', url, '(type:', typeof url, ')');
+        setCurrentPreviewUrl(url);
+        console.log('🔄 Set currentPreviewUrl to:', url);
+      } else {
+        console.log('🔄 Preview not running, setting currentPreviewUrl to null');
+        setCurrentPreviewUrl(null);
+      }
+    };
+    
+    updatePreviewUrl();
+  }, [preview?.url, preview?.status, inspectionMode, selectedProject?.id]);
 
 
-  // Listen for messages from same-origin preview iframe (secondary handler)
+  // Listen for messages from inspection preview iframe
   useEffect(() => {
     const handleIframeMessage = (event: MessageEvent) => {
-      // Only accept messages from same origin
-      if (event.origin !== window.location.origin) {
-        return;
-      }
+      console.log('📨 Received message from iframe:', event.origin, event.data);
 
-      if (event.data.type === 'ELEMENT_SELECTED') {
-        const element: UIElement = event.data.element;
-        handleElementSelection(element);
-      } else if (event.data.type === 'ELEMENTS_MAPPED') {
-        const elements: UIElement[] = event.data.elements;
-        setUIElements(elements);
+      // Handle inspection element clicks from the preview server's InspectionOverlay
+      if (event.data.type === 'INSPECTION_ELEMENT_CLICKED') {
+        const inspectableElement = event.data.element;
+        console.log('🎯 Inspection element clicked:', inspectableElement);
+        
+        // Convert from InspectableElement to UIElement format
+        const uiElement: UIElement = {
+          id: inspectableElement.id,
+          type: inspectableElement.type,
+          selector: inspectableElement.selector,
+          componentName: inspectableElement.text || inspectableElement.type,
+          boundingBox: {
+            x: inspectableElement.x,
+            y: inspectableElement.y,
+            width: inspectableElement.width,
+            height: inspectableElement.height
+          }
+        };
+        
+        handleElementSelection(uiElement);
       }
     };
 
@@ -290,28 +310,14 @@ The user has visually selected this specific UI element and wants to modify it. 
       setInspectionMode(newMode);
       setSelectedElement(null);
       
-      // Send message to same-origin iframe - no CORS issues!
-      if (previewIframeRef.current && previewIframeRef.current.contentWindow) {
-        const message = newMode ? 'ENABLE_INSPECTION' : 'DISABLE_INSPECTION';
-        console.log(`📡 Sending ${message} to same-origin preview iframe`);
-        
-        try {
-          previewIframeRef.current.contentWindow.postMessage(
-            { type: message }, 
-            '*'
-          );
-          console.log('✅ Message sent to iframe successfully');
-        } catch (error) {
-          console.warn('⚠️ Failed to send message to same-origin iframe:', error);
-        }
-      } else {
-        console.warn('⚠️ Preview iframe not available for inspection toggle');
-      }
+      // The useEffect will reload the iframe with the proxy URL containing the inspection script
+      // We'll send the message after the iframe loads
+      console.log('⏳ Setting inspection mode - useEffect will reload iframe with appropriate URL');
       
       if (newMode) {
-        console.log('✅ Inspection mode enabled (real inspection)');
+        console.log('✅ Inspection mode enabled - iframe will reload with proxy URL and injected script');
       } else {
-        console.log('❌ Inspection mode disabled'); 
+        console.log('❌ Inspection mode disabled - iframe will reload with direct URL'); 
       }
       
     } catch (error) {
@@ -333,12 +339,26 @@ The user has visually selected this specific UI element and wants to modify it. 
     // TODO: Open file in editor or show file details
   };
 
-  const getPreviewUrl = () => {
-    if (!preview || preview.status !== 'running') return null;
+  const getPreviewUrl = async () => {
+    console.log('🔄 getPreviewUrl called - preview status:', preview?.status, 'inspectionMode:', inspectionMode);
     
-    // Just return the direct URL to restore working state
-    console.log('📡 Using direct preview URL:', preview.url);
-    return preview.url;
+    if (!preview || preview.status !== 'running') {
+      console.log('❌ Preview not running, returning null');
+      return null;
+    }
+    
+    const baseUrl = preview.url;
+    
+    // If inspection mode is enabled, add inspection query parameter
+    if (inspectionMode) {
+      const inspectionUrl = `${baseUrl}?inspection=true`;
+      console.log('🔍 Using inspection URL:', inspectionUrl);
+      return inspectionUrl;
+    }
+    
+    // Normal mode: use direct URL
+    console.log('📺 Using direct preview URL:', baseUrl);
+    return baseUrl;
   };
 
   const getDeviceClasses = () => {
@@ -728,6 +748,14 @@ The user has visually selected this specific UI element and wants to modify it. 
                       title="App Preview"
                       onLoad={() => {
                         console.log('🎬 Preview iframe loaded with URL:', currentPreviewUrl);
+                        
+                        // Check if this is the new server-side inspection preview
+                        const isInspectionPreview = currentPreviewUrl?.includes('/inspection?');
+                        
+                        if (isInspectionPreview && inspectionMode) {
+                          console.log('🔍 Loaded server-side inspection preview - no postMessage needed');
+                        }
+                        
                         setTimeout(() => {
                           console.log('✅ Preview content should be ready');
                           setIframeLoaded(true);
@@ -807,13 +835,15 @@ The user has visually selected this specific UI element and wants to modify it. 
         />
       )}
 
-      {/* Preview Inspection Overlay */}
-      <PreviewOverlay
-        isActive={inspectionMode}
-        previewIframeRef={previewIframeRef}
-        onElementSelect={handleElementSelection}
-        deviceClasses={getDeviceClasses()}
-      />
+      {/* Preview Inspection Overlay - disabled when using server-side inspection */}
+      {false && (
+        <PreviewOverlay
+          isActive={inspectionMode}
+          previewIframeRef={previewIframeRef}
+          onElementSelect={handleElementSelection}
+          deviceClasses={getDeviceClasses()}
+        />
+      )}
       </div>
     </>
   );
