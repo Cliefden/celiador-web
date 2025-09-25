@@ -420,9 +420,29 @@ The user has visually selected this specific UI element and wants to modify it. 
       }
     }
     
-    // Normal mode: use direct URL
-    console.log('📺 Using direct preview URL:', baseUrl);
-    return baseUrl;
+    // Normal mode: add authentication to proxy URL
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const authToken = session?.access_token;
+      
+      if (!authToken) {
+        console.error('🔍 No auth token available for normal preview');
+        return null;
+      }
+      
+      const urlWithAuth = `${baseUrl}?token=${encodeURIComponent(authToken)}`;
+      console.log('📺 Using authenticated preview URL:', urlWithAuth);
+      console.log('🔑 Session details:', {
+        userId: session.user?.id,
+        tokenLength: authToken.length,
+        tokenPreview: authToken.substring(0, 20) + '...',
+        expires: session.expires_at
+      });
+      return urlWithAuth;
+    } catch (error) {
+      console.error('🔍 Error getting auth token for normal preview:', error);
+      return null;
+    }
   };
 
   const getDeviceClasses = () => {
