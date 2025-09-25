@@ -195,12 +195,15 @@ export function usePreview(projectId: string | null) {
 
   // Clear preview immediately when project changes, then load new one
   useEffect(() => {
+    console.log('[usePreview] Project changed to:', projectId);
     // Immediately clear current preview to avoid showing old project
     setPreview(null);
     setError(null);
+    console.log('[usePreview] Cleared previous preview state');
     
     // Load new project's preview if projectId exists
     if (projectId) {
+      console.log('[usePreview] Loading preview for new project:', projectId);
       loadPreview();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps

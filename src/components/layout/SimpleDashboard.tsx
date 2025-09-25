@@ -180,10 +180,12 @@ export function SimpleDashboard({ initialUser, onLogout }: SimpleDashboardProps)
     loadProjects();
   }, []);
 
-  // Reset iframe loaded state when preview or project changes
+  // Reset iframe loaded state and preview URL when preview or project changes
   useEffect(() => {
+    console.log('🔄 Project or preview changed - clearing iframe state and preview URL');
     setIframeLoaded(false);
-  }, [preview?.url, selectedProject?.id]);
+    setCurrentPreviewUrl(null); // Clear stale preview URL when switching projects
+  }, [selectedProject?.id]); // Only depend on project ID, not preview URL to avoid loops
 
   // Set preview URL when preview or inspection mode changes
   useEffect(() => {
