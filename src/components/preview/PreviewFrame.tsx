@@ -105,6 +105,13 @@ export function PreviewFrame({
       if (originalUrl.includes('/projects/') && originalUrl.includes('/preview/') && originalUrl.includes('/proxy/')) {
         const urlWithAuth = `${originalUrl}?token=${encodeURIComponent(session.access_token)}`;
         console.log('[PreviewFrame] Added auth token to backend proxy URL');
+        console.log('[PreviewFrame] Session details:', {
+          userId: session.user?.id,
+          tokenLength: session.access_token?.length,
+          tokenPreview: session.access_token?.substring(0, 20) + '...',
+          expires: session.expires_at
+        });
+        console.log('[PreviewFrame] Final URL with token:', urlWithAuth);
         return urlWithAuth;
       }
       
