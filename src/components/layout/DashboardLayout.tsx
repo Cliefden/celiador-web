@@ -45,17 +45,11 @@ interface DashboardLayoutProps {
 }
 
 export function DashboardLayout({ initialUser, onLogout }: DashboardLayoutProps) {
+  console.log('🔄 DashboardLayout rendering with persistence enabled');
+  
   const [user] = useState<User>(initialUser);
   const [projects, setProjects] = useState<Project[]>([]);
-  // Initialize selectedProject from localStorage if available
-  const [selectedProject, setSelectedProject] = useState<Project | null>(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('selectedProjectId');
-      // We'll set the actual project object after loading projects
-      return saved ? { id: saved } as Project : null;
-    }
-    return null;
-  });
+  const [selectedProject, setSelectedProject] = useState<Project | null>(null);
   const [showCreateProject, setShowCreateProject] = useState(false);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -82,6 +76,8 @@ export function DashboardLayout({ initialUser, onLogout }: DashboardLayoutProps)
         
         // Try to restore selected project from localStorage
         const savedProjectId = typeof window !== 'undefined' ? localStorage.getItem('selectedProjectId') : null;
+        console.log('[dashboard] Saved project ID from localStorage:', savedProjectId);
+        
         if (savedProjectId && projectsData.length > 0) {
           const savedProject = projectsData.find(p => p.id === savedProjectId);
           if (savedProject) {
@@ -94,8 +90,8 @@ export function DashboardLayout({ initialUser, onLogout }: DashboardLayoutProps)
           }
         }
           
-        // Auto-select first project if none selected and no saved selection
-        if (projectsData.length > 0 && !selectedProject) {
+        // Auto-select first project if no saved selection was restored
+        if (projectsData.length > 0) {
           console.log('[dashboard] Auto-selecting first project:', projectsData[0].name);
           setSelectedProject(projectsData[0]);
           localStorage.setItem('selectedProjectId', projectsData[0].id);

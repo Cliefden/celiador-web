@@ -71,6 +71,8 @@ interface UIElement {
 }
 
 export function SimpleDashboard({ initialUser, onLogout }: SimpleDashboardProps) {
+  console.log('🔄 SimpleDashboard rendering with persistence enabled');
+  
   const [user] = useState<User>(initialUser);
   const [projects, setProjects] = useState<Project[]>([]);
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
@@ -164,10 +166,30 @@ export function SimpleDashboard({ initialUser, onLogout }: SimpleDashboardProps)
 
         if (response.ok) {
           const projectsData = await response.json();
+          console.log('[SimpleDashboard] Projects loaded:', projectsData.length);
           setProjects(projectsData);
           
-          if (projectsData.length > 0 && !selectedProject) {
+          // Try to restore selected project from localStorage
+          const savedProjectId = typeof window !== 'undefined' ? localStorage.getItem('selectedProjectId') : null;
+          console.log('[SimpleDashboard] Saved project ID from localStorage:', savedProjectId);
+          
+          if (savedProjectId && projectsData.length > 0) {
+            const savedProject = projectsData.find((p: Project) => p.id === savedProjectId);
+            if (savedProject) {
+              console.log('[SimpleDashboard] Restored selected project from localStorage:', savedProject.name);
+              setSelectedProject(savedProject);
+              return; // Exit early, don't auto-select first project
+            } else {
+              console.log('[SimpleDashboard] Saved project not found, clearing localStorage');
+              localStorage.removeItem('selectedProjectId');
+            }
+          }
+          
+          // Auto-select first project if no saved selection was restored
+          if (projectsData.length > 0) {
+            console.log('[SimpleDashboard] Auto-selecting first project:', projectsData[0].name);
             setSelectedProject(projectsData[0]);
+            localStorage.setItem('selectedProjectId', projectsData[0].id);
           }
         }
       } catch (error) {
@@ -364,7 +386,14 @@ The user has visually selected this specific UI element and wants to modify it. 
         setProjects(prev => prev.filter(p => p.id !== project.id));
         if (selectedProject?.id === project.id) {
           const remainingProjects = projects.filter(p => p.id !== project.id);
-          setSelectedProject(remainingProjects.length > 0 ? remainingProjects[0] : null);
+          const newSelection = remainingProjects.length > 0 ? remainingProjects[0] : null;
+          setSelectedProject(newSelection);
+          // Update localStorage with new selection or clear it
+          if (newSelection) {
+            localStorage.setItem('selectedProjectId', newSelection.id);
+          } else {
+            localStorage.removeItem('selectedProjectId');
+          }
         }
         setShowProjectMenu(null);
       }
@@ -585,7 +614,9 @@ The user has visually selected this specific UI element and wants to modify it. 
                       <div key={project.id} className="flex items-center">
                         <button
                           onClick={() => {
+                            console.log('[SimpleDashboard] Project selected:', project.name);
                             setSelectedProject(project);
+                            localStorage.setItem('selectedProjectId', project.id);
                             setShowProjectDropdown(false);
                           }}
                           className={`flex-1 px-4 py-2 text-sm text-left hover:bg-gray-50 ${
