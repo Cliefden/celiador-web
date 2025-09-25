@@ -47,7 +47,15 @@ interface DashboardLayoutProps {
 export function DashboardLayout({ initialUser, onLogout }: DashboardLayoutProps) {
   const [user] = useState<User>(initialUser);
   const [projects, setProjects] = useState<Project[]>([]);
-  const [selectedProject, setSelectedProject] = useState<Project | null>(null);
+  // Initialize selectedProject from localStorage if available
+  const [selectedProject, setSelectedProject] = useState<Project | null>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('selectedProjectId');
+      // We'll set the actual project object after loading projects
+      return saved ? { id: saved } as Project : null;
+    }
+    return null;
+  });
   const [showCreateProject, setShowCreateProject] = useState(false);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -71,11 +79,26 @@ export function DashboardLayout({ initialUser, onLogout }: DashboardLayoutProps)
         const projectsData = await ApiClient.getProjects();
         console.log('[dashboard] Projects loaded:', projectsData.length);
         setProjects(projectsData);
+        
+        // Try to restore selected project from localStorage
+        const savedProjectId = typeof window !== 'undefined' ? localStorage.getItem('selectedProjectId') : null;
+        if (savedProjectId && projectsData.length > 0) {
+          const savedProject = projectsData.find(p => p.id === savedProjectId);
+          if (savedProject) {
+            console.log('[dashboard] Restored selected project from localStorage:', savedProject.name);
+            setSelectedProject(savedProject);
+            return; // Exit early, don't auto-select first project
+          } else {
+            console.log('[dashboard] Saved project not found, clearing localStorage');
+            localStorage.removeItem('selectedProjectId');
+          }
+        }
           
-        // Auto-select first project if none selected
+        // Auto-select first project if none selected and no saved selection
         if (projectsData.length > 0 && !selectedProject) {
           console.log('[dashboard] Auto-selecting first project:', projectsData[0].name);
           setSelectedProject(projectsData[0]);
+          localStorage.setItem('selectedProjectId', projectsData[0].id);
         }
       } catch (error) {
         console.error('[dashboard] Error loading projects:', error);
@@ -125,6 +148,8 @@ export function DashboardLayout({ initialUser, onLogout }: DashboardLayoutProps)
   const handleProjectSelect = (project: Project) => {
     console.log('[dashboard] Project selected:', project.name);
     setSelectedProject(project);
+    // Persist selection in localStorage
+    localStorage.setItem('selectedProjectId', project.id);
   };
 
   const handleCreateProject = () => {
@@ -153,9 +178,10 @@ export function DashboardLayout({ initialUser, onLogout }: DashboardLayoutProps)
       // Remove project from state
       setProjects(prev => prev.filter(p => p.id !== project.id));
       
-      // If this was the selected project, clear selection
+      // If this was the selected project, clear selection and localStorage
       if (selectedProject?.id === project.id) {
         setSelectedProject(null);
+        localStorage.removeItem('selectedProjectId');
       }
     } catch (error) {
       console.error('[dashboard] Error deleting project:', error);
