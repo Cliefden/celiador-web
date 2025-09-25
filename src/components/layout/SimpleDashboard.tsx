@@ -78,7 +78,7 @@ export function SimpleDashboard({ initialUser, onLogout }: SimpleDashboardProps)
   const [loading, setLoading] = useState(true);
   const [currentMessage, setCurrentMessage] = useState('');
   const [isBuilding, setIsBuilding] = useState(false);
-  const [previewDevice, setPreviewDevice] = useState<PreviewDevice>('mobile');
+  const [previewDevice, setPreviewDevice] = useState<PreviewDevice>('desktop');
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showProjectDropdown, setShowProjectDropdown] = useState(false);
   const [showProjectMenu, setShowProjectMenu] = useState<string | null>(null);
@@ -88,10 +88,25 @@ export function SimpleDashboard({ initialUser, onLogout }: SimpleDashboardProps)
   const [iframeLoaded, setIframeLoaded] = useState(false);
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
   const [currentPreviewUrl, setCurrentPreviewUrl] = useState<string | null>(null);
+  const [chatPanelWidth, setChatPanelWidth] = useState(384); // Default 384px (w-96)
+  const [isResizing, setIsResizing] = useState(false);
+  const [isDesktop, setIsDesktop] = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
   const projectDropdownRef = useRef<HTMLDivElement>(null);
   const previewIframeRef = useRef<HTMLIFrameElement>(null);
   
+  // Handle responsive layout
+  useEffect(() => {
+    const checkIsDesktop = () => {
+      setIsDesktop(window.innerWidth >= 1024);
+    };
+    
+    checkIsDesktop();
+    window.addEventListener('resize', checkIsDesktop);
+    
+    return () => window.removeEventListener('resize', checkIsDesktop);
+  }, []);
+
   // Listen for messages from same-origin preview iframe
   useEffect(() => {
     const handlePreviewMessage = (event: MessageEvent) => {
@@ -231,6 +246,40 @@ export function SimpleDashboard({ initialUser, onLogout }: SimpleDashboardProps)
     }
   }, [selectedProject?.id]);
 
+  // Handle panel resize
+  const handleMouseDown = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsResizing(true);
+  };
+
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isResizing) return;
+      
+      // Calculate new width based on mouse position
+      const newWidth = Math.max(280, Math.min(600, e.clientX - 24)); // Min 280px, Max 600px, account for padding
+      setChatPanelWidth(newWidth);
+    };
+
+    const handleMouseUp = () => {
+      setIsResizing(false);
+    };
+
+    if (isResizing) {
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+      document.body.style.cursor = 'ew-resize';
+      document.body.style.userSelect = 'none';
+    }
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
+  }, [isResizing]);
+
   const handleSendMessage = async () => {
     if (!currentMessage.trim() || !selectedProject || conversationLoading || !sendMessage) return;
     
@@ -342,18 +391,33 @@ The user has visually selected this specific UI element and wants to modify it. 
   const getPreviewUrl = async () => {
     console.log('🔄 getPreviewUrl called - preview status:', preview?.status, 'inspectionMode:', inspectionMode);
     
-    if (!preview || preview.status !== 'running') {
-      console.log('❌ Preview not running, returning null');
+    if (!preview || preview.status !== 'running' || !selectedProject) {
+      console.log('❌ Preview not running or no project selected, returning null');
       return null;
     }
     
     const baseUrl = preview.url;
     
-    // If inspection mode is enabled, add inspection query parameter
-    if (inspectionMode) {
-      const inspectionUrl = `${baseUrl}?inspection=true`;
-      console.log('🔍 Using inspection URL:', inspectionUrl);
-      return inspectionUrl;
+    // If inspection mode is enabled, use the server-side inspection route
+    if (inspectionMode && preview.id) {
+      try {
+        // Get auth token for inspection route
+        const { data: { session } } = await supabase.auth.getSession();
+        const authToken = session?.access_token;
+        
+        if (!authToken) {
+          console.error('🔍 No auth token available for inspection mode');
+          return baseUrl; // Fall back to normal preview
+        }
+        
+        const apiUrl = process.env.NEXT_PUBLIC_ORCHESTRATOR_URL || 'http://localhost:4000';
+        const inspectionUrl = `${apiUrl}/projects/${selectedProject.id}/preview/${preview.id}/inspection?token=${authToken}`;
+        console.log('🔍 Using server-side inspection URL with auth token');
+        return inspectionUrl;
+      } catch (error) {
+        console.error('🔍 Error getting auth token for inspection:', error);
+        return baseUrl; // Fall back to normal preview
+      }
     }
     
     // Normal mode: use direct URL
@@ -392,7 +456,7 @@ The user has visually selected this specific UI element and wants to modify it. 
       <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50">
       {/* Header */}
       <header className="bg-white/80 backdrop-blur-xl border-b border-white/20 sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
+        <div className="px-6 h-16 flex items-center justify-between">
           {/* Logo & Navigation */}
           <div className="flex items-center space-x-8">
             <div className="flex items-center space-x-3">
@@ -455,7 +519,7 @@ The user has visually selected this specific UI element and wants to modify it. 
       </header>
 
       {/* Main Content */}
-      <div className="max-w-7xl mx-auto p-6 flex flex-col h-[calc(100vh-4rem)]">
+      <div className="p-6 flex flex-col h-[calc(100vh-4rem)]">
         {/* Project Selector */}
         {projects.length > 0 && (
           <div className="mb-4 flex items-center justify-between flex-shrink-0">
@@ -551,9 +615,12 @@ The user has visually selected this specific UI element and wants to modify it. 
           </div>
         ) : (
           /* Main Workspace */
-          <div className="flex-1 min-h-0 flex flex-col lg:flex-row gap-6">
-            {/* Chat Panel */}
-            <div className="flex-1 flex flex-col bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
+          <div className="flex-1 min-h-0 flex flex-col lg:flex-row">
+            {/* Chat Panel - Resizable sidebar */}
+            <div 
+              className="w-full flex-shrink-0 flex flex-col bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden mr-2"
+              style={{ width: isDesktop ? `${chatPanelWidth}px` : '100%' }}
+            >
               {/* Chat Header */}
               <div className="bg-gradient-to-r from-blue-600 to-purple-600 text-white p-4">
                 <div className="flex items-center space-x-3">
@@ -655,6 +722,21 @@ The user has visually selected this specific UI element and wants to modify it. 
               </div>
             </div>
 
+            {/* Resize Handle */}
+            <div 
+              className="hidden lg:block w-2 hover:w-3 bg-gray-200 hover:bg-blue-400 cursor-ew-resize transition-all duration-200 relative group mr-2 rounded-sm"
+              onMouseDown={handleMouseDown}
+              title="Drag to resize AI Assistant panel"
+            >
+              <div className="absolute inset-y-0 -inset-x-1 flex items-center justify-center group-hover:bg-blue-100/50 transition-colors duration-200 rounded-sm">
+                <div className="flex flex-col space-y-0.5">
+                  <div className="w-0.5 h-3 bg-gray-400 group-hover:bg-blue-500 rounded-full"></div>
+                  <div className="w-0.5 h-3 bg-gray-400 group-hover:bg-blue-500 rounded-full"></div>
+                  <div className="w-0.5 h-3 bg-gray-400 group-hover:bg-blue-500 rounded-full"></div>
+                </div>
+              </div>
+            </div>
+
             {/* Preview Panel */}
             <div className="flex-1 flex flex-col bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
               {/* Preview Header */}
@@ -738,9 +820,15 @@ The user has visually selected this specific UI element and wants to modify it. 
               </div>
 
               {/* Preview Content */}
-              <div className="flex-1 bg-gray-100 p-6 flex items-center justify-center overflow-hidden">
+              <div className={`flex-1 bg-gray-100 overflow-hidden ${
+                previewDevice === 'desktop' ? 'p-0' : 'p-6 flex items-center justify-center'
+              }`}>
                 {currentPreviewUrl ? (
-                  <div className={`bg-white rounded-xl shadow-lg overflow-hidden transition-all ${getDeviceClasses()} relative`}>
+                  <div className={
+                    previewDevice === 'desktop' 
+                      ? 'w-full h-full relative' 
+                      : `bg-white rounded-xl shadow-lg overflow-hidden transition-all relative ${getDeviceClasses()}`
+                  }>
                     <iframe
                       ref={previewIframeRef}
                       src={currentPreviewUrl}
