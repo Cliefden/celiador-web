@@ -26,6 +26,7 @@ export function usePreview(projectId: string | null) {
   const [preview, setPreview] = useState<PreviewInstance | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [loadingMessage, setLoadingMessage] = useState<string>('');
 
   // Load existing preview for project
   const loadPreview = useCallback(async () => {
@@ -37,7 +38,11 @@ export function usePreview(projectId: string | null) {
     try {
       setLoading(true);
       setError(null);
+      setLoadingMessage('Checking for existing preview...');
       console.log('[usePreview] Loading preview for project:', projectId);
+
+      // Log API configuration for debugging
+      ApiClient.logConfig();
 
       const data = await ApiClient.listPreviews(projectId);
       const previews = data.previews || [];
@@ -65,22 +70,34 @@ export function usePreview(projectId: string | null) {
       }
     } catch (error) {
       console.error('[usePreview] Error loading preview:', error);
-      // Don't set error for 404s when no previews exist
-      if (!error?.message?.includes('Failed to list previews')) {
-        setError(error instanceof Error ? error.message : 'Failed to load preview');
+      const errorMessage = error instanceof Error ? error.message : 'Failed to load preview';
+      
+      // Don't set error for 404s when no previews exist, but log for debugging
+      if (errorMessage.includes('Failed to list previews') || errorMessage.includes('404')) {
+        console.log('[usePreview] No existing previews found (this is normal)');
+      } else {
+        console.error('[usePreview] Actual error loading preview:', errorMessage);
+        setError(`Failed to check existing previews: ${errorMessage}`);
       }
     } finally {
       setLoading(false);
+      setLoadingMessage('');
     }
   }, [projectId]); // pollPreviewStatus is defined later, will be handled in the callback
 
   // Start a new preview
   const startPreview = useCallback(async () => {
-    if (!projectId) return;
+    if (!projectId) {
+      console.error('[usePreview] Cannot start preview: no projectId');
+      return;
+    }
 
     try {
       setLoading(true);
       setError(null);
+      setLoadingMessage('Starting preview server...');
+      
+      console.log('[usePreview] Starting new preview for project:', projectId);
 
       const data = await ApiClient.startPreview(projectId, {
         name: 'Project Preview',
@@ -88,15 +105,18 @@ export function usePreview(projectId: string | null) {
       });
 
       setPreview(data.preview);
-      console.log('[usePreview] Started preview:', data.preview.id);
+      setLoadingMessage('Preview started, monitoring status...');
+      console.log('[usePreview] Started preview:', data.preview.id, 'status:', data.preview.status);
       
       // Poll for status updates
       pollPreviewStatus(data.preview.id);
     } catch (error) {
       console.error('[usePreview] Error starting preview:', error);
-      setError(error instanceof Error ? error.message : 'Failed to start preview');
+      const errorMessage = error instanceof Error ? error.message : 'Failed to start preview';
+      setError(`Failed to start preview: ${errorMessage}`);
     } finally {
       setLoading(false);
+      setLoadingMessage('');
     }
   }, [projectId]);
 
@@ -186,6 +206,7 @@ export function usePreview(projectId: string | null) {
     preview,
     loading,
     error,
+    loadingMessage,
     startPreview,
     stopPreview,
     restartPreview,

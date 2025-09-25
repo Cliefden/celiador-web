@@ -147,7 +147,7 @@ export function SimpleDashboard({ initialUser, onLogout }: SimpleDashboardProps)
   const { conversation, messages, sendMessage, isLoading: conversationLoading } = conversationHook || {};
   
   // Use preview hook for the selected project
-  const { preview, loading: previewLoading, startPreview, restartPreview } = usePreview(selectedProject?.id || null);
+  const { preview, loading: previewLoading, error: previewError, loadingMessage, startPreview, restartPreview } = usePreview(selectedProject?.id || null);
 
   // Load projects
   useEffect(() => {
@@ -869,25 +869,48 @@ The user has visually selected this specific UI element and wants to modify it. 
                     <div className="w-16 h-16 bg-gradient-to-br from-blue-100 to-purple-100 rounded-full flex items-center justify-center mx-auto mb-4">
                       <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
                     </div>
-                    <h4 className="font-semibold text-gray-900 mb-2">Starting Preview</h4>
+                    <h4 className="font-semibold text-gray-900 mb-2">
+                      {preview?.status === 'syncing' ? 'Syncing Files' : 'Starting Preview'}
+                    </h4>
                     <p className="text-gray-600 text-sm">
-                      Setting up your app preview...
+                      {loadingMessage || preview?.status === 'syncing' ? 'Downloading project files...' : 'Setting up your app preview...'}
                     </p>
+                    {loadingMessage && (
+                      <p className="text-blue-600 text-xs mt-2 font-medium">
+                        {loadingMessage}
+                      </p>
+                    )}
                   </div>
-                ) : preview?.status === 'error' ? (
+                ) : preview?.status === 'error' || previewError ? (
                   <div className="text-center">
                     <div className="w-16 h-16 bg-gradient-to-br from-red-100 to-pink-100 rounded-full flex items-center justify-center mx-auto mb-4">
                       <AlertCircle className="h-8 w-8 text-red-600" />
                     </div>
                     <h4 className="font-semibold text-gray-900 mb-2">Preview Error</h4>
                     <p className="text-gray-600 text-sm mb-4">
-                      {preview.errorMessage || 'Failed to start preview'}
+                      {previewError || preview?.errorMessage || 'Failed to start preview'}
                     </p>
+                    {previewError && preview?.errorMessage && previewError !== preview.errorMessage && (
+                      <details className="text-left mb-4">
+                        <summary className="text-xs text-gray-500 cursor-pointer hover:text-gray-700">
+                          Show technical details
+                        </summary>
+                        <div className="mt-2 p-3 bg-gray-50 rounded-lg text-xs text-gray-700">
+                          <div className="mb-2">
+                            <strong>API Error:</strong> {previewError}
+                          </div>
+                          <div>
+                            <strong>Preview Status Error:</strong> {preview?.errorMessage}
+                          </div>
+                        </div>
+                      </details>
+                    )}
                     <button
                       onClick={startPreview}
-                      className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-all"
+                      disabled={previewLoading}
+                      className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      Try Again
+                      {previewLoading ? 'Starting...' : 'Try Again'}
                     </button>
                   </div>
                 ) : (

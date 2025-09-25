@@ -3,6 +3,13 @@ import { supabase } from './supabase';
 export class ApiClient {
   private static baseUrl = process.env.NEXT_PUBLIC_ORCHESTRATOR_URL || 'http://localhost:4000';
 
+  // Debug method to log configuration
+  static logConfig() {
+    console.log('[ApiClient] Configuration:');
+    console.log('  Base URL:', this.baseUrl);
+    console.log('  Environment NEXT_PUBLIC_ORCHESTRATOR_URL:', process.env.NEXT_PUBLIC_ORCHESTRATOR_URL);
+  }
+
   private static async getAuthHeaders() {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) throw new Error('No authentication session');
@@ -15,22 +22,43 @@ export class ApiClient {
 
   // Preview API methods
   static async startPreview(projectId: string, options: { name?: string; type?: string } = {}) {
-    const headers = await this.getAuthHeaders();
-    const response = await fetch(`${this.baseUrl}/projects/${projectId}/preview/start`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({
-        name: options.name || 'Project Preview',
-        type: options.type || 'nextjs'
-      })
-    });
+    const url = `${this.baseUrl}/projects/${projectId}/preview/start`;
+    console.log('[ApiClient] Starting preview for project:', projectId, 'URL:', url);
+    
+    try {
+      const headers = await this.getAuthHeaders();
+      console.log('[ApiClient] Auth headers obtained, making request...');
+      
+      const response = await fetch(url, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          name: options.name || 'Project Preview',
+          type: options.type || 'nextjs'
+        })
+      });
 
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.error || 'Failed to start preview');
+      console.log('[ApiClient] Response status:', response.status, response.statusText);
+
+      if (!response.ok) {
+        let errorMessage = `HTTP ${response.status}: ${response.statusText}`;
+        try {
+          const error = await response.json();
+          errorMessage = error.error || errorMessage;
+        } catch (e) {
+          console.error('[ApiClient] Failed to parse error response:', e);
+        }
+        console.error('[ApiClient] Preview start failed:', errorMessage);
+        throw new Error(errorMessage);
+      }
+
+      const result = await response.json();
+      console.log('[ApiClient] Preview started successfully:', result);
+      return result;
+    } catch (error) {
+      console.error('[ApiClient] Network or other error starting preview:', error);
+      throw error;
     }
-
-    return response.json();
   }
 
   static async stopPreview(projectId: string, previewId: string) {
@@ -63,17 +91,36 @@ export class ApiClient {
   }
 
   static async listPreviews(projectId: string) {
-    const headers = await this.getAuthHeaders();
-    const response = await fetch(`${this.baseUrl}/projects/${projectId}/preview/list`, {
-      headers
-    });
+    const url = `${this.baseUrl}/projects/${projectId}/preview/list`;
+    console.log('[ApiClient] Listing previews for project:', projectId, 'URL:', url);
+    
+    try {
+      const headers = await this.getAuthHeaders();
+      const response = await fetch(url, {
+        headers
+      });
 
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.error || 'Failed to list previews');
+      console.log('[ApiClient] List previews response status:', response.status, response.statusText);
+
+      if (!response.ok) {
+        let errorMessage = `HTTP ${response.status}: ${response.statusText}`;
+        try {
+          const error = await response.json();
+          errorMessage = error.error || errorMessage;
+        } catch (e) {
+          console.error('[ApiClient] Failed to parse list previews error response:', e);
+        }
+        console.error('[ApiClient] List previews failed:', errorMessage);
+        throw new Error(errorMessage);
+      }
+
+      const result = await response.json();
+      console.log('[ApiClient] List previews successful:', result);
+      return result;
+    } catch (error) {
+      console.error('[ApiClient] Network or other error listing previews:', error);
+      throw error;
     }
-
-    return response.json();
   }
 
   // File upload method
