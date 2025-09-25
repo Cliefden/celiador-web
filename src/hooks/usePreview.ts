@@ -164,17 +164,28 @@ export function usePreview(projectId: string | null) {
         setPreview(prev => {
           // Only update if this is still the current preview
           if (prev?.id === previewId) {
+            console.log('[usePreview] Status update:', prev?.status, '->', updatedPreview.status);
             return updatedPreview;
           }
           return prev;
         });
 
-        // Continue polling if still starting/syncing
+        console.log('[usePreview] Poll result:', updatedPreview.status, 'for preview:', previewId);
+        
+        // Continue polling until preview reaches a final state
         if (updatedPreview.status === 'starting' || updatedPreview.status === 'syncing') {
+          console.log('[usePreview] Preview still', updatedPreview.status, '- continuing to poll');
           setTimeout(poll, 2000);
+        } else if (updatedPreview.status === 'running') {
+          console.log('[usePreview] ✅ Preview is now running - polling complete');
+        } else {
+          console.log('[usePreview] Preview in final state:', updatedPreview.status, '- polling stopped');
         }
       } catch (error) {
         console.error('[usePreview] Error polling status:', error);
+        // On error, retry polling with longer interval (could be temporary network issue)
+        console.log('[usePreview] Retrying poll after error in 5 seconds');
+        setTimeout(poll, 5000);
       }
     };
 

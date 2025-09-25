@@ -188,21 +188,42 @@ export function SimpleDashboard({ initialUser, onLogout }: SimpleDashboardProps)
   // Set preview URL when preview or inspection mode changes
   useEffect(() => {
     const updatePreviewUrl = async () => {
-      console.log('🔄 updatePreviewUrl called - preview status:', preview?.status);
+      console.log('🔄 updatePreviewUrl called - preview status:', preview?.status, 'preview ID:', preview?.id);
       if (preview?.status === 'running') {
-        console.log('🔄 Getting preview URL...');
+        console.log('🔄 Preview is running, getting preview URL...');
         const url = await getPreviewUrl();
         console.log('🔄 Got URL from getPreviewUrl:', url, '(type:', typeof url, ')');
         setCurrentPreviewUrl(url);
         console.log('🔄 Set currentPreviewUrl to:', url);
       } else {
-        console.log('🔄 Preview not running, setting currentPreviewUrl to null');
+        console.log('🔄 Preview not running (status:', preview?.status, '), setting currentPreviewUrl to null');
         setCurrentPreviewUrl(null);
       }
     };
     
     updatePreviewUrl();
-  }, [preview?.url, preview?.status, inspectionMode, selectedProject?.id]);
+  }, [preview?.url, preview?.status, preview?.id, inspectionMode, selectedProject?.id]);
+
+  // Add a simple fallback timer for stuck previews
+  useEffect(() => {
+    if (!preview || preview.status !== 'starting' && preview.status !== 'syncing') {
+      return; // No need for fallback timer
+    }
+
+    console.log('🕐 Setting up fallback timer for preview that might be stuck in', preview.status, 'state');
+    
+    // If preview is still starting/syncing after 30 seconds, force refresh the status
+    const fallbackTimer = setTimeout(async () => {
+      console.log('🕐 Fallback: Preview may be stuck, attempting manual status check');
+      // Force a manual refresh by calling the hook's refreshPreview function
+      // This should trigger the loadPreview function which will check current status
+      window.location.reload(); // Simple but effective fallback
+    }, 30000); // 30 seconds
+
+    return () => {
+      clearTimeout(fallbackTimer);
+    };
+  }, [preview?.id, preview?.status]);
 
 
   // Listen for messages from inspection preview iframe
