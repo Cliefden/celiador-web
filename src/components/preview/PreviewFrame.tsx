@@ -92,7 +92,7 @@ export function PreviewFrame({
     if (!originalUrl) return null;
     
     try {
-      // Get auth token for the API route
+      // Get auth token for the proxy URL
       const { supabase } = await import('../../lib/supabase');
       const { data: { session } } = await supabase.auth.getSession();
       
@@ -101,12 +101,19 @@ export function PreviewFrame({
         return null;
       }
       
-      // Create URL with auth token as query parameter for iframe
+      // If the URL is already a backend proxy URL, just add the token
+      if (originalUrl.includes('/projects/') && originalUrl.includes('/preview/') && originalUrl.includes('/proxy/')) {
+        const urlWithAuth = `${originalUrl}?token=${encodeURIComponent(session.access_token)}`;
+        console.log('[PreviewFrame] Added auth token to backend proxy URL');
+        return urlWithAuth;
+      }
+      
+      // Fallback: Use frontend API route proxy (legacy behavior)
       const currentOrigin = window.location.origin;
       const proxyUrl = `${currentOrigin}/api/preview/${projectId}`;
       const urlWithAuth = `${proxyUrl}?token=${encodeURIComponent(session.access_token)}`;
       
-      console.log('[PreviewFrame] Generated auth URL successfully');
+      console.log('[PreviewFrame] Using frontend API proxy (legacy)');
       return urlWithAuth;
     } catch (error) {
       console.error('[PreviewFrame] Error generating same-origin URL:', error);
