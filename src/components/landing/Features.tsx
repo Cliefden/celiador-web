@@ -1,88 +1,102 @@
+import { CeliadorLogo } from '../ui/celiador-logo';
+import { Sparkles, Code, Zap, Users, Rocket, BarChart3, Terminal, Palette, Eye, GitBranch } from 'lucide-react';
+
 const features = [
   {
-    name: 'AI Code Generation',
-    description: 'Generate production-ready code with advanced AI models. From simple components to complex applications.',
-    icon: (
-      <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
-      </svg>
-    ),
+    name: 'AI-Powered Code Generation',
+    description: 'Transform natural language into production-ready code with Claude and ChatGPT integration. From simple components to complex full-stack applications.',
+    icon: <Sparkles className="w-8 h-8" />,
+    color: 'from-teal-500 to-cyan-500',
   },
   {
-    name: 'Smart Testing',
-    description: 'Automatically generate comprehensive test suites. Catch bugs before they reach production.',
-    icon: (
-      <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-      </svg>
-    ),
+    name: 'Live Preview & Inspection',
+    description: 'See your code come to life instantly with real-time previews. Inspect and modify UI elements directly in the browser.',
+    icon: <Eye className="w-8 h-8" />,
+    color: 'from-cyan-500 to-teal-500',
   },
   {
-    name: '✨ Magic Templates',
-    description: 'Start with stunning SaaS starters, AI chat apps, e-commerce stores, and more. Launch in minutes, not weeks.',
-    icon: (
-      <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
-      </svg>
-    ),
+    name: 'Magic Templates',
+    description: 'Start with stunning templates: SaaS starters, AI chat apps, e-commerce stores, and landing pages. Launch in minutes, not weeks.',
+    icon: <Palette className="w-8 h-8" />,
+    color: 'from-teal-600 to-cyan-600',
   },
   {
-    name: 'Real-time Collaboration',
-    description: 'Work together with your team in real-time. Share projects, review code, and deploy together.',
-    icon: (
-      <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z" />
-      </svg>
-    ),
+    name: 'Smart File Management',
+    description: 'Intelligent file organization with AI-powered suggestions. Edit, create, and manage your project structure effortlessly.',
+    icon: <Terminal className="w-8 h-8" />,
+    color: 'from-cyan-600 to-teal-600',
   },
   {
     name: 'One-Click Deployment',
-    description: 'Deploy your applications with a single click. Support for Vercel, Netlify, and custom servers.',
-    icon: (
-      <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-      </svg>
-    ),
+    description: 'Deploy to Vercel, Netlify, and other platforms with a single click. Automated CI/CD pipeline included.',
+    icon: <Rocket className="w-8 h-8" />,
+    color: 'from-teal-500 to-cyan-400',
   },
   {
-    name: 'Advanced Analytics',
-    description: 'Track your development progress, code quality metrics, and deployment performance.',
-    icon: (
-      <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-      </svg>
-    ),
+    name: 'Real-time Collaboration',
+    description: 'Work with your team in real-time. Share projects, review code, and build together with seamless collaboration tools.',
+    icon: <Users className="w-8 h-8" />,
+    color: 'from-cyan-500 to-teal-400',
   },
 ];
 
 export default function Features() {
   return (
-    <div className="py-12 bg-gray-50" id="features">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="lg:text-center">
-          <h2 className="text-base text-blue-600 font-semibold tracking-wide uppercase">Features</h2>
-          <p className="mt-2 text-3xl leading-8 font-extrabold tracking-tight text-gray-900 sm:text-4xl">
-            Everything you need to build better apps
-          </p>
-          <p className="mt-4 max-w-2xl text-xl text-gray-500 lg:mx-auto">
-            Our AI-powered platform provides all the tools you need to develop, test, and deploy applications faster than ever before.
+    <div className="py-20 bg-gradient-to-r from-teal-600 via-cyan-600 to-teal-600 relative overflow-hidden" id="features">
+      {/* Background decoration */}
+      <div className="absolute inset-0 opacity-10">
+        <div className="absolute top-1/4 right-1/4 w-40 h-40">
+          <CeliadorLogo size="2xl" variant="icon" />
+        </div>
+        <div className="absolute bottom-1/4 left-1/4 w-32 h-32">
+          <CeliadorLogo size="xl" variant="icon" />
+        </div>
+      </div>
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
+        <div className="text-center mb-16">
+          <div className="inline-flex items-center px-4 py-2 rounded-full bg-white/20 backdrop-blur-sm border border-white/30 mb-6">
+            <CeliadorLogo size="sm" variant="icon" className="mr-2" />
+            <span className="text-sm font-semibold text-white">Powerful Features</span>
+          </div>
+          <h2 className="text-4xl font-bold text-white sm:text-5xl mb-6">
+            Everything you need to build
+            <span className="block text-teal-100">
+              truly lovable apps
+            </span>
+          </h2>
+          <p className="max-w-3xl mx-auto text-xl text-teal-100 leading-relaxed">
+            Our AI-powered platform combines intelligent code generation, real-time collaboration, 
+            and seamless deployment to transform how you build applications.
           </p>
         </div>
 
-        <div className="mt-10">
-          <dl className="space-y-10 md:space-y-0 md:grid md:grid-cols-2 md:gap-x-8 md:gap-y-10">
-            {features.map((feature) => (
-              <div key={feature.name} className="relative">
-                <dt>
-                  <div className="absolute flex items-center justify-center h-12 w-12 rounded-md bg-gradient-to-r from-blue-600 to-purple-600 text-white">
-                    {feature.icon}
-                  </div>
-                  <p className="ml-16 text-lg leading-6 font-medium text-gray-900">{feature.name}</p>
-                </dt>
-                <dd className="mt-2 ml-16 text-base text-gray-500">{feature.description}</dd>
+        <div className="grid grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-3">
+          {features.map((feature, index) => (
+            <div 
+              key={feature.name} 
+              className="relative group bg-white/10 backdrop-blur-sm rounded-2xl p-8 shadow-lg shadow-black/10 hover:shadow-xl hover:shadow-black/20 transition-all duration-300 hover:-translate-y-1 border border-white/20"
+            >
+              <div className={`flex items-center justify-center w-16 h-16 rounded-2xl bg-white text-teal-600 shadow-lg shadow-black/25 mb-6 group-hover:scale-110 transition-transform duration-300`}>
+                {feature.icon}
               </div>
-            ))}
-          </dl>
+              <h3 className="text-xl font-bold text-white mb-4">{feature.name}</h3>
+              <p className="text-teal-100 leading-relaxed">{feature.description}</p>
+              
+              {/* Decorative element */}
+              <div className="absolute top-4 right-4 w-20 h-20 bg-white/5 rounded-full opacity-20 group-hover:opacity-30 transition-opacity duration-300"></div>
+            </div>
+          ))}
+        </div>
+
+        {/* Bottom CTA */}
+        <div className="text-center mt-16">
+          <p className="text-lg text-teal-100 mb-4">Ready to experience the magic?</p>
+          <div className="inline-flex items-center text-white font-semibold hover:text-teal-100 transition-colors duration-200 cursor-pointer">
+            <span>Start building for free</span>
+            <svg className="w-5 h-5 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3" />
+            </svg>
+          </div>
         </div>
       </div>
     </div>

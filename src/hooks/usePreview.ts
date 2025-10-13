@@ -152,12 +152,26 @@ export function usePreview(projectId: string | null) {
     }
   }, [preview, stopPreview, startPreview]);
 
-  // Poll for preview status updates
+  // Poll for preview status updates with timeout
   const pollPreviewStatus = useCallback(async (previewId: string) => {
     if (!projectId) return;
 
+    let pollCount = 0;
+    const maxPolls = 60; // 60 polls * 2s = 2 minutes timeout
+    const startTime = Date.now();
+
     const poll = async () => {
       try {
+        pollCount++;
+        const elapsed = Math.floor((Date.now() - startTime) / 1000);
+        
+        // Check for timeout
+        if (pollCount > maxPolls) {
+          console.warn(`[usePreview] ⏰ Polling timeout after ${elapsed}s - preview may be stuck`);
+          setError('Preview startup timed out. Try clicking the Reset button to restart the preview.');
+          return;
+        }
+        
         const data = await ApiClient.getPreviewStatus(projectId, previewId);
         const updatedPreview = data.preview;
         
@@ -170,22 +184,30 @@ export function usePreview(projectId: string | null) {
           return prev;
         });
 
-        console.log('[usePreview] Poll result:', updatedPreview.status, 'for preview:', previewId);
+        console.log(`[usePreview] Poll ${pollCount}/${maxPolls} (${elapsed}s):`, updatedPreview.status, 'for preview:', previewId);
         
         // Continue polling until preview reaches a final state
         if (updatedPreview.status === 'starting' || updatedPreview.status === 'syncing') {
-          console.log('[usePreview] Preview still', updatedPreview.status, '- continuing to poll');
+          console.log(`[usePreview] Preview still ${updatedPreview.status} - continuing to poll (${pollCount}/${maxPolls})`);
           setTimeout(poll, 2000);
         } else if (updatedPreview.status === 'running') {
           console.log('[usePreview] ✅ Preview is now running - polling complete');
+          setError(null); // Clear any previous timeout errors
         } else {
           console.log('[usePreview] Preview in final state:', updatedPreview.status, '- polling stopped');
         }
       } catch (error) {
         console.error('[usePreview] Error polling status:', error);
-        // On error, retry polling with longer interval (could be temporary network issue)
-        console.log('[usePreview] Retrying poll after error in 5 seconds');
-        setTimeout(poll, 5000);
+        
+        // On error, retry with exponential backoff, but respect the timeout
+        if (pollCount < maxPolls) {
+          const retryDelay = Math.min(5000 + (pollCount * 500), 10000); // Max 10s delay
+          console.log(`[usePreview] Retrying poll after error in ${retryDelay}ms (attempt ${pollCount}/${maxPolls})`);
+          setTimeout(poll, retryDelay);
+        } else {
+          console.error('[usePreview] Max polling attempts reached after errors');
+          setError('Preview startup failed after multiple attempts. Try clicking the Reset button.');
+        }
       }
     };
 

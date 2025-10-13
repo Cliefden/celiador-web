@@ -1,8 +1,14 @@
 import './globals.css';
+import { Inter } from 'next/font/google';
 import { AuthProvider } from '../contexts/AuthContext';
 import { SettingsProvider } from '../contexts/SettingsContext';
 import { SettingsPanelProvider } from '../contexts/SettingsPanelContext';
 import { SettingsWindow } from '../components/settings/SettingsPanel';
+
+const inter = Inter({ 
+  subsets: ['latin'],
+  variable: '--font-inter',
+});
 
 export const metadata = { 
   title: 'Celiador Studio', 
@@ -36,7 +42,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
         <meta name="apple-mobile-web-app-title" content="Celiador" />
       </head>
-      <body>
+      <body className={inter.className}>
         <AuthProvider>
           <SettingsProvider>
             <SettingsPanelProvider>

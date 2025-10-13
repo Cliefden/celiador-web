@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
+import { CeliadorLogo } from '../ui/celiador-logo';
 
 interface SignUpModalProps {
   isOpen: boolean;
@@ -79,18 +80,21 @@ export default function SignUpModal({ isOpen, onClose, onSwitchToSignIn }: SignU
       <div className="fixed inset-0 z-50 flex items-center justify-center">
         <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
         <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 p-8 text-center">
-          <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-            <svg className="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-            </svg>
+          <div className="mb-6">
+            <CeliadorLogo size="lg" variant="icon" className="mx-auto mb-3" />
+            <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <svg className="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              </svg>
+            </div>
           </div>
-          <h2 className="text-2xl font-bold text-gray-900 mb-2">Account created!</h2>
+          <h2 className="text-2xl font-bold text-gray-900 mb-2">Welcome to Celiador!</h2>
           <p className="text-gray-600 mb-6">
-            Please check your email to confirm your account before signing in.
+            Please check your email to confirm your account before signing in and start building truly lovable apps.
           </p>
           <Button
             onClick={onClose}
-            className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white"
+            variant="celiador"
           >
             Got it
           </Button>
@@ -121,11 +125,13 @@ export default function SignUpModal({ isOpen, onClose, onSwitchToSignIn }: SignU
 
         {/* Header */}
         <div className="text-center mb-8">
-          <div className="w-12 h-12 bg-gradient-to-br from-blue-600 to-purple-600 rounded-xl flex items-center justify-center mx-auto mb-4">
-            <span className="text-white font-bold text-lg">C</span>
+          <div className="mb-6">
+            <CeliadorLogo size="lg" variant="icon" className="mx-auto mb-3" animate />
+            <div className="text-xl font-bold text-gray-900">Celiador</div>
+            <div className="text-xs font-medium tracking-widest text-teal-600 uppercase">Truly Lovable</div>
           </div>
           <h2 className="text-2xl font-bold text-gray-900">Create your account</h2>
-          <p className="text-gray-600 mt-2">Join Celiador and start building amazing apps</p>
+          <p className="text-gray-600 mt-2">Join Celiador and start building truly lovable apps</p>
         </div>
 
         {/* Form */}
@@ -232,7 +238,8 @@ export default function SignUpModal({ isOpen, onClose, onSwitchToSignIn }: SignU
           <Button
             type="submit"
             disabled={isLoading}
-            className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white py-3 mt-6"
+            variant="celiador"
+            className="w-full py-3 mt-6"
           >
             {isLoading ? 'Creating account...' : 'Create Account'}
           </Button>
@@ -244,7 +251,7 @@ export default function SignUpModal({ isOpen, onClose, onSwitchToSignIn }: SignU
             Already have an account?{' '}
             <button
               onClick={onSwitchToSignIn}
-              className="text-blue-600 hover:text-blue-700 font-medium transition-colors"
+              className="text-teal-600 hover:text-teal-700 font-medium transition-colors"
             >
               Sign in
             </button>

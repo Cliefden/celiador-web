@@ -36,8 +36,8 @@ export function FloatingWindowController({
   return (
     <div className={className}>
       {/* Floating Action Buttons - Stack vertically from bottom */}
-      <div className="fixed right-6 bottom-6 z-[80]">
-        <div className="flex flex-col-reverse space-y-reverse space-y-3">
+      <div className="fixed right-4 bottom-20 z-[80]">
+        <div className="flex flex-col-reverse space-y-reverse space-y-2">
           {availableWindows.map((content, index) => (
             <FloatingActionButton
               key={content}
@@ -45,7 +45,7 @@ export function FloatingWindowController({
               onClick={() => openWindow(content)}
               className={`
                 transition-all duration-200 ease-out
-                ${activeWindow === content ? 'ring-2 ring-blue-300 ring-offset-2' : ''}
+                ${activeWindow === content ? 'ring-2 ring-teal-400 ring-offset-2 ring-offset-black' : ''}
                 ${index > 0 ? 'opacity-80 hover:opacity-100' : ''}
               `}
             />

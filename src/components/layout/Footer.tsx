@@ -1,11 +1,12 @@
 import Link from 'next/link';
+import { CeliadorLogo } from '../ui/celiador-logo';
 
 export default function Footer() {
   const navigation = {
     product: [
       { name: 'Features', href: '/#features' },
+      { name: 'Templates', href: '/#templates' },
       { name: 'Solutions', href: '/solutions' },
-      { name: 'Pricing', href: '/#pricing' },
       { name: 'API', href: '/api' },
     ],
     company: [
@@ -67,28 +68,38 @@ export default function Footer() {
   ];
 
   return (
-    <footer className="bg-gray-900" aria-labelledby="footer-heading">
+    <footer className="bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 relative overflow-hidden" aria-labelledby="footer-heading">
       <h2 id="footer-heading" className="sr-only">
         Footer
       </h2>
-      <div className="max-w-7xl mx-auto py-12 px-4 sm:px-6 lg:py-16 lg:px-8">
+      
+      {/* Background decoration */}
+      <div className="absolute inset-0 opacity-5">
+        <div className="absolute top-10 right-10 w-32 h-32">
+          <CeliadorLogo size="2xl" variant="icon" />
+        </div>
+        <div className="absolute bottom-10 left-10 w-24 h-24">
+          <CeliadorLogo size="xl" variant="icon" />
+        </div>
+      </div>
+      
+      <div className="max-w-7xl mx-auto py-12 px-4 sm:px-6 lg:py-16 lg:px-8 relative z-10">
         <div className="xl:grid xl:grid-cols-3 xl:gap-8">
           <div className="space-y-8 xl:col-span-1">
-            <div className="flex items-center space-x-2">
-              <div className="w-8 h-8 bg-gradient-to-br from-blue-600 to-purple-600 rounded-lg flex items-center justify-center">
-                <span className="text-white font-bold text-sm">C</span>
-              </div>
-              <span className="text-xl font-bold text-white">Celiador</span>
+            <div className="flex items-center space-x-3">
+              <CeliadorLogo size="md" variant="icon" className="opacity-90" />
+              <span className="text-2xl font-bold text-white">Celiador</span>
             </div>
-            <p className="text-gray-400 text-base">
-              Build better apps with AI-powered development tools. Generate, test, and deploy faster than ever before.
+            <p className="text-gray-300 text-base leading-relaxed max-w-md">
+              Build apps truly lovable with AI-powered development. Transform ideas into production-ready 
+              applications with intelligent code generation and seamless deployment.
             </p>
             <div className="flex space-x-6">
               {social.map((item) => (
                 <a
                   key={item.name}
                   href={item.href}
-                  className="text-gray-400 hover:text-gray-300"
+                  className="text-gray-400 hover:text-teal-400 transition-colors duration-200"
                 >
                   <span className="sr-only">{item.name}</span>
                   <item.icon className="h-6 w-6" aria-hidden="true" />
@@ -99,15 +110,15 @@ export default function Footer() {
           <div className="mt-12 grid grid-cols-2 gap-8 xl:mt-0 xl:col-span-2">
             <div className="md:grid md:grid-cols-2 md:gap-8">
               <div>
-                <h3 className="text-sm font-semibold text-gray-400 tracking-wider uppercase">
+                <h3 className="text-sm font-semibold text-teal-400 tracking-wider uppercase mb-4">
                   Product
                 </h3>
-                <ul role="list" className="mt-4 space-y-4">
+                <ul role="list" className="space-y-3">
                   {navigation.product.map((item) => (
                     <li key={item.name}>
                       <Link
                         href={item.href}
-                        className="text-base text-gray-300 hover:text-white"
+                        className="text-base text-gray-300 hover:text-teal-400 transition-colors duration-200"
                       >
                         {item.name}
                       </Link>
@@ -116,15 +127,15 @@ export default function Footer() {
                 </ul>
               </div>
               <div className="mt-12 md:mt-0">
-                <h3 className="text-sm font-semibold text-gray-400 tracking-wider uppercase">
+                <h3 className="text-sm font-semibold text-teal-400 tracking-wider uppercase mb-4">
                   Company
                 </h3>
-                <ul role="list" className="mt-4 space-y-4">
+                <ul role="list" className="space-y-3">
                   {navigation.company.map((item) => (
                     <li key={item.name}>
                       <Link
                         href={item.href}
-                        className="text-base text-gray-300 hover:text-white"
+                        className="text-base text-gray-300 hover:text-teal-400 transition-colors duration-200"
                       >
                         {item.name}
                       </Link>
@@ -135,15 +146,15 @@ export default function Footer() {
             </div>
             <div className="md:grid md:grid-cols-2 md:gap-8">
               <div>
-                <h3 className="text-sm font-semibold text-gray-400 tracking-wider uppercase">
+                <h3 className="text-sm font-semibold text-teal-400 tracking-wider uppercase mb-4">
                   Support
                 </h3>
-                <ul role="list" className="mt-4 space-y-4">
+                <ul role="list" className="space-y-3">
                   {navigation.support.map((item) => (
                     <li key={item.name}>
                       <Link
                         href={item.href}
-                        className="text-base text-gray-300 hover:text-white"
+                        className="text-base text-gray-300 hover:text-teal-400 transition-colors duration-200"
                       >
                         {item.name}
                       </Link>
@@ -152,15 +163,15 @@ export default function Footer() {
                 </ul>
               </div>
               <div className="mt-12 md:mt-0">
-                <h3 className="text-sm font-semibold text-gray-400 tracking-wider uppercase">
+                <h3 className="text-sm font-semibold text-teal-400 tracking-wider uppercase mb-4">
                   Legal
                 </h3>
-                <ul role="list" className="mt-4 space-y-4">
+                <ul role="list" className="space-y-3">
                   {navigation.legal.map((item) => (
                     <li key={item.name}>
                       <Link
                         href={item.href}
-                        className="text-base text-gray-300 hover:text-white"
+                        className="text-base text-gray-300 hover:text-teal-400 transition-colors duration-200"
                       >
                         {item.name}
                       </Link>
@@ -171,10 +182,20 @@ export default function Footer() {
             </div>
           </div>
         </div>
-        <div className="mt-12 border-t border-gray-700 pt-8">
-          <p className="text-base text-gray-400 xl:text-center">
-            &copy; 2024 Celiador. All rights reserved.
-          </p>
+        
+        {/* Enhanced footer bottom */}
+        <div className="mt-12 border-t border-gray-700/50 pt-8">
+          <div className="flex flex-col md:flex-row items-center justify-between">
+            <div className="flex items-center space-x-2 mb-4 md:mb-0">
+              <CeliadorLogo size="sm" variant="icon" className="opacity-60" />
+              <p className="text-base text-gray-400">
+                &copy; 2024 Celiador. Building apps truly lovable.
+              </p>
+            </div>
+            <div className="text-sm text-gray-500">
+              Made with ❤️ for developers worldwide
+            </div>
+          </div>
         </div>
       </div>
     </footer>

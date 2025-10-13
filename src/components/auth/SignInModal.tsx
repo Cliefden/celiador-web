@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
+import { CeliadorLogo } from '../ui/celiador-logo';
 
 interface SignInModalProps {
   isOpen: boolean;
@@ -69,11 +70,13 @@ export default function SignInModal({ isOpen, onClose, onSwitchToSignUp }: SignI
 
         {/* Header */}
         <div className="text-center mb-8">
-          <div className="w-12 h-12 bg-gradient-to-br from-blue-600 to-purple-600 rounded-xl flex items-center justify-center mx-auto mb-4">
-            <span className="text-white font-bold text-lg">B</span>
+          <div className="mb-6">
+            <CeliadorLogo size="lg" variant="icon" className="mx-auto mb-3" animate />
+            <div className="text-xl font-bold text-gray-900">Celiador</div>
+            <div className="text-xs font-medium tracking-widest text-teal-600 uppercase">Truly Lovable</div>
           </div>
           <h2 className="text-2xl font-bold text-gray-900">Welcome back</h2>
-          <p className="text-gray-600 mt-2">Sign in to your Celiador account</p>
+          <p className="text-gray-600 mt-2">Sign in to continue building truly lovable apps</p>
         </div>
 
         {/* Form */}
@@ -117,7 +120,8 @@ export default function SignInModal({ isOpen, onClose, onSwitchToSignUp }: SignI
           <Button
             type="submit"
             disabled={isLoading}
-            className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white py-3"
+            variant="celiador"
+            className="w-full py-3"
           >
             {isLoading ? 'Signing in...' : 'Sign In'}
           </Button>
@@ -129,7 +133,7 @@ export default function SignInModal({ isOpen, onClose, onSwitchToSignUp }: SignI
             Don't have an account?{' '}
             <button
               onClick={onSwitchToSignUp}
-              className="text-blue-600 hover:text-blue-700 font-medium transition-colors"
+              className="text-teal-600 hover:text-teal-700 font-medium transition-colors"
             >
               Sign up
             </button>

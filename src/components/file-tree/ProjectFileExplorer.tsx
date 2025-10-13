@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { SimpleFileExplorer } from './SimpleFileExplorer';
 import { supabase } from '../../lib/supabase';
+import { useFileRefresh } from './useFileRefresh';
 
 interface FileNode {
   name: string;
@@ -30,6 +31,7 @@ export function ProjectFileExplorer({
   const [files, setFiles] = useState<FileNode[]>([]);
   const [loading, setLoading] = useState(false);
   const [isScaffolding, setIsScaffolding] = useState(false);
+  const { onFileRefresh } = useFileRefresh(projectId);
 
   useEffect(() => {
     fetchFiles();
@@ -54,6 +56,18 @@ export function ProjectFileExplorer({
       }
     };
   }, [isScaffolding, projectId]);
+
+  // Listen for file refresh events
+  useEffect(() => {
+    const cleanup = onFileRefresh((event) => {
+      if (event.detail.projectId === projectId) {
+        console.log(`[ProjectFileExplorer] Received refresh event for ${event.detail.filePath} (${event.detail.operation})`);
+        fetchFiles(true); // Silent refresh
+      }
+    });
+
+    return cleanup;
+  }, [onFileRefresh, projectId]);
 
   const handleFileSelect = (file: any) => {
     if (typeof file === 'string') {

@@ -23,9 +23,11 @@ import {
   MoreHorizontal,
   Trash2,
   Search,
-  MousePointer
+  MousePointer,
+  RotateCcw
 } from 'lucide-react';
 import { SettingsMenuItem } from '../settings/SettingsPanel';
+import { CeliadorLogo } from '../ui/celiador-logo';
 
 interface User {
   id: string;
@@ -426,6 +428,59 @@ The user has visually selected this specific UI element and wants to modify it. 
     }
   };
 
+  const resetPreview = async () => {
+    console.log('🔄 Resetting preview...');
+    
+    try {
+      // Reset iframe state immediately
+      setIframeLoaded(false);
+      setCurrentPreviewUrl(null);
+      
+      // Turn off inspection mode if it's on
+      if (inspectionMode) {
+        setInspectionMode(false);
+        setSelectedElement(null);
+      }
+      
+      // If preview is stuck in syncing/starting state, try to stop and restart it
+      if (preview && selectedProject && (preview.status === 'syncing' || preview.status === 'starting')) {
+        console.log(`🛑 Preview stuck in ${preview.status} state - attempting force restart`);
+        
+        try {
+          // Stop the current preview
+          await stopPreview();
+          
+          // Wait a moment, then start a new preview
+          setTimeout(async () => {
+            console.log('🚀 Starting fresh preview after reset...');
+            await startPreview();
+          }, 1000);
+        } catch (error) {
+          console.error('❌ Error force restarting preview:', error);
+          // Fall back to just refreshing the URL
+          setTimeout(async () => {
+            if (preview?.status === 'running') {
+              const url = await getPreviewUrl();
+              setCurrentPreviewUrl(url);
+            }
+          }, 100);
+        }
+      } else {
+        // For running previews or no preview, just refresh the URL
+        setTimeout(async () => {
+          if (preview?.status === 'running') {
+            const url = await getPreviewUrl();
+            setCurrentPreviewUrl(url);
+          }
+        }, 100);
+      }
+      
+      console.log('✅ Preview reset successfully');
+    } catch (error) {
+      console.error('❌ Error resetting preview:', error);
+    }
+  };
+
   const handleElementSelection = (element: UIElement) => {
     setSelectedElement(element);
     
@@ -451,10 +506,16 @@ The user has visually selected this specific UI element and wants to modify it. 
     const baseUrl = preview.url;
     
     // If inspection mode is enabled, use the server-side inspection route
+    console.log('🔍 Debug inspection check:', { inspectionMode, previewId: preview.id, selectedProjectId: selectedProject?.id });
+    
     if (inspectionMode && preview.id) {
+      console.log('🔍 Inspection mode enabled and preview.id exists, getting auth token...');
       try {
         // Get auth token for inspection route
+        console.log('🔍 About to call supabase.auth.getSession()...');
         const { data: { session } } = await supabase.auth.getSession();
+        console.log('🔍 getSession() completed successfully');
+        console.log('🔍 Got session:', { hasSession: !!session, hasToken: !!session?.access_token });
         const authToken = session?.access_token;
         
         if (!authToken) {
@@ -525,33 +586,29 @@ The user has visually selected this specific UI element and wants to modify it. 
         selectedFile={selectedFile}
       />
       
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50">
+      <div className="h-screen bg-black overflow-hidden">
       {/* Header */}
-      <header className="bg-white/80 backdrop-blur-xl border-b border-white/20 sticky top-0 z-50">
+      <header className="bg-gray-900/50 backdrop-blur-md border-b border-gray-700/50 sticky top-0 z-50">
         <div className="px-6 h-16 flex items-center justify-between">
           {/* Logo & Navigation */}
           <div className="flex items-center space-x-8">
             <div className="flex items-center space-x-3">
-              <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-purple-600 rounded-xl flex items-center justify-center shadow-lg">
-                <span className="text-white font-bold text-lg">C</span>
-              </div>
-              <span className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-                Celiador
-              </span>
+              <CeliadorLogo size="md" variant="icon" className="hover:scale-105 transition-transform duration-200" animate />
+              <span className="text-2xl font-bold text-white">Celiador</span>
             </div>
             
             {/* Navigation Links */}
             <nav className="hidden md:flex space-x-6">
-              <a href="/dashboard" className="text-blue-600 font-medium px-3 py-2 text-sm">
+              <a href="/dashboard" className="text-teal-400 font-medium px-3 py-2 text-sm">
                 Dashboard
               </a>
-              <a href="/solutions" className="text-gray-700 hover:text-blue-600 px-3 py-2 text-sm font-medium transition-colors duration-200">
+              <a href="/solutions" className="text-gray-300 hover:text-white px-3 py-2 text-sm font-medium transition-colors duration-200">
                 Solutions
               </a>
-              <a href="/about" className="text-gray-700 hover:text-blue-600 px-3 py-2 text-sm font-medium transition-colors duration-200">
+              <a href="/about" className="text-gray-300 hover:text-white px-3 py-2 text-sm font-medium transition-colors duration-200">
                 About
               </a>
-              <a href="/contact" className="text-gray-700 hover:text-blue-600 px-3 py-2 text-sm font-medium transition-colors duration-200">
+              <a href="/contact" className="text-gray-300 hover:text-white px-3 py-2 text-sm font-medium transition-colors duration-200">
                 Contact
               </a>
             </nav>
@@ -561,25 +618,25 @@ The user has visually selected this specific UI element and wants to modify it. 
           <div className="relative" ref={userMenuRef}>
             <button
               onClick={() => setShowUserMenu(!showUserMenu)}
-              className="flex items-center space-x-3 p-2 rounded-lg bg-white/60 hover:bg-white/80 transition-all"
+              className="flex items-center space-x-3 p-2 rounded-lg bg-gray-800/60 hover:bg-gray-800/80 transition-all"
             >
-              <div className="w-8 h-8 bg-gradient-to-br from-blue-600 to-purple-600 rounded-full flex items-center justify-center">
+              <div className="w-8 h-8 bg-gradient-to-br from-teal-500 to-cyan-500 rounded-full flex items-center justify-center">
                 <span className="text-white font-bold text-xs">
                   {(user.name || user.email || 'U').charAt(0).toUpperCase()}
                 </span>
               </div>
-              <span className="text-sm font-medium text-gray-700 hidden md:block">
+              <span className="text-sm font-medium text-white hidden md:block">
                 {user.name || user.email}
               </span>
-              <ChevronDown className="h-4 w-4 text-gray-500" />
+              <ChevronDown className="h-4 w-4 text-gray-300" />
             </button>
             
             {showUserMenu && (
-              <div className="absolute top-12 right-0 bg-white rounded-lg shadow-lg border border-gray-200 py-2 min-w-48">
+              <div className="absolute top-12 right-0 bg-gray-800 rounded-lg shadow-lg border border-gray-600 py-2 min-w-48">
                 <SettingsMenuItem />
                 <button
                   onClick={onLogout}
-                  className="flex items-center space-x-2 w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                  className="flex items-center space-x-2 w-full px-4 py-2 text-sm text-gray-300 hover:bg-gray-700"
                 >
                   <LogOut className="h-4 w-4" />
                   <span>Sign Out</span>
@@ -596,20 +653,20 @@ The user has visually selected this specific UI element and wants to modify it. 
         {projects.length > 0 && (
           <div className="mb-4 flex items-center justify-between flex-shrink-0">
             <div className="flex items-center space-x-3">
-              <span className="text-sm text-gray-600">Project:</span>
+              <span className="text-sm text-gray-300">Project:</span>
               <div className="relative" ref={projectDropdownRef}>
                 <button
                   onClick={() => setShowProjectDropdown(!showProjectDropdown)}
-                  className="flex items-center space-x-2 px-3 py-2 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-all min-w-48"
+                  className="flex items-center space-x-2 px-3 py-2 bg-gray-800 border border-gray-600 rounded-lg hover:bg-gray-700 transition-all min-w-48"
                 >
-                  <span className="text-sm font-medium text-gray-900 truncate">
+                  <span className="text-sm font-medium text-white truncate">
                     {selectedProject?.name || 'Select project...'}
                   </span>
-                  <ChevronDown className="h-4 w-4 text-gray-500 ml-auto" />
+                  <ChevronDown className="h-4 w-4 text-gray-300 ml-auto" />
                 </button>
                 
                 {showProjectDropdown && (
-                  <div className="absolute top-12 left-0 bg-white rounded-lg shadow-lg border border-gray-200 py-2 min-w-64 z-20">
+                  <div className="absolute top-12 left-0 bg-gray-800 rounded-lg shadow-lg border border-gray-600 py-2 min-w-64 z-20">
                     {projects.map((project) => (
                       <div key={project.id} className="flex items-center">
                         <button
@@ -619,8 +676,8 @@ The user has visually selected this specific UI element and wants to modify it. 
                             localStorage.setItem('selectedProjectId', project.id);
                             setShowProjectDropdown(false);
                           }}
-                          className={`flex-1 px-4 py-2 text-sm text-left hover:bg-gray-50 ${
-                            selectedProject?.id === project.id ? 'bg-blue-50 text-blue-600' : 'text-gray-700'
+                          className={`flex-1 px-4 py-2 text-sm text-left hover:bg-gray-700 ${
+                            selectedProject?.id === project.id ? 'bg-teal-600/20 text-teal-400' : 'text-gray-300'
                           }`}
                         >
                           {project.name}
@@ -630,22 +687,22 @@ The user has visually selected this specific UI element and wants to modify it. 
                             e.stopPropagation();
                             setShowProjectMenu(showProjectMenu === project.id ? null : project.id);
                           }}
-                          className="p-2 hover:bg-gray-100 rounded-md mr-2"
+                          className="p-2 hover:bg-gray-700 rounded-md mr-2"
                         >
-                          <MoreHorizontal className="h-4 w-4 text-gray-500" />
+                          <MoreHorizontal className="h-4 w-4 text-gray-400" />
                         </button>
                       </div>
                     ))}
                     
                     {/* Project Menu */}
                     {showProjectMenu && (
-                      <div className="border-t border-gray-100 mt-2 pt-2">
+                      <div className="border-t border-gray-600 mt-2 pt-2">
                         <button
                           onClick={() => {
                             const projectToDelete = projects.find(p => p.id === showProjectMenu);
                             if (projectToDelete) handleDeleteProject(projectToDelete);
                           }}
-                          className="flex items-center space-x-2 w-full px-4 py-2 text-sm text-red-600 hover:bg-red-50"
+                          className="flex items-center space-x-2 w-full px-4 py-2 text-sm text-red-400 hover:bg-red-900/20"
                         >
                           <Trash2 className="h-4 w-4" />
                           <span>Delete Project</span>
@@ -659,7 +716,7 @@ The user has visually selected this specific UI element and wants to modify it. 
             
             <button
               onClick={() => setShowCreateProject(true)}
-              className="flex items-center space-x-2 px-3 py-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg hover:from-blue-700 hover:to-purple-700 transition-all shadow-sm text-sm"
+              className="flex items-center space-x-2 px-3 py-2 bg-gradient-to-r from-teal-600 to-cyan-600 text-white rounded-lg hover:from-teal-700 hover:to-cyan-700 transition-all shadow-sm text-sm"
             >
               <Plus className="h-4 w-4" />
               <span>New App</span>
@@ -671,16 +728,16 @@ The user has visually selected this specific UI element and wants to modify it. 
           /* No Project State */
           <div className="h-full flex items-center justify-center">
             <div className="text-center max-w-md">
-              <div className="w-24 h-24 bg-gradient-to-br from-blue-600 to-purple-600 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-xl">
-                <Sparkles className="h-12 w-12 text-white" />
+              <div className="w-24 h-24 bg-gradient-to-br from-teal-600 to-cyan-600 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-xl">
+                <CeliadorLogo size="xl" variant="icon" />
               </div>
-              <h1 className="text-3xl font-bold text-gray-900 mb-4">Welcome to Celiador</h1>
-              <p className="text-gray-600 mb-8">
-                Create your first app with AI. Just describe what you want to build.
+              <h1 className="text-3xl font-bold text-white mb-4">Welcome to Celiador</h1>
+              <p className="text-gray-300 mb-8">
+                Create your first app with AI. Ready to build truly lovable apps.
               </p>
               <button
                 onClick={() => setShowCreateProject(true)}
-                className="inline-flex items-center space-x-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white px-6 py-3 rounded-xl hover:from-blue-700 hover:to-purple-700 transition-all shadow-lg"
+                className="inline-flex items-center space-x-2 bg-gradient-to-r from-teal-600 to-cyan-600 text-white px-6 py-3 rounded-xl hover:from-teal-700 hover:to-cyan-700 transition-all shadow-lg"
               >
                 <Plus className="h-5 w-5" />
                 <span className="font-medium">Create Your First App</span>
@@ -692,31 +749,31 @@ The user has visually selected this specific UI element and wants to modify it. 
           <div className="flex-1 min-h-0 flex flex-col lg:flex-row">
             {/* Chat Panel - Resizable sidebar */}
             <div 
-              className="w-full flex-shrink-0 flex flex-col bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden mr-2"
+              className="w-full flex-shrink-0 flex flex-col bg-gray-900/50 backdrop-blur-sm rounded-2xl shadow-xl border border-gray-700/50 overflow-hidden mr-2"
               style={{ width: isDesktop ? `${chatPanelWidth}px` : '100%' }}
             >
               {/* Chat Header */}
-              <div className="bg-gradient-to-r from-blue-600 to-purple-600 text-white p-4">
+              <div className="bg-gradient-to-r from-teal-600 to-cyan-600 text-white p-4">
                 <div className="flex items-center space-x-3">
                   <div className="w-8 h-8 bg-white/20 rounded-lg flex items-center justify-center">
-                    <Sparkles className="h-5 w-5" />
+                    <CeliadorLogo size="sm" variant="icon" />
                   </div>
                   <div>
                     <h2 className="font-semibold text-lg">AI Assistant</h2>
-                    <p className="text-blue-100 text-sm">Building {selectedProject.name}</p>
+                    <p className="text-teal-100 text-sm">Building {selectedProject.name}</p>
                   </div>
                 </div>
               </div>
 
               {/* Messages */}
-              <div className="flex-1 overflow-y-auto p-4 space-y-4">
+              <div className="flex-1 overflow-y-auto p-4 space-y-4 dark-scrollbar">
                 {!messages || messages.length === 0 ? (
                   <div className="text-center py-12">
-                    <div className="w-16 h-16 bg-gradient-to-br from-blue-100 to-purple-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                      <Sparkles className="h-8 w-8 text-blue-600" />
+                    <div className="w-16 h-16 bg-gradient-to-br from-teal-500/20 to-cyan-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                      <CeliadorLogo size="lg" variant="icon" />
                     </div>
-                    <h3 className="font-semibold text-gray-900 mb-2">Let's build something amazing!</h3>
-                    <p className="text-gray-600 text-sm">
+                    <h3 className="font-semibold text-white mb-2">Let's build something amazing!</h3>
+                    <p className="text-gray-300 text-sm">
                       Tell me what you want to add or change in your app.
                     </p>
                   </div>
@@ -729,8 +786,8 @@ The user has visually selected this specific UI element and wants to modify it. 
                       <div
                         className={`max-w-[80%] p-4 rounded-2xl ${
                           message.role === 'user'
-                            ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white'
-                            : 'bg-gray-100 text-gray-900'
+                            ? 'bg-gradient-to-r from-teal-600 to-cyan-600 text-white'
+                            : 'bg-gray-800/50 text-gray-100 border border-gray-700/50'
                         }`}
                       >
                         {message.content}
@@ -740,28 +797,28 @@ The user has visually selected this specific UI element and wants to modify it. 
                 )}
                 {isBuilding && (
                   <div className="flex justify-start">
-                    <div className="bg-gray-100 p-4 rounded-2xl flex items-center space-x-3">
-                      <Loader2 className="h-5 w-5 animate-spin text-blue-600" />
-                      <span className="text-gray-700">Building your changes...</span>
+                    <div className="bg-gray-800/50 border border-gray-700/50 p-4 rounded-2xl flex items-center space-x-3">
+                      <Loader2 className="h-5 w-5 animate-spin text-teal-400" />
+                      <span className="text-gray-100">Building your changes...</span>
                     </div>
                   </div>
                 )}
               </div>
 
               {/* Message Input */}
-              <div className="p-4 border-t border-gray-100">
+              <div className="p-4 border-t border-gray-700/50">
                 {/* Selected Element Indicator */}
                 {selectedElement && (
-                  <div className="mb-3 p-3 bg-purple-50 border border-purple-200 rounded-lg">
-                    <div className="flex items-center space-x-2 text-purple-700">
+                  <div className="mb-3 p-3 bg-teal-500/10 border border-teal-400/30 rounded-lg">
+                    <div className="flex items-center space-x-2 text-teal-300">
                       <MousePointer className="h-4 w-4" />
                       <span className="text-sm font-medium">Selected Element:</span>
-                      <code className="bg-purple-100 px-2 py-1 rounded text-xs">
+                      <code className="bg-teal-400/20 px-2 py-1 rounded text-xs">
                         {selectedElement.componentName || selectedElement.type}
                       </code>
                       <button 
                         onClick={() => setSelectedElement(null)}
-                        className="ml-auto text-purple-600 hover:text-purple-800"
+                        className="ml-auto text-teal-300 hover:text-teal-100"
                       >
                         ×
                       </button>
@@ -782,13 +839,13 @@ The user has visually selected this specific UI element and wants to modify it. 
                         ? "Click an element in the preview to modify it..."
                         : "Describe what you want to build or change..."
                     }
-                    className="flex-1 p-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="flex-1 p-3 border border-gray-600 bg-gray-800/50 text-white rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent placeholder-gray-400"
                     disabled={conversationLoading || isBuilding}
                   />
                   <button
                     onClick={handleSendMessage}
                     disabled={!currentMessage.trim() || conversationLoading || isBuilding}
-                    className="bg-gradient-to-r from-blue-600 to-purple-600 text-white p-3 rounded-xl hover:from-blue-700 hover:to-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg"
+                    className="bg-gradient-to-r from-teal-600 to-cyan-600 text-white p-3 rounded-xl hover:from-teal-700 hover:to-cyan-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg"
                   >
                     <Send className="h-5 w-5" />
                   </button>
@@ -798,36 +855,42 @@ The user has visually selected this specific UI element and wants to modify it. 
 
             {/* Resize Handle */}
             <div 
-              className="hidden lg:block w-2 hover:w-3 bg-gray-200 hover:bg-blue-400 cursor-ew-resize transition-all duration-200 relative group mr-2 rounded-sm"
+              className="hidden lg:block w-2 hover:w-3 bg-gray-700 hover:bg-teal-500 cursor-ew-resize transition-all duration-200 relative group mr-2 rounded-sm"
               onMouseDown={handleMouseDown}
               title="Drag to resize AI Assistant panel"
             >
-              <div className="absolute inset-y-0 -inset-x-1 flex items-center justify-center group-hover:bg-blue-100/50 transition-colors duration-200 rounded-sm">
+              <div className="absolute inset-y-0 -inset-x-1 flex items-center justify-center group-hover:bg-teal-500/20 transition-colors duration-200 rounded-sm">
                 <div className="flex flex-col space-y-0.5">
-                  <div className="w-0.5 h-3 bg-gray-400 group-hover:bg-blue-500 rounded-full"></div>
-                  <div className="w-0.5 h-3 bg-gray-400 group-hover:bg-blue-500 rounded-full"></div>
-                  <div className="w-0.5 h-3 bg-gray-400 group-hover:bg-blue-500 rounded-full"></div>
+                  <div className="w-0.5 h-3 bg-gray-500 group-hover:bg-teal-300 rounded-full"></div>
+                  <div className="w-0.5 h-3 bg-gray-500 group-hover:bg-teal-300 rounded-full"></div>
+                  <div className="w-0.5 h-3 bg-gray-500 group-hover:bg-teal-300 rounded-full"></div>
                 </div>
               </div>
             </div>
 
             {/* Preview Panel */}
-            <div className="flex-1 flex flex-col bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
+            <div className="flex-1 flex flex-col bg-gray-900/50 backdrop-blur-sm rounded-2xl shadow-xl border border-gray-700/50 overflow-hidden">
               {/* Preview Header */}
-              <div className="bg-gray-50 border-b border-gray-200 p-3">
+              <div className="bg-gray-800/50 border-b border-gray-700/50 p-3">
                 <div className="flex items-center justify-between min-h-[48px]">
                   <div className="flex items-center space-x-3 flex-1">
-                    <h3 className="font-semibold text-gray-900 text-sm">Live Preview</h3>
+                    <div className="flex items-center space-x-2">
+                      <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                      <h3 className="font-semibold text-white text-sm">Live Preview</h3>
+                    </div>
+                    <span className="text-xs text-gray-400 bg-gray-700/50 px-2 py-1 rounded-md">
+                      Your App
+                    </span>
                   </div>
                   <div className="flex items-center space-x-2 flex-shrink-0">
                     {/* Device Selector */}
-                    <div className="flex bg-gray-200 rounded-lg p-1 border border-gray-300">
+                    <div className="flex bg-gray-700 rounded-lg p-1 border border-gray-600">
                       <button
                         onClick={() => setPreviewDevice('mobile')}
                         className={`p-2 rounded-md transition-all ${
                           previewDevice === 'mobile'
-                            ? 'bg-white text-blue-600 shadow-sm'
-                            : 'text-gray-600 hover:text-gray-900'
+                            ? 'bg-gray-800 text-teal-400 shadow-sm'
+                            : 'text-gray-300 hover:text-white'
                         }`}
                         title="Mobile View"
                       >
@@ -837,8 +900,8 @@ The user has visually selected this specific UI element and wants to modify it. 
                         onClick={() => setPreviewDevice('tablet')}
                         className={`p-2 rounded-md transition-all ${
                           previewDevice === 'tablet'
-                            ? 'bg-white text-blue-600 shadow-sm'
-                            : 'text-gray-600 hover:text-gray-900'
+                            ? 'bg-gray-800 text-teal-400 shadow-sm'
+                            : 'text-gray-300 hover:text-white'
                         }`}
                         title="Tablet View"
                       >
@@ -848,8 +911,8 @@ The user has visually selected this specific UI element and wants to modify it. 
                         onClick={() => setPreviewDevice('desktop')}
                         className={`p-2 rounded-md transition-all ${
                           previewDevice === 'desktop'
-                            ? 'bg-white text-blue-600 shadow-sm'
-                            : 'text-gray-600 hover:text-gray-900'
+                            ? 'bg-gray-800 text-teal-400 shadow-sm'
+                            : 'text-gray-300 hover:text-white'
                         }`}
                         title="Desktop View"
                       >
@@ -865,8 +928,8 @@ The user has visually selected this specific UI element and wants to modify it. 
                       }}
                       className={`flex items-center space-x-2 px-3 py-2 rounded-lg transition-all text-sm font-medium ${
                         inspectionMode 
-                          ? 'bg-purple-600 text-white shadow-md hover:bg-purple-700' 
-                          : 'bg-white text-purple-600 hover:bg-purple-50 border border-purple-200'
+                          ? 'bg-teal-600 text-white shadow-md hover:bg-teal-700' 
+                          : 'bg-gray-800 text-teal-400 hover:bg-gray-700 border border-teal-400/30'
                       }`}
                       title={inspectionMode ? 'Exit Inspection Mode' : 'Inspect UI Elements'}
                       type="button"
@@ -884,6 +947,17 @@ The user has visually selected this specific UI element and wants to modify it. 
                       )}
                     </button>
                     
+                    {/* Reset Preview Button */}
+                    <button 
+                      onClick={resetPreview}
+                      className="flex items-center space-x-2 px-3 py-2 rounded-lg transition-all text-sm font-medium bg-gray-800 text-gray-300 hover:bg-gray-700 hover:text-white border border-gray-600/30"
+                      title="Reset Preview"
+                      type="button"
+                    >
+                      <RotateCcw className="h-4 w-4" />
+                      <span>Reset</span>
+                    </button>
+                    
                     {/* Deploy Button */}
                     <button className="flex items-center space-x-2 bg-gradient-to-r from-green-600 to-emerald-600 text-white px-3 py-2 rounded-lg hover:from-green-700 hover:to-emerald-700 transition-all shadow-sm">
                       <Rocket className="h-4 w-4" />
@@ -894,19 +968,31 @@ The user has visually selected this specific UI element and wants to modify it. 
               </div>
 
               {/* Preview Content */}
-              <div className={`flex-1 bg-gray-100 overflow-hidden ${
-                previewDevice === 'desktop' ? 'p-0' : 'p-6 flex items-center justify-center'
+              <div className={`flex-1 bg-white overflow-hidden ${
+                previewDevice === 'desktop' ? 'p-4' : 'p-6 flex items-center justify-center'
               }`}>
                 {currentPreviewUrl ? (
                   <div className={
                     previewDevice === 'desktop' 
-                      ? 'w-full h-full relative' 
-                      : `bg-white rounded-xl shadow-lg overflow-hidden transition-all relative ${getDeviceClasses()}`
+                      ? 'w-full h-full relative bg-white rounded-lg shadow-lg border border-gray-200 overflow-hidden' 
+                      : `bg-white rounded-xl shadow-xl border border-gray-300 overflow-hidden transition-all relative ${getDeviceClasses()}`
                   }>
+                    {previewDevice === 'desktop' && (
+                      <div className="h-10 bg-gray-100 border-b border-gray-200 flex items-center px-4 space-x-2">
+                        <div className="flex space-x-2">
+                          <div className="w-3 h-3 bg-red-500 rounded-full"></div>
+                          <div className="w-3 h-3 bg-yellow-500 rounded-full"></div>
+                          <div className="w-3 h-3 bg-green-500 rounded-full"></div>
+                        </div>
+                        <div className="flex-1 bg-white border border-gray-300 rounded-md px-3 py-1 text-xs text-gray-600 mx-4">
+                          🌐 {selectedProject?.name || 'Your App'} - Live Preview
+                        </div>
+                      </div>
+                    )}
                     <iframe
                       ref={previewIframeRef}
                       src={currentPreviewUrl}
-                      className="w-full h-full border-0"
+                      className={`w-full border-0 ${previewDevice === 'desktop' ? 'h-[calc(100%-2.5rem)]' : 'h-full'}`}
                       title="App Preview"
                       onLoad={() => {
                         console.log('🎬 Preview iframe loaded with URL:', currentPreviewUrl);
@@ -925,12 +1011,12 @@ The user has visually selected this specific UI element and wants to modify it. 
                       }}
                     />
                     {!iframeLoaded && (
-                      <div className="absolute inset-0 bg-white bg-opacity-90 flex items-center justify-center">
+                      <div className="absolute inset-0 bg-white bg-opacity-95 flex items-center justify-center">
                         <div className="text-center">
-                          <div className="w-16 h-16 bg-gradient-to-br from-blue-100 to-purple-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                            <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+                          <div className="w-16 h-16 bg-gradient-to-br from-teal-100 to-cyan-100 rounded-full flex items-center justify-center mx-auto mb-4 border-2 border-teal-200">
+                            <Loader2 className="h-8 w-8 animate-spin text-teal-600" />
                           </div>
-                          <h4 className="font-semibold text-gray-900 mb-2">Loading Preview</h4>
+                          <h4 className="font-semibold text-gray-800 mb-2">Loading Preview</h4>
                           <p className="text-gray-600 text-sm">
                             Waiting for app to render...
                           </p>
@@ -940,28 +1026,28 @@ The user has visually selected this specific UI element and wants to modify it. 
                   </div>
                 ) : preview?.status === 'starting' || preview?.status === 'syncing' || previewLoading ? (
                   <div className="text-center">
-                    <div className="w-16 h-16 bg-gradient-to-br from-blue-100 to-purple-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                      <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+                    <div className="w-16 h-16 bg-gradient-to-br from-teal-500/20 to-cyan-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                      <Loader2 className="h-8 w-8 animate-spin text-teal-400" />
                     </div>
-                    <h4 className="font-semibold text-gray-900 mb-2">
+                    <h4 className="font-semibold text-white mb-2">
                       {preview?.status === 'syncing' ? 'Syncing Files' : 'Starting Preview'}
                     </h4>
-                    <p className="text-gray-600 text-sm">
+                    <p className="text-gray-300 text-sm">
                       {loadingMessage || preview?.status === 'syncing' ? 'Downloading project files...' : 'Setting up your app preview...'}
                     </p>
                     {loadingMessage && (
-                      <p className="text-blue-600 text-xs mt-2 font-medium">
+                      <p className="text-teal-400 text-xs mt-2 font-medium">
                         {loadingMessage}
                       </p>
                     )}
                   </div>
                 ) : preview?.status === 'error' || previewError ? (
                   <div className="text-center">
-                    <div className="w-16 h-16 bg-gradient-to-br from-red-100 to-pink-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                      <AlertCircle className="h-8 w-8 text-red-600" />
+                    <div className="w-16 h-16 bg-gradient-to-br from-red-500/20 to-pink-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                      <AlertCircle className="h-8 w-8 text-red-400" />
                     </div>
-                    <h4 className="font-semibold text-gray-900 mb-2">Preview Error</h4>
-                    <p className="text-gray-600 text-sm mb-4">
+                    <h4 className="font-semibold text-white mb-2">Preview Error</h4>
+                    <p className="text-gray-300 text-sm mb-4">
                       {previewError || preview?.errorMessage || 'Failed to start preview'}
                     </p>
                     {previewError && preview?.errorMessage && previewError !== preview.errorMessage && (
@@ -982,23 +1068,23 @@ The user has visually selected this specific UI element and wants to modify it. 
                     <button
                       onClick={startPreview}
                       disabled={previewLoading}
-                      className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="bg-teal-600 text-white px-4 py-2 rounded-lg hover:bg-teal-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       {previewLoading ? 'Starting...' : 'Try Again'}
                     </button>
                   </div>
                 ) : (
                   <div className="text-center">
-                    <div className="w-16 h-16 bg-gradient-to-br from-gray-200 to-gray-300 rounded-full flex items-center justify-center mx-auto mb-4">
-                      <Monitor className="h-8 w-8 text-gray-600" />
+                    <div className="w-16 h-16 bg-gradient-to-br from-gray-700 to-gray-800 rounded-full flex items-center justify-center mx-auto mb-4">
+                      <Monitor className="h-8 w-8 text-gray-300" />
                     </div>
-                    <h4 className="font-semibold text-gray-900 mb-2">Start Preview</h4>
-                    <p className="text-gray-600 text-sm mb-4">
+                    <h4 className="font-semibold text-white mb-2">Start Preview</h4>
+                    <p className="text-gray-300 text-sm mb-4">
                       Click to preview your app in the browser.
                     </p>
                     <button
                       onClick={startPreview}
-                      className="bg-gradient-to-r from-blue-600 to-purple-600 text-white px-4 py-2 rounded-lg hover:from-blue-700 hover:to-purple-700 transition-all shadow-md"
+                      className="bg-gradient-to-r from-teal-600 to-cyan-600 text-white px-4 py-2 rounded-lg hover:from-teal-700 hover:to-cyan-700 transition-all shadow-md"
                     >
                       Start Preview
                     </button>

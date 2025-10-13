@@ -1,26 +1,155 @@
 @import "tailwindcss";
 
 :root {
+  /* Celiador Brand Colors */
+  --celiador-primary: #14B8A6; /* Teal-500 - main brand color */
+  --celiador-primary-dark: #0D9488; /* Teal-600 */
+  --celiador-primary-light: #5EEAD4; /* Teal-300 */
+  --celiador-accent: #06B6D4; /* Cyan-500 */
+  --celiador-accent-light: #67E8F9; /* Cyan-300 */
+  
+  /* Neutral Colors */
+  --celiador-dark: #1F2937; /* Gray-800 - dark charcoal from logo bg */
+  --celiador-dark-light: #374151; /* Gray-700 */
+  --celiador-light: #F9FAFB; /* Gray-50 */
+  --celiador-light-dark: #F3F4F6; /* Gray-100 */
+  
+  /* Text Colors */
+  --celiador-text-primary: #111827; /* Gray-900 */
+  --celiador-text-secondary: #6B7280; /* Gray-500 */
+  --celiador-text-light: #9CA3AF; /* Gray-400 */
+  
+  /* Background & Surface */
   --background: #ffffff;
-  --foreground: #171717;
+  --foreground: var(--celiador-text-primary);
+  --surface: #ffffff;
+  --surface-elevated: #f8fafc;
+  
+  /* Semantic Colors */
+  --success: #10B981; /* Green-500 */
+  --warning: #F59E0B; /* Amber-500 */
+  --error: #EF4444; /* Red-500 */
+  --info: var(--celiador-accent);
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-primary: var(--celiador-primary);
+  --color-primary-dark: var(--celiador-primary-dark);
+  --color-primary-light: var(--celiador-primary-light);
+  --color-accent: var(--celiador-accent);
+  --color-dark: var(--celiador-dark);
+  --color-surface: var(--surface);
+  --font-sans: 'Inter', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --background: var(--celiador-dark);
+    --foreground: #F9FAFB;
+    --surface: var(--celiador-dark-light);
+    --surface-elevated: #4B5563;
+    --celiador-text-primary: #F9FAFB;
+    --celiador-text-secondary: #D1D5DB;
+    --celiador-text-light: #9CA3AF;
   }
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: 'Inter', system-ui, sans-serif;
+  font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+  font-optical-sizing: auto;
+}
+
+/* Celiador Logo Animation */
+@keyframes celiador-pulse {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.05);
+    opacity: 0.8;
+  }
+}
+
+.celiador-logo {
+  animation: celiador-pulse 2s ease-in-out infinite;
+}
+
+/* Gradient Backgrounds */
+.celiador-gradient-primary {
+  background: linear-gradient(135deg, var(--celiador-primary), var(--celiador-accent));
+}
+
+.celiador-gradient-dark {
+  background: linear-gradient(135deg, var(--celiador-dark), var(--celiador-dark-light));
+}
+
+/* Custom Scrollbar - Dark Theme Optimized */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(31, 41, 55, 0.3); /* gray-800/30 */
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(20, 184, 166, 0.6); /* teal-500/60 */
+  border-radius: 4px;
+  border: 1px solid rgba(31, 41, 55, 0.2);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(20, 184, 166, 0.8); /* teal-500/80 */
+}
+
+::-webkit-scrollbar-thumb:active {
+  background: rgba(13, 148, 136, 0.9); /* teal-600/90 */
+}
+
+/* Corner where scrollbars meet */
+::-webkit-scrollbar-corner {
+  background: rgba(31, 41, 55, 0.3);
+}
+
+/* Firefox scrollbar support */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(20, 184, 166, 0.6) rgba(31, 41, 55, 0.3);
+}
+
+/* Specific scrollbar styling for dark containers */
+.dark-scrollbar::-webkit-scrollbar-track {
+  background: rgba(17, 24, 39, 0.5); /* gray-900/50 */
+}
+
+.dark-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(20, 184, 166, 0.4); /* teal-500/40 */
+}
+
+.dark-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(20, 184, 166, 0.6); /* teal-500/60 */
+}
+
+/* Smooth scrolling for better UX */
+html {
+  scroll-behavior: smooth;
+}
+
+/* Hide scrollbars but keep functionality for specific elements if needed */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
 }

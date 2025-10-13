@@ -12,15 +12,28 @@ interface Conversation {
   userId: string;
 }
 
+interface FileOperationPreview {
+  operations: Array<{
+    type: 'create_file' | 'update_file' | 'delete_file';
+    path: string;
+    content?: string;
+  }>;
+  aiResponse: string;
+  conversationId: string;
+}
+
 interface UseConversationReturn {
   conversation: Conversation | null;
   messages: Message[];
   loading: boolean;
   error: string | null;
-sendMessage: (content: string, messageType?: Message['messageType'], targetConversation?: Conversation) => Promise<void>;
-createConversation: (title: string) => Promise<Conversation>;
+  pendingFileOperations: FileOperationPreview | null;
+  sendMessage: (content: string, messageType?: Message['messageType'], targetConversation?: Conversation) => Promise<void>;
+  createConversation: (title: string) => Promise<Conversation>;
   loadConversation: (conversationId: string) => Promise<void>;
   clearConversation: () => void;
+  approveFileOperations: (operations: any[]) => Promise<void>;
+  rejectFileOperations: () => void;
 }
 
 export function useConversation(projectId?: string): UseConversationReturn {
@@ -28,6 +41,7 @@ export function useConversation(projectId?: string): UseConversationReturn {
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [pendingFileOperations, setPendingFileOperations] = useState<FileOperationPreview | null>(null);
 
   // Load existing conversation for project
   const loadProjectConversation = useCallback(async () => {

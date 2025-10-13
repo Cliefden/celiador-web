@@ -3,6 +3,7 @@
 import Header from '../../components/layout/Header';
 import Footer from '../../components/layout/Footer';
 import { Button } from '../../components/ui/button';
+import { CeliadorLogo } from '../../components/ui/celiador-logo';
 
 const values = [
   {
@@ -80,49 +81,66 @@ const milestones = [
 
 export default function AboutPage() {
   return (
-    <div className="min-h-screen bg-white">
+    <div className="min-h-screen bg-black">
       <Header />
       
       {/* Hero Section */}
-      <div className="pt-16 bg-gradient-to-br from-blue-50 to-purple-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-24">
+      <div className="pt-16 bg-gradient-to-r from-teal-600 via-cyan-600 to-teal-600 relative overflow-hidden">
+        {/* Background decoration */}
+        <div className="absolute inset-0 opacity-10">
+          <div className="absolute top-1/4 right-1/4 w-40 h-40">
+            <CeliadorLogo size="2xl" variant="icon" />
+          </div>
+          <div className="absolute bottom-1/4 left-1/4 w-32 h-32">
+            <CeliadorLogo size="xl" variant="icon" />
+          </div>
+        </div>
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-24 relative z-10">
           <div className="text-center">
-            <h1 className="text-4xl font-extrabold text-gray-900 sm:text-5xl md:text-6xl">
+            <CeliadorLogo size="lg" variant="icon" className="mx-auto mb-6 opacity-90" />
+            <h1 className="text-4xl font-extrabold text-white sm:text-5xl md:text-6xl">
               About
-              <span className="text-blue-600"> Celiador</span>
+              <span className="text-teal-200"> Celiador</span>
             </h1>
-            <p className="mt-6 max-w-2xl mx-auto text-xl text-gray-500">
-              We\'re on a mission to make software development faster, more efficient, and more enjoyable through the power of AI.
+            <p className="mt-6 max-w-2xl mx-auto text-xl text-teal-100">
+              We're on a mission to help developers build truly lovable apps through the power of AI.
             </p>
           </div>
         </div>
       </div>
 
       {/* Mission Section */}
-      <div className="py-16 bg-white">
+      <div className="py-16 bg-gradient-to-br from-gray-800 to-black">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
             <div>
-              <h2 className="text-3xl font-extrabold text-gray-900 sm:text-4xl mb-6">
-                Our Mission
+              <div className="inline-flex items-center px-6 py-3 rounded-full bg-gradient-to-r from-teal-500/20 to-cyan-500/20 border border-teal-400/30 mb-6">
+                <CeliadorLogo size="sm" variant="icon" className="mr-2" />
+                <span className="text-sm font-semibold text-teal-300">Mission</span>
+              </div>
+              <h2 className="text-3xl font-extrabold text-white sm:text-4xl mb-6">
+                Our 
+                <span className="text-transparent bg-clip-text bg-gradient-to-r from-teal-400 to-cyan-400">
+                  Mission
+                </span>
               </h2>
-              <p className="text-lg text-gray-600 mb-6">
+              <p className="text-lg text-gray-300 mb-6">
                 At Celiador, we believe that every developer deserves tools that amplify their creativity and productivity. 
-                We\'re building the future of software development by combining cutting-edge AI with intuitive design.
+                We're building the future of software development by combining cutting-edge AI with intuitive design.
               </p>
-              <p className="text-lg text-gray-600 mb-8">
+              <p className="text-lg text-gray-300 mb-8">
                 Our platform helps developers generate code, test applications, and deploy projects faster than ever before. 
-                We\'re not just building tools—we\'re building the foundation for the next generation of software development.
+                We're not just building tools—we're building the foundation for truly lovable applications.
               </p>
-              <Button className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white">
+              <Button variant="celiador">
                 Join Our Mission
               </Button>
             </div>
-            <div className="bg-gradient-to-br from-blue-400 via-purple-500 to-pink-500 rounded-2xl p-8 text-white text-center">
-              <div className="text-6xl mb-4">🚀</div>
+            <div className="bg-gradient-to-br from-teal-600 via-cyan-600 to-teal-600 rounded-2xl p-8 text-white text-center shadow-xl">
+              <CeliadorLogo size="xl" variant="icon" className="mx-auto mb-4 opacity-90" />
               <h3 className="text-2xl font-bold mb-4">Building the Future</h3>
-              <p className="text-blue-100">
-                Empowering developers to create amazing applications with AI-powered tools.
+              <p className="text-teal-100">
+                Empowering developers to create truly lovable applications with AI-powered tools.
               </p>
             </div>
           </div>
@@ -130,25 +148,28 @@ export default function AboutPage() {
       </div>
 
       {/* Values Section */}
-      <div className="py-16 bg-gray-50">
+      <div className="py-16 bg-gradient-to-br from-black to-gray-900">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-16">
-            <h2 className="text-3xl font-extrabold text-gray-900 sm:text-4xl">
-              Our Values
+            <h2 className="text-3xl font-extrabold text-white sm:text-4xl">
+              Our 
+              <span className="text-transparent bg-clip-text bg-gradient-to-r from-teal-400 to-cyan-400">
+                Values
+              </span>
             </h2>
-            <p className="mt-4 text-xl text-gray-500">
+            <p className="mt-4 text-xl text-gray-300">
               The principles that guide everything we do
             </p>
           </div>
 
           <div className="grid grid-cols-1 gap-8 md:grid-cols-3">
             {values.map((value) => (
-              <div key={value.title} className="bg-white rounded-xl p-8 shadow-lg text-center">
-                <div className="flex items-center justify-center w-16 h-16 bg-gradient-to-r from-blue-600 to-purple-600 rounded-lg text-white mx-auto mb-6">
+              <div key={value.title} className="bg-gray-800/50 backdrop-blur-sm rounded-xl p-8 shadow-lg shadow-black/20 text-center border border-gray-700/50">
+                <div className="flex items-center justify-center w-16 h-16 bg-gradient-to-r from-teal-500 to-cyan-500 rounded-lg text-white mx-auto mb-6">
                   {value.icon}
                 </div>
-                <h3 className="text-xl font-semibold text-gray-900 mb-4">{value.title}</h3>
-                <p className="text-gray-600">{value.description}</p>
+                <h3 className="text-xl font-semibold text-white mb-4">{value.title}</h3>
+                <p className="text-gray-300">{value.description}</p>
               </div>
             ))}
           </div>
@@ -156,26 +177,29 @@ export default function AboutPage() {
       </div>
 
       {/* Team Section */}
-      <div className="py-16 bg-white">
+      <div className="py-16 bg-gradient-to-br from-gray-800 to-black">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-16">
-            <h2 className="text-3xl font-extrabold text-gray-900 sm:text-4xl">
-              Meet Our Team
+            <h2 className="text-3xl font-extrabold text-white sm:text-4xl">
+              Meet Our 
+              <span className="text-transparent bg-clip-text bg-gradient-to-r from-teal-400 to-cyan-400">
+                Team
+              </span>
             </h2>
-            <p className="mt-4 text-xl text-gray-500">
+            <p className="mt-4 text-xl text-gray-300">
               The passionate people behind Celiador
             </p>
           </div>
 
           <div className="grid grid-cols-1 gap-8 md:grid-cols-3">
             {team.map((member) => (
-              <div key={member.name} className="bg-white rounded-xl p-8 shadow-lg text-center border border-gray-200">
-                <div className="w-24 h-24 bg-gradient-to-br from-blue-400 to-purple-500 rounded-full mx-auto mb-6 flex items-center justify-center text-white text-2xl font-bold">
+              <div key={member.name} className="bg-gray-900/50 backdrop-blur-sm rounded-xl p-8 shadow-lg shadow-black/20 text-center border border-gray-700/50">
+                <div className="w-24 h-24 bg-gradient-to-br from-teal-500 to-cyan-500 rounded-full mx-auto mb-6 flex items-center justify-center text-white text-2xl font-bold">
                   {member.name.split(' ').map(n => n[0]).join('')}
                 </div>
-                <h3 className="text-xl font-semibold text-gray-900 mb-2">{member.name}</h3>
-                <p className="text-blue-600 font-medium mb-4">{member.role}</p>
-                <p className="text-gray-600">{member.bio}</p>
+                <h3 className="text-xl font-semibold text-white mb-2">{member.name}</h3>
+                <p className="text-teal-400 font-medium mb-4">{member.role}</p>
+                <p className="text-gray-300">{member.bio}</p>
               </div>
             ))}
           </div>
@@ -183,30 +207,33 @@ export default function AboutPage() {
       </div>
 
       {/* Timeline Section */}
-      <div className="py-16 bg-gray-50">
+      <div className="py-16 bg-gradient-to-br from-black to-gray-900">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-16">
-            <h2 className="text-3xl font-extrabold text-gray-900 sm:text-4xl">
-              Our Journey
+            <h2 className="text-3xl font-extrabold text-white sm:text-4xl">
+              Our 
+              <span className="text-transparent bg-clip-text bg-gradient-to-r from-teal-400 to-cyan-400">
+                Journey
+              </span>
             </h2>
-            <p className="mt-4 text-xl text-gray-500">
-              Key milestones in our company\'s history
+            <p className="mt-4 text-xl text-gray-300">
+              Key milestones in our company's history
             </p>
           </div>
 
           <div className="relative">
-            <div className="absolute left-1/2 transform -translate-x-1/2 w-0.5 h-full bg-gray-300"></div>
+            <div className="absolute left-1/2 transform -translate-x-1/2 w-0.5 h-full bg-teal-400/30"></div>
             <div className="space-y-12">
               {milestones.map((milestone, index) => (
-                <div key={milestone.year} className={`relative flex items-center ${index % 2 === 0 ? 'justify-start' : 'justify-end'}`}>
+                <div key={`${milestone.year}-${index}`} className={`relative flex items-center ${index % 2 === 0 ? 'justify-start' : 'justify-end'}`}>
                   <div className={`w-1/2 ${index % 2 === 0 ? 'pr-8 text-right' : 'pl-8 text-left'}`}>
-                    <div className="bg-white rounded-lg p-6 shadow-lg">
-                      <div className="text-2xl font-bold text-blue-600 mb-2">{milestone.year}</div>
-                      <h3 className="text-xl font-semibold text-gray-900 mb-2">{milestone.title}</h3>
-                      <p className="text-gray-600">{milestone.description}</p>
+                    <div className="bg-gray-800/50 backdrop-blur-sm rounded-lg p-6 shadow-lg shadow-black/20 border border-gray-700/50">
+                      <div className="text-2xl font-bold text-teal-400 mb-2">{milestone.year}</div>
+                      <h3 className="text-xl font-semibold text-white mb-2">{milestone.title}</h3>
+                      <p className="text-gray-300">{milestone.description}</p>
                     </div>
                   </div>
-                  <div className="absolute left-1/2 transform -translate-x-1/2 w-4 h-4 bg-blue-600 rounded-full border-4 border-white"></div>
+                  <div className="absolute left-1/2 transform -translate-x-1/2 w-4 h-4 bg-teal-400 rounded-full border-4 border-gray-800"></div>
                 </div>
               ))}
             </div>
@@ -215,19 +242,29 @@ export default function AboutPage() {
       </div>
 
       {/* CTA Section */}
-      <div className="bg-gradient-to-r from-blue-600 to-purple-600">
-        <div className="max-w-7xl mx-auto py-12 px-4 sm:px-6 lg:py-16 lg:px-8 text-center">
+      <div className="bg-gradient-to-r from-teal-600 via-cyan-600 to-teal-600 relative overflow-hidden">
+        {/* Background decoration */}
+        <div className="absolute inset-0 opacity-10">
+          <div className="absolute top-0 left-1/4 w-32 h-32">
+            <CeliadorLogo size="2xl" variant="icon" />
+          </div>
+          <div className="absolute bottom-0 right-1/4 w-24 h-24">
+            <CeliadorLogo size="xl" variant="icon" />
+          </div>
+        </div>
+        <div className="max-w-7xl mx-auto py-12 px-4 sm:px-6 lg:py-16 lg:px-8 text-center relative z-10">
+          <CeliadorLogo size="lg" variant="icon" className="mx-auto mb-6 opacity-90" />
           <h2 className="text-3xl font-extrabold text-white sm:text-4xl">
-            Join us in shaping the future of development
+            Join us in building truly lovable apps
           </h2>
-          <p className="mt-4 text-xl text-blue-100">
+          <p className="mt-4 text-xl text-teal-100">
             Be part of the revolution in software development.
           </p>
           <div className="mt-8 flex justify-center space-x-4">
-            <Button className="bg-white text-blue-600 hover:bg-blue-50">
+            <Button className="!bg-white !text-teal-600 hover:!bg-gray-100 hover:!text-teal-700 !font-semibold">
               Get Started
             </Button>
-            <Button variant="outline" className="text-white border-white hover:bg-white hover:text-blue-600">
+            <Button className="!bg-transparent !text-white !border-2 !border-white hover:!bg-white hover:!text-teal-600 !font-semibold">
               View Careers
             </Button>
           </div>

@@ -2,6 +2,8 @@
 
 import { clsx } from 'clsx';
 import { Message } from './MessageList';
+import { useJobMonitor } from './useJobMonitor';
+import { useEffect } from 'react';
 
 interface MessageBubbleProps {
   message: Message;
@@ -16,6 +18,18 @@ export function MessageBubble({
 }: MessageBubbleProps) {
   const isUser = message.role === 'user';
   const isSystem = message.role === 'system';
+  const { getJobStatus, getJobResult, startMonitoring, jobs } = useJobMonitor();
+
+  // Start monitoring job if this message has one
+  useEffect(() => {
+    if (message.relatedJobId && !jobs[message.relatedJobId]) {
+      console.log(`[MessageBubble] Starting to monitor job: ${message.relatedJobId}`);
+      startMonitoring(message.relatedJobId);
+    }
+  }, [message.relatedJobId, startMonitoring, jobs]);
+
+  const jobStatus = message.relatedJobId ? getJobStatus(message.relatedJobId) : null;
+  const jobResult = message.relatedJobId ? getJobResult(message.relatedJobId) : null;
   
   const formatTime = (timestamp: string) => {
     return new Date(timestamp).toLocaleTimeString('en-US', {
@@ -91,9 +105,38 @@ export function MessageBubble({
         {/* Related job indicator */}
         {message.relatedJobId && (
           <div className="text-xs mt-2 pt-2 border-t border-current/20 opacity-75">
-            <span className="inline-flex items-center gap-1">
-              🔗 Job linked
-            </span>
+            <div className="flex items-center justify-between">
+              <span className="inline-flex items-center gap-1">
+                {jobStatus === 'PENDING' && '⏳ Pending'}
+                {jobStatus === 'RUNNING' && '🔄 Running'}
+                {jobStatus === 'COMPLETED' && '✅ Completed'}
+                {jobStatus === 'FAILED' && '❌ Failed'}
+                {jobStatus === 'CANCELLED' && '🚫 Cancelled'}
+                {!jobStatus && '🔗 Job linked'}
+              </span>
+              {jobStatus === 'RUNNING' && (
+                <div className="flex space-x-1">
+                  <div className="w-1 h-1 bg-current rounded-full animate-pulse"></div>
+                  <div className="w-1 h-1 bg-current rounded-full animate-pulse" style={{ animationDelay: '0.2s' }}></div>
+                  <div className="w-1 h-1 bg-current rounded-full animate-pulse" style={{ animationDelay: '0.4s' }}></div>
+                </div>
+              )}
+            </div>
+            
+            {/* Job results */}
+            {jobStatus === 'COMPLETED' && jobResult && (
+              <div className="mt-1 text-xs bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300 rounded px-2 py-1">
+                {typeof jobResult === 'object' && jobResult.message 
+                  ? jobResult.message 
+                  : 'Job completed successfully'}
+              </div>
+            )}
+            
+            {jobStatus === 'FAILED' && jobs[message.relatedJobId]?.error && (
+              <div className="mt-1 text-xs bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 rounded px-2 py-1">
+                Error: {jobs[message.relatedJobId].error}
+              </div>
+            )}
           </div>
         )}
         
