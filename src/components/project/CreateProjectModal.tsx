@@ -255,7 +255,16 @@ export function CreateProjectModal({ isOpen, onClose, onProjectCreated, userId }
         userId
       };
 
-      const newProject = await ApiClient.createProject(projectData);
+      console.log('🚀 [CreateProjectModal] Sending project creation request:', projectData);
+      
+      const newProject = await Promise.race([
+        ApiClient.createProject(projectData),
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Request timeout after 60 seconds. Please try again.')), 60000)
+        )
+      ]);
+      
+      console.log('✅ [CreateProjectModal] Project created successfully:', newProject);
       onProjectCreated(newProject);
       
       // Clear fields
@@ -263,8 +272,9 @@ export function CreateProjectModal({ isOpen, onClose, onProjectCreated, userId }
       setTemplateKey('');
       onClose();
     } catch (error) {
-      console.error('Failed to create project:', error);
-      setError(error instanceof Error ? error.message : 'Failed to create project');
+      console.error('❌ [CreateProjectModal] Failed to create project:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Failed to create project';
+      setError(`Project creation failed: ${errorMessage}`);
     } finally {
       setIsSubmitting(false);
     }

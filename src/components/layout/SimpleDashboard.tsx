@@ -59,11 +59,20 @@ interface UIElement {
   type: string;
   selector: string;
   componentName?: string;
-  boundingBox: {
+  text?: string;
+  boundingBox?: {
     x: number;
     y: number;
     width: number;
     height: number;
+  };
+  attributes?: Record<string, any>;
+  styles?: Record<string, string>;
+  context?: {
+    parentTag?: string;
+    parentClass?: string;
+    siblingCount?: number;
+    indexInParent?: number;
   };
   metadata?: {
     filePath?: string;
@@ -335,22 +344,18 @@ export function SimpleDashboard({ initialUser, onLogout }: SimpleDashboardProps)
     // Enhanced message with element context if an element is selected
     let enhancedMessage = currentMessage;
     if (selectedElement) {
-      // Try to get the actual text content from the DOM element
-      let textContent = '';
-      if (selectedElement.type === 'h1' && selectedElement.componentName === 'WelcomeHeading') {
-        textContent = 'Welcome to Celiador'; // Known text content
-      }
-      
       const elementContext = `
 
 SELECTED UI ELEMENT CONTEXT:
 - Element Type: ${selectedElement.type}
 - Component Name: ${selectedElement.componentName || 'Unknown'}
 - CSS Selector: ${selectedElement.selector}
-- Text Content: ${textContent || 'Not available'}
-- Position: x=${selectedElement.boundingBox.x}, y=${selectedElement.boundingBox.y}
-- Size: ${selectedElement.boundingBox.width}x${selectedElement.boundingBox.height}px
-${selectedElement.metadata?.props ? `- Properties: ${JSON.stringify(selectedElement.metadata.props, null, 2)}` : ''}
+- Text Content: ${selectedElement.text || 'Not available'}
+${selectedElement.boundingBox ? `- Position: x=${selectedElement.boundingBox.x}, y=${selectedElement.boundingBox.y}` : '- Position: Not available'}
+${selectedElement.boundingBox ? `- Size: ${selectedElement.boundingBox.width}x${selectedElement.boundingBox.height}px` : '- Size: Not available'}
+${selectedElement.attributes ? `- HTML Attributes: ${JSON.stringify(selectedElement.attributes, null, 2)}` : ''}
+${selectedElement.styles ? `- Computed Styles: ${JSON.stringify(selectedElement.styles, null, 2)}` : ''}
+${selectedElement.context ? `- Parent Context: ${JSON.stringify(selectedElement.context, null, 2)}` : ''}
 
 The user has visually selected this specific UI element and wants to modify it. Please search through the provided project files to find this element and make the requested changes using the action format.`;
       
@@ -784,7 +789,7 @@ The user has visually selected this specific UI element and wants to modify it. 
                       className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
                     >
                       <div
-                        className={`max-w-[80%] p-4 rounded-2xl ${
+                        className={`max-w-[80%] p-4 rounded-2xl break-words overflow-wrap-anywhere whitespace-pre-wrap ${
                           message.role === 'user'
                             ? 'bg-gradient-to-r from-teal-600 to-cyan-600 text-white'
                             : 'bg-gray-800/50 text-gray-100 border border-gray-700/50'
