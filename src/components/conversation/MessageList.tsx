@@ -23,11 +23,20 @@ interface MessageListProps {
 export function MessageList({ messages, loading, className }: MessageListProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const lastMessageCountRef = useRef(messages.length);
 
-  // Auto-scroll to bottom when new messages arrive
+  // Auto-scroll to bottom when new messages arrive or loading state changes
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+    const shouldScroll = messages.length > lastMessageCountRef.current || loading;
+    lastMessageCountRef.current = messages.length;
+    
+    if (shouldScroll && bottomRef.current) {
+      // Use requestAnimationFrame to ensure DOM updates are complete
+      requestAnimationFrame(() => {
+        bottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+      });
+    }
+  }, [messages, loading]);
 
   if (loading && messages.length === 0) {
     return (

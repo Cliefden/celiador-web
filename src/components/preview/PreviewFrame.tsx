@@ -80,6 +80,7 @@ export function PreviewFrame({
   const [iframeKey, setIframeKey] = useState(0);
   const [iframeLoading, setIframeLoading] = useState(false);
   const [urlReady, setUrlReady] = useState(false);
+  const [currentPath, setCurrentPath] = useState('/'); // Track current page path
 
   const refreshPreview = () => {
     setIframeKey(prev => prev + 1);
@@ -87,43 +88,77 @@ export function PreviewFrame({
     setUrlReady(false); // Reset URL readiness to trigger re-check
   };
 
-  // Generate same-origin preview URL with auth token
-  const getSameOriginPreviewUrl = async (originalUrl: string) => {
-    if (!originalUrl) return null;
+  // Generate same-origin preview URL with auth token and preserve current path
+  const getSameOriginPreviewUrl = async (originalUrl: string, preservePath?: string, testInspectionMode?: boolean) => {
+    console.log('[getSameOriginPreviewUrl] 🔍 Starting with URL:', originalUrl);
+    console.log('[getSameOriginPreviewUrl] 🔍 Preserve path:', preservePath);
+    
+    if (!originalUrl) {
+      console.log('[getSameOriginPreviewUrl] ❌ No URL provided');
+      return null;
+    }
     
     try {
       // Get auth token for the proxy URL
+      console.log('[getSameOriginPreviewUrl] 🔐 Getting auth session...');
       const { supabase } = await import('../../lib/supabase');
       const { data: { session } } = await supabase.auth.getSession();
       
       if (!session) {
-        console.warn('[PreviewFrame] No session available for preview proxy');
+        console.warn('[getSameOriginPreviewUrl] ❌ No session available for preview proxy');
         return null;
       }
       
+      console.log('[getSameOriginPreviewUrl] ✅ Session found, user:', session.user?.id);
+      
       // If the URL is already a backend proxy URL, just add the token
+      console.log('[getSameOriginPreviewUrl] 🔍 Checking if URL is backend proxy URL...');
+      console.log('[getSameOriginPreviewUrl] 🔍 Contains /projects/:', originalUrl.includes('/projects/'));
+      console.log('[getSameOriginPreviewUrl] 🔍 Contains /preview/:', originalUrl.includes('/preview/'));
+      console.log('[getSameOriginPreviewUrl] 🔍 Contains /proxy/:', originalUrl.includes('/proxy/'));
+      
       if (originalUrl.includes('/projects/') && originalUrl.includes('/preview/') && originalUrl.includes('/proxy/')) {
-        const urlWithAuth = `${originalUrl}?token=${encodeURIComponent(session.access_token)}`;
-        console.log('[PreviewFrame] Added auth token to backend proxy URL');
-        console.log('[PreviewFrame] Session details:', {
-          userId: session.user?.id,
-          tokenLength: session.access_token?.length,
-          tokenPreview: session.access_token?.substring(0, 20) + '...',
-          expires: session.expires_at
-        });
-        console.log('[PreviewFrame] Final URL with token:', urlWithAuth);
+        console.log('[getSameOriginPreviewUrl] 🔧 Processing backend proxy URL');
+        console.log('[getSameOriginPreviewUrl] 🔧 Original URL:', originalUrl);
+        console.log('[getSameOriginPreviewUrl] 🔧 Path to preserve:', preservePath);
+        
+        // HARDCODED TEST: Always append 'products' in inspection mode for testing
+        let finalUrl;
+        if (testInspectionMode) {
+          console.log('[getSameOriginPreviewUrl] 🚨 INSPECTION MODE TEST - forcing products path');
+          const baseUrl = originalUrl.endsWith('/') ? originalUrl : originalUrl + '/';
+          finalUrl = baseUrl + 'products';
+          console.log('[getSameOriginPreviewUrl] 🚨 HARDCODED TEST URL:', finalUrl);
+        } else if (preservePath && preservePath !== '/') {
+          // Ensure the URL ends with /proxy/ and append the path
+          const baseUrl = originalUrl.endsWith('/') ? originalUrl : originalUrl + '/';
+          // Remove leading slash from preservePath since baseUrl ends with /
+          const cleanPath = preservePath.startsWith('/') ? preservePath.substring(1) : preservePath;
+          finalUrl = baseUrl + cleanPath;
+          console.log('[getSameOriginPreviewUrl] ✅ URL with preserved path:', finalUrl);
+        } else {
+          finalUrl = originalUrl;
+          console.log('[getSameOriginPreviewUrl] ✅ Using original URL (no path to preserve)');
+        }
+        
+        const urlWithAuth = `${finalUrl}?token=${encodeURIComponent(session.access_token)}`;
+        console.log('[getSameOriginPreviewUrl] 🎯 Final URL with auth:', urlWithAuth);
         return urlWithAuth;
       }
       
       // Fallback: Use frontend API route proxy (legacy behavior)
+      console.log('[getSameOriginPreviewUrl] 🔄 Using frontend API proxy (legacy)');
       const currentOrigin = window.location.origin;
-      const proxyUrl = `${currentOrigin}/api/preview/${projectId}`;
+      let proxyUrl = `${currentOrigin}/api/preview/${projectId}`;
+      if (preservePath && preservePath !== '/') {
+        proxyUrl += preservePath;
+      }
       const urlWithAuth = `${proxyUrl}?token=${encodeURIComponent(session.access_token)}`;
       
-      console.log('[PreviewFrame] Using frontend API proxy (legacy)');
+      console.log('[getSameOriginPreviewUrl] 🎯 Legacy proxy URL:', urlWithAuth);
       return urlWithAuth;
     } catch (error) {
-      console.error('[PreviewFrame] Error generating same-origin URL:', error);
+      console.error('[getSameOriginPreviewUrl] ❌ Error generating same-origin URL:', error);
       return null;
     }
   };
@@ -131,29 +166,197 @@ export function PreviewFrame({
   const [proxyUrl, setProxyUrl] = useState<string | null>(null);
   const [authReady, setAuthReady] = useState(false);
 
-  // Generate proxy URL when preview is ready
+  // Listen for navigation changes in the preview iframe
+  useEffect(() => {
+    const handleMessage = (event: MessageEvent) => {
+      if (event.data?.type === 'PREVIEW_NAVIGATION') {
+        console.log('[PreviewFrame] 🧭 Navigation detected:', event.data.path);
+        setCurrentPath(event.data.path || '/');
+      } else if (event.data?.type === 'CURRENT_PATH_RESPONSE') {
+        console.log('[PreviewFrame] 📍 Received current path from iframe:', event.data.path);
+        setCurrentPath(event.data.path || '/');
+      }
+    };
+
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, []);
+
+  // Initialize current path from iframe when it first loads
+  useEffect(() => {
+    if (iframeRef?.current?.src && !inspectionMode) {
+      const detectedPath = getCurrentPathFromIframe();
+      if (detectedPath !== currentPath) {
+        console.log('[PreviewFrame] 🔄 Initializing current path from iframe:', detectedPath);
+        setCurrentPath(detectedPath);
+      }
+    }
+  }, [preview?.url, preview?.status]);
+
+  // Function to extract current path from iframe URL
+  const getCurrentPathFromIframe = (): string => {
+    if (!iframeRef?.current?.src) {
+      console.log('[PreviewFrame] 📍 No iframe src available');
+      return '/';
+    }
+    
+    try {
+      const url = new URL(iframeRef.current.src);
+      console.log('[PreviewFrame] 📍 Parsing iframe URL:', {
+        fullUrl: iframeRef.current.src,
+        pathname: url.pathname,
+        search: url.search
+      });
+      
+      // If it's a proxy URL, extract the path after /proxy/
+      if (url.pathname.includes('/proxy/')) {
+        const proxyIndex = url.pathname.indexOf('/proxy/');
+        let pathAfterProxy = url.pathname.substring(proxyIndex + '/proxy'.length);
+        
+        console.log('[PreviewFrame] 📍 Found proxy URL, pathAfterProxy raw:', pathAfterProxy);
+        
+        // Ensure path starts with /
+        if (!pathAfterProxy.startsWith('/')) {
+          pathAfterProxy = '/' + pathAfterProxy;
+        }
+        
+        // If path is just '/' or empty, return root
+        if (pathAfterProxy === '/' || pathAfterProxy === '') {
+          console.log('[PreviewFrame] 📍 Proxy path is root');
+          return '/';
+        }
+        
+        console.log('[PreviewFrame] 📍 Extracted proxy path:', pathAfterProxy);
+        return pathAfterProxy;
+      }
+      
+      // If it's a direct URL, use the pathname
+      const directPath = url.pathname || '/';
+      console.log('[PreviewFrame] 📍 Using direct URL path:', directPath);
+      return directPath;
+    } catch (error) {
+      console.warn('[PreviewFrame] Failed to parse iframe URL:', error);
+      return '/';
+    }
+  };
+
+  // Function to request current path from iframe (async)
+  const requestCurrentPathFromIframe = (): Promise<string> => {
+    return new Promise((resolve) => {
+      if (!iframeRef?.current?.contentWindow) {
+        console.warn('[PreviewFrame] No iframe contentWindow available');
+        resolve('/');
+        return;
+      }
+
+      // Set up a one-time listener for the response
+      const handleResponse = (event: MessageEvent) => {
+        if (event.data?.type === 'CURRENT_PATH_RESPONSE') {
+          console.log('[PreviewFrame] 📍 Received path response:', event.data.path);
+          window.removeEventListener('message', handleResponse);
+          resolve(event.data.path || '/');
+        }
+      };
+
+      window.addEventListener('message', handleResponse);
+
+      // Send request
+      try {
+        iframeRef.current.contentWindow.postMessage({ type: 'GET_CURRENT_PATH' }, '*');
+        console.log('[PreviewFrame] 📤 Requested current path from iframe');
+        
+        // Timeout after 1 second
+        setTimeout(() => {
+          window.removeEventListener('message', handleResponse);
+          console.log('[PreviewFrame] ⏰ Path request timed out, using fallback');
+          resolve(currentPath !== '/' ? currentPath : '/');
+        }, 1000);
+      } catch (error) {
+        console.warn('[PreviewFrame] Could not request current path from iframe:', error);
+        window.removeEventListener('message', handleResponse);
+        resolve('/');
+      }
+    });
+  };
+
+  // Function to determine the path to use when switching to inspection mode
+  const getPathForInspection = async (): Promise<string> => {
+    console.log('[PreviewFrame] 🎯 getPathForInspection called - determining current path...');
+    console.log('[PreviewFrame] 🎯 Current state:', {
+      currentPath,
+      inspectionMode,
+      iframeSrc: iframeRef?.current?.src
+    });
+    
+    // First try to extract from iframe URL (most reliable)
+    const extractedPath = getCurrentPathFromIframe();
+    console.log('[PreviewFrame] 🎯 Extracted path from iframe URL:', extractedPath);
+    
+    if (extractedPath !== '/') {
+      console.log('[PreviewFrame] ✅ Using extracted path (non-root):', extractedPath);
+      return extractedPath;
+    }
+    
+    // If we have a tracked currentPath that's not root, use it as fallback
+    if (currentPath !== '/') {
+      console.log('[PreviewFrame] ✅ Using tracked currentPath as fallback:', currentPath);
+      return currentPath;
+    }
+    
+    // Last resort: request from iframe (but with shorter timeout)
+    console.log('[PreviewFrame] 📞 Last resort: requesting current path from iframe...');
+    const requestedPath = await requestCurrentPathFromIframe();
+    console.log('[PreviewFrame] 🎯 Iframe responded with path:', requestedPath);
+    return requestedPath || '/';
+  };
+
+  // Generate proxy URL when preview is ready or when we need to preserve path
   useEffect(() => {
     console.log('[PreviewFrame] Effect triggered - preview status:', preview?.status, 'URL:', preview?.url);
+    console.log('[PreviewFrame] Current path:', currentPath, 'Inspection mode:', inspectionMode);
     
     if (preview?.url && preview.status === 'running') {
       console.log('[PreviewFrame] ✅ Preview is running, generating proxy URL...');
-      getSameOriginPreviewUrl(preview.url).then(url => {
-        console.log('[PreviewFrame] ✅ Generated same-origin proxy URL:', url);
-        console.log('[PreviewFrame] 📍 Original preview URL was:', preview.url);
-        setProxyUrl(url);
-        setAuthReady(!!url);
-        console.log('[PreviewFrame] 🔄 Auth ready set to:', !!url);
-      }).catch(error => {
-        console.error('[PreviewFrame] ❌ Failed to generate proxy URL:', error);
-        setProxyUrl(null);
-        setAuthReady(false);
-      });
+      console.log('[PreviewFrame] 🔍 Preview URL to check:', preview.url);
+      console.log('[PreviewFrame] 🔍 URL contains /projects/:', preview.url.includes('/projects/'));
+      console.log('[PreviewFrame] 🔍 URL contains /preview/:', preview.url.includes('/preview/'));
+      console.log('[PreviewFrame] 🔍 URL contains /proxy/:', preview.url.includes('/proxy/'));
+      
+      // Generate proxy URL with path preservation for inspection mode
+      const generateProxyUrl = async () => {
+        let pathToPreserve: string | undefined = undefined;
+        
+        if (inspectionMode) {
+          pathToPreserve = await getPathForInspection();
+          console.log('[PreviewFrame] 🎯 Inspection mode path preservation:', {
+            currentPath,
+            extractedPath: getCurrentPathFromIframe(),
+            finalPath: pathToPreserve
+          });
+        }
+        
+        try {
+          const url = await getSameOriginPreviewUrl(preview.url, pathToPreserve, inspectionMode);
+          console.log('[PreviewFrame] ✅ Generated same-origin proxy URL:', url);
+          console.log('[PreviewFrame] 📍 Original preview URL was:', preview.url);
+          console.log('[PreviewFrame] 📍 Preserved path:', pathToPreserve);
+          setProxyUrl(url);
+          setAuthReady(!!url);
+          console.log('[PreviewFrame] 🔄 Auth ready set to:', !!url);
+        } catch (error) {
+          console.error('[PreviewFrame] ❌ Failed to generate proxy URL:', error);
+          setProxyUrl(null);
+          setAuthReady(false);
+        }
+      };
+      
+      generateProxyUrl();
     } else {
       console.log('[PreviewFrame] ⏸️ Preview not ready - status:', preview?.status, 'URL exists:', !!preview?.url);
       setProxyUrl(null);
       setAuthReady(false);
     }
-  }, [preview?.url, preview?.status, projectId]);
+  }, [preview?.url, preview?.status, projectId, currentPath, inspectionMode]);
 
   // Effect to communicate inspection mode changes to iframe
   useEffect(() => {
@@ -198,58 +401,15 @@ export function PreviewFrame({
     setUrlReady(false);
   }, [preview?.id]);
 
-  // Effect to handle URL readiness with health check approach
+  // Simplified URL readiness - trust backend status
   useEffect(() => {
-    let timeoutId: NodeJS.Timeout | null = null;
-    let intervalId: NodeJS.Timeout | null = null;
-
-    const checkServerHealth = async (url: string): Promise<boolean> => {
-      try {
-        const response = await fetch(url, { 
-          method: 'HEAD',
-          mode: 'no-cors',
-          cache: 'no-cache'
-        });
-        return true; // If no error thrown, server is responding
-      } catch (error) {
-        return false; // Server not ready yet
-      }
-    };
-
-    if (preview?.status === 'running' && preview.url && !urlReady) {
-      console.log('[PreviewFrame] Preview running, checking server readiness...');
-      
-      let attempts = 0;
-      const maxAttempts = 20; // 20 attempts over 10 seconds
-      
-      intervalId = setInterval(async () => {
-        attempts++;
-        console.log(`[PreviewFrame] Health check attempt ${attempts}/${maxAttempts}`);
-        
-        const isReady = await checkServerHealth(preview.url!);
-        
-        if (isReady || attempts >= maxAttempts) {
-          if (intervalId) clearInterval(intervalId);
-          
-          if (isReady) {
-            console.log('[PreviewFrame] Server is ready, showing iframe');
-            setUrlReady(true);
-          } else {
-            console.log('[PreviewFrame] Server not ready after max attempts, showing anyway');
-            // Fallback: show iframe anyway after max attempts
-            timeoutId = setTimeout(() => {
-              setUrlReady(true);
-            }, 2000); // Additional 2 second fallback
-          }
-        }
-      }, 500); // Check every 500ms
+    if (preview?.status === 'running' && preview.url) {
+      console.log('[PreviewFrame] Preview running with URL, setting URL ready immediately');
+      setUrlReady(true);
+    } else {
+      setUrlReady(false);
     }
-
-    return () => {
-      if (timeoutId) clearTimeout(timeoutId);
-      if (intervalId) clearInterval(intervalId);
-    };
-  }, [preview?.status, preview?.url, urlReady]); // Only depend on status and url changes
+  }, [preview?.status, preview?.url]);
 
   const openInNewTab = () => {
     if (preview?.url) {
@@ -504,19 +664,22 @@ export function PreviewFrame({
               </Badge>
             )}
           </div>
-        ) : preview.status === 'running' && !authReady ? (
-          /* Auth/Proxy Setup State */
+        ) : preview.status === 'running' && inspectionMode && (!authReady || !proxyUrl) ? (
+          /* Auth/Proxy Setup State - Only for inspection mode */
           <div className="text-center max-w-md">
             <Loader2 className="w-12 h-12 animate-spin text-purple-500 mx-auto mb-4" />
             <h3 className="text-lg font-medium text-gray-700 mb-2">
-              Setting up Same-Origin Preview...
+              Setting up Inspection Mode...
             </h3>
             <p className="text-sm text-gray-500">
               Configuring secure preview access for element inspection
             </p>
+            <div className="mt-3 text-xs text-gray-400">
+              authReady: {String(authReady)}, hasProxyUrl: {String(!!proxyUrl)}
+            </div>
           </div>
-        ) : preview.status === 'running' && authReady && proxyUrl ? (
-          /* Preview Iframe */
+        ) : preview.status === 'running' && ((!inspectionMode && preview.url) || (inspectionMode && authReady && proxyUrl)) ? (
+          /* Preview Iframe - Use direct URL for normal mode, proxy URL for inspection mode */
           <div 
             className="bg-white rounded-lg shadow-lg overflow-hidden transition-all duration-300"
             style={{
@@ -532,22 +695,36 @@ export function PreviewFrame({
               </div>
             )}
             <iframe
-              key={`${iframeKey}-${proxyUrl}`}
+              key={`${iframeKey}-${inspectionMode ? proxyUrl : preview.url}`}
               ref={iframeRef}
-              src={proxyUrl}
+              src={inspectionMode ? proxyUrl : preview.url}
               className="w-full h-full border-0"
               onLoad={() => {
                 setIframeLoading(false);
-                console.log('🎬 Same-origin preview iframe loaded successfully');
-                console.log('🔗 Iframe URL:', proxyUrl);
-                console.log('✅ Using same-origin proxy - inspection should work!');
+                const currentUrl = inspectionMode ? proxyUrl : preview.url;
+                console.log('🎬 Preview iframe loaded successfully');
+                console.log('🔗 Iframe URL:', currentUrl);
+                console.log('🔍 Mode:', inspectionMode ? 'INSPECTION (same-origin proxy)' : 'NORMAL (direct URL)');
+                
+                // Update current path based on loaded URL
+                const detectedPath = getCurrentPathFromIframe();
+                if (detectedPath !== currentPath) {
+                  console.log('📍 Updating current path from iframe URL:', detectedPath);
+                  setCurrentPath(detectedPath);
+                }
+                
+                if (inspectionMode) {
+                  console.log('✅ Using same-origin proxy - inspection should work!');
+                }
               }}
               onError={() => {
                 setIframeLoading(false);
-                console.error('❌ Same-origin preview iframe failed to load');
-                console.error('❌ Failed URL:', proxyUrl);
+                const currentUrl = inspectionMode ? proxyUrl : preview.url;
+                console.error('❌ Preview iframe failed to load');
+                console.error('❌ Failed URL:', currentUrl);
+                console.error('❌ Mode:', inspectionMode ? 'INSPECTION' : 'NORMAL');
               }}
-              title={`Same-Origin Preview for ${projectId}`}
+              title={`${inspectionMode ? 'Inspection' : 'Direct'} Preview for ${projectId}`}
               // Remove sandbox for same-origin - we need full access
               allowFullScreen
             />

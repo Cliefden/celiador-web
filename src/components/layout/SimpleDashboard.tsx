@@ -101,6 +101,7 @@ export function SimpleDashboard({ initialUser, onLogout }: SimpleDashboardProps)
   const [iframeLoaded, setIframeLoaded] = useState(false);
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
   const [currentPreviewUrl, setCurrentPreviewUrl] = useState<string | null>(null);
+  const [currentPreviewPath, setCurrentPreviewPath] = useState<string>('/');
   const [chatPanelWidth, setChatPanelWidth] = useState(384); // Default 384px (w-96)
   const [isResizing, setIsResizing] = useState(false);
   const [isDesktop, setIsDesktop] = useState(false);
@@ -287,10 +288,38 @@ export function SimpleDashboard({ initialUser, onLogout }: SimpleDashboardProps)
         
         handleElementSelection(uiElement);
       }
+      
+      // Handle navigation updates from preview iframe
+      if (event.data.type === 'PREVIEW_NAVIGATION') {
+        const newPath = event.data.path || '/';
+        console.log('🧭 Preview navigation detected:', newPath);
+        console.log('🧭 Full navigation event data:', event.data);
+        setCurrentPreviewPath(newPath);
+      }
     };
 
     window.addEventListener('message', handleIframeMessage);
     return () => window.removeEventListener('message', handleIframeMessage);
+  }, []);
+
+  // Track navigation within the preview iframe
+  useEffect(() => {
+    const handleNavigationMessage = (event: MessageEvent) => {
+      // Only handle messages from our preview iframe
+      if (event.origin !== window.location.origin) {
+        return;
+      }
+
+      // Handle navigation tracking messages
+      if (event.data.type === 'PREVIEW_NAVIGATION') {
+        const newPath = event.data.path || '/';
+        console.log('🧭 Navigation detected in preview iframe:', newPath);
+        setCurrentPreviewPath(newPath);
+      }
+    };
+
+    window.addEventListener('message', handleNavigationMessage);
+    return () => window.removeEventListener('message', handleNavigationMessage);
   }, []);
 
   // Reset inspection mode when project changes
@@ -412,25 +441,67 @@ The user has visually selected this specific UI element and wants to modify it. 
 
   const toggleInspectionMode = () => {
     const newMode = !inspectionMode;
-    console.log(`🔄 Toggling inspection mode: ${inspectionMode} -> ${newMode}`);
+    console.log('🔍 Toggling inspection mode:', { current: inspectionMode, new: newMode });
     
-    try {
-      setInspectionMode(newMode);
-      setSelectedElement(null);
+    // When enabling inspection mode, try to get current path from tracking or iframe URL
+    if (newMode) {
+      console.log('🔍 Getting current path for inspection mode');
+      console.log('🔍 currentPreviewPath from tracking:', currentPreviewPath);
       
-      // The useEffect will reload the iframe with the proxy URL containing the inspection script
-      // We'll send the message after the iframe loads
-      console.log('⏳ Setting inspection mode - useEffect will reload iframe with appropriate URL');
-      
-      if (newMode) {
-        console.log('✅ Inspection mode enabled - iframe will reload with proxy URL and injected script');
+      // First, try using the tracked path if we have navigation tracking
+      if (currentPreviewPath && currentPreviewPath !== '/') {
+        console.log('🔍 Using tracked navigation path:', currentPreviewPath);
+        // Keep the tracked path
       } else {
-        console.log('❌ Inspection mode disabled - iframe will reload with direct URL'); 
+        console.log('🔍 No tracked path, trying iframe URL extraction...');
+        console.log('🔍 Debug iframe state:', {
+          hasIframe: !!previewIframeRef.current,
+          iframeSrc: previewIframeRef.current?.src,
+          srcLength: previewIframeRef.current?.src?.length
+        });
+        
+        if (previewIframeRef.current?.src) {
+          try {
+            const iframeSrc = previewIframeRef.current.src;
+            console.log('🔍 Extracting path from iframe URL:', iframeSrc);
+            
+            // Parse the iframe URL to extract the path
+            const url = new URL(iframeSrc);
+            let extractedPath = '/';
+            
+            console.log('🔍 URL parts:', {
+              pathname: url.pathname,
+              hasProxy: url.pathname.includes('/proxy/'),
+              fullURL: url.toString()
+            });
+            
+            // Check if it's a proxy URL and extract the path after /proxy/
+            if (url.pathname.includes('/proxy/')) {
+              const proxyIndex = url.pathname.indexOf('/proxy/');
+              const pathAfterProxy = url.pathname.substring(proxyIndex + '/proxy'.length);
+              extractedPath = pathAfterProxy || '/';
+              console.log('🔍 Path after proxy extraction:', {
+                proxyIndex,
+                pathAfterProxy,
+                extractedPath
+              });
+            }
+            
+            console.log('🔍 Final extracted path for inspection:', extractedPath);
+            setCurrentPreviewPath(extractedPath);
+          } catch (error) {
+            console.warn('🔍 Failed to extract path from iframe URL:', error);
+            setCurrentPreviewPath('/'); // Fallback to root
+          }
+        } else {
+          console.warn('🔍 No iframe src available, using fallback path');
+          setCurrentPreviewPath('/'); // Fallback to root
+        }
       }
-      
-    } catch (error) {
-      console.error('❌ Error toggling inspection mode:', error);
     }
+    
+    setInspectionMode(newMode);
+    setSelectedElement(null);
   };
 
   const resetPreview = async () => {
@@ -486,12 +557,32 @@ The user has visually selected this specific UI element and wants to modify it. 
     }
   };
 
-  const handleElementSelection = (element: UIElement) => {
+  const handleElementSelection = async (element: UIElement) => {
     setSelectedElement(element);
     
-    // Update the current message to indicate selected element
-    const elementDescription = element.componentName || element.type;
-    setCurrentMessage(`Modify ${elementDescription}: `);
+    // Create an automatic conversation message when an element is clicked in inspection mode
+    if (selectedProject && sendMessage && inspectionMode) {
+      const elementDescription = element.componentName || element.type;
+      const elementText = element.componentName || 'this element';
+      
+      // Create a descriptive message about the clicked element
+      const inspectionMessage = `I clicked on ${elementDescription}${element.selector ? ` (${element.selector})` : ''} in the preview. I want to modify or interact with this element.`;
+      
+      console.log('🎯 [Inspection] Auto-creating conversation message:', inspectionMessage);
+      
+      try {
+        await sendMessage(inspectionMessage);
+        console.log('✅ [Inspection] Conversation message created successfully');
+      } catch (error) {
+        console.error('❌ [Inspection] Failed to create conversation message:', error);
+        // Fallback: still update the input field if auto-message fails
+        setCurrentMessage(`Modify ${elementDescription}: `);
+      }
+    } else {
+      // Fallback for when not in inspection mode or sendMessage unavailable
+      const elementDescription = element.componentName || element.type;
+      setCurrentMessage(`Modify ${elementDescription}: `);
+    }
   };
 
   const handleFileSelect = (filePath: string) => {
@@ -529,8 +620,9 @@ The user has visually selected this specific UI element and wants to modify it. 
         }
         
         const apiUrl = process.env.NEXT_PUBLIC_ORCHESTRATOR_URL || 'http://localhost:4000';
-        const inspectionUrl = `${apiUrl}/projects/${selectedProject.id}/preview/${preview.id}/inspection?token=${authToken}`;
-        console.log('🔍 Using server-side inspection URL with auth token');
+        const inspectionUrl = `${apiUrl}/projects/${selectedProject.id}/preview/${preview.id}/inspection?token=${authToken}&path=${encodeURIComponent(currentPreviewPath)}`;
+        console.log('🔍 Using server-side inspection URL with auth token and path:', currentPreviewPath);
+        console.log('🔍 Full inspection URL:', inspectionUrl);
         return inspectionUrl;
       } catch (error) {
         console.error('🔍 Error getting auth token for inspection:', error);
@@ -929,6 +1021,7 @@ The user has visually selected this specific UI element and wants to modify it. 
                     <button 
                       onClick={(e) => {
                         e.preventDefault();
+                        console.log('🚨 BUTTON CLICKED! Current inspection mode:', inspectionMode);
                         toggleInspectionMode();
                       }}
                       className={`flex items-center space-x-2 px-3 py-2 rounded-lg transition-all text-sm font-medium ${

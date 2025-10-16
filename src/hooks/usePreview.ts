@@ -45,7 +45,7 @@ export function usePreview(projectId: string | null) {
       ApiClient.logConfig();
 
       const data = await ApiClient.listPreviews(projectId);
-      const previews = data.previews || [];
+      const previews = Array.isArray(data) ? data : (data.previews || []); // Handle both direct array and wrapped response
       console.log('[usePreview] Found previews:', previews.length);
       
       // Get the most recent active preview
@@ -173,7 +173,7 @@ export function usePreview(projectId: string | null) {
         }
         
         const data = await ApiClient.getPreviewStatus(projectId, previewId);
-        const updatedPreview = data.preview;
+        const updatedPreview = data.preview; // API returns {success: true, preview: {...}}
         
         setPreview(prev => {
           // Only update if this is still the current preview
