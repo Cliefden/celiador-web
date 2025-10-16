@@ -140,17 +140,9 @@ export function PreviewFrame({
         return urlWithAuth;
       }
       
-      // Fallback: Use frontend API route proxy (legacy behavior)
-      console.log('[getSameOriginPreviewUrl] 🔄 Using frontend API proxy (legacy)');
-      const currentOrigin = window.location.origin;
-      let proxyUrl = `${currentOrigin}/api/preview/${projectId}`;
-      if (preservePath && preservePath !== '/') {
-        proxyUrl += preservePath;
-      }
-      const urlWithAuth = `${proxyUrl}?token=${encodeURIComponent(session.access_token)}`;
-      
-      console.log('[getSameOriginPreviewUrl] 🎯 Legacy proxy URL:', urlWithAuth);
-      return urlWithAuth;
+      // Should not reach here - all preview URLs should be backend proxy URLs
+      console.error('[getSameOriginPreviewUrl] ❌ Unexpected URL format - not a backend proxy URL');
+      return null;
     } catch (error) {
       console.error('[getSameOriginPreviewUrl] ❌ Error generating same-origin URL:', error);
       return null;
