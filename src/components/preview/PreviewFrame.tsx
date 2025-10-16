@@ -89,7 +89,7 @@ export function PreviewFrame({
   };
 
   // Generate same-origin preview URL with auth token and preserve current path
-  const getSameOriginPreviewUrl = async (originalUrl: string, preservePath?: string, testInspectionMode?: boolean) => {
+  const getSameOriginPreviewUrl = async (originalUrl: string, preservePath?: string) => {
     console.log('[getSameOriginPreviewUrl] 🔍 Starting with URL:', originalUrl);
     console.log('[getSameOriginPreviewUrl] 🔍 Preserve path:', preservePath);
     
@@ -122,14 +122,8 @@ export function PreviewFrame({
         console.log('[getSameOriginPreviewUrl] 🔧 Original URL:', originalUrl);
         console.log('[getSameOriginPreviewUrl] 🔧 Path to preserve:', preservePath);
         
-        // HARDCODED TEST: Always append 'products' in inspection mode for testing
         let finalUrl;
-        if (testInspectionMode) {
-          console.log('[getSameOriginPreviewUrl] 🚨 INSPECTION MODE TEST - forcing products path');
-          const baseUrl = originalUrl.endsWith('/') ? originalUrl : originalUrl + '/';
-          finalUrl = baseUrl + 'products';
-          console.log('[getSameOriginPreviewUrl] 🚨 HARDCODED TEST URL:', finalUrl);
-        } else if (preservePath && preservePath !== '/') {
+        if (preservePath && preservePath !== '/') {
           // Ensure the URL ends with /proxy/ and append the path
           const baseUrl = originalUrl.endsWith('/') ? originalUrl : originalUrl + '/';
           // Remove leading slash from preservePath since baseUrl ends with /
@@ -336,7 +330,7 @@ export function PreviewFrame({
         }
         
         try {
-          const url = await getSameOriginPreviewUrl(preview.url, pathToPreserve, inspectionMode);
+          const url = await getSameOriginPreviewUrl(preview.url, pathToPreserve);
           console.log('[PreviewFrame] ✅ Generated same-origin proxy URL:', url);
           console.log('[PreviewFrame] 📍 Original preview URL was:', preview.url);
           console.log('[PreviewFrame] 📍 Preserved path:', pathToPreserve);
