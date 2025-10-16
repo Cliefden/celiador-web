@@ -21,6 +21,7 @@ import {
   ChevronRight
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
+import { useAuth } from '../../contexts/AuthContext';
 
 interface ActivityItem {
   id: string;
@@ -48,10 +49,12 @@ interface ActivityFeedProps {
 }
 
 export function ActivityFeed({ projectId, className = '' }: ActivityFeedProps) {
+  const { session } = useAuth();
   const [activities, setActivities] = useState<ActivityItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [expandedCards, setExpandedCards] = useState<Set<string>>(new Set());
+
 
   const loadActivities = async (silent = false) => {
     if (!projectId) {
@@ -60,13 +63,14 @@ export function ActivityFeed({ projectId, className = '' }: ActivityFeedProps) {
       return;
     }
 
+    if (!session) {
+      setActivities([]);
+      setLoading(false);
+      return;
+    }
+
     try {
       if (!silent) setLoading(true);
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
-        setActivities([]);
-        return;
-      }
       
       const response = await fetch(`${process.env.NEXT_PUBLIC_ORCHESTRATOR_URL || 'http://localhost:4000'}/projects/${projectId}/activity?showAll=false&_t=${Date.now()}&_debug=true`, {
         headers: {
@@ -93,8 +97,10 @@ export function ActivityFeed({ projectId, className = '' }: ActivityFeedProps) {
   };
 
   useEffect(() => {
-    loadActivities();
-  }, [projectId]);
+    if (session) {
+      loadActivities();
+    }
+  }, [projectId, session]);
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
@@ -222,18 +228,18 @@ export function ActivityFeed({ projectId, className = '' }: ActivityFeedProps) {
   return (
     <div className={`flex flex-col h-full ${className}`}>
       {/* Header */}
-      <div className="flex items-center justify-between p-4 border-b border-gray-200">
+      <div className="flex items-center justify-between p-4 border-b border-gray-700">
         <div className="flex items-center space-x-2">
-          <Activity className="w-4 h-4 text-gray-600" />
-          <h3 className="font-medium text-gray-900">Activity</h3>
+          <Activity className="w-4 h-4 text-gray-400" />
+          <h3 className="font-medium text-white">Activity</h3>
         </div>
         <button
           onClick={handleRefresh}
           disabled={isRefreshing}
-          className="p-1 hover:bg-gray-100 rounded transition-colors"
+          className="p-1 hover:bg-gray-700 rounded transition-colors"
           title="Refresh activity"
         >
-          <RefreshCw className={`w-4 h-4 text-gray-500 ${isRefreshing ? 'animate-spin' : ''}`} />
+          <RefreshCw className={`w-4 h-4 text-gray-400 ${isRefreshing ? 'animate-spin' : ''}`} />
         </button>
       </div>
 
@@ -241,8 +247,8 @@ export function ActivityFeed({ projectId, className = '' }: ActivityFeedProps) {
       <div className="flex-1 overflow-y-auto">
         {activities.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-center p-6">
-            <Activity className="w-8 h-8 text-gray-300 mb-3" />
-            <p className="text-sm text-gray-500 mb-1">No recent activity</p>
+            <Activity className="w-8 h-8 text-gray-500 mb-3" />
+            <p className="text-sm text-gray-300 mb-1">No recent activity</p>
             <p className="text-xs text-gray-400">Start building to see activity here</p>
           </div>
         ) : (
@@ -254,7 +260,7 @@ export function ActivityFeed({ projectId, className = '' }: ActivityFeedProps) {
               return (
                 <div
                   key={activity.id}
-                  className="relative group bg-white rounded-lg border border-gray-100 hover:border-gray-200 transition-all duration-200 hover:shadow-sm overflow-hidden"
+                  className="relative group bg-gray-800 rounded-lg border border-gray-700 hover:border-gray-600 transition-all duration-200 hover:shadow-sm overflow-hidden"
                 >
                   {/* Status indicator bar */}
                   <div className={`absolute left-0 top-0 bottom-0 w-1 ${
@@ -277,11 +283,11 @@ export function ActivityFeed({ projectId, className = '' }: ActivityFeedProps) {
                       <div className="flex-1 min-w-0">
                         <div className="flex items-start justify-between mb-1">
                           <div className="flex items-center space-x-2">
-                            <h4 className="text-sm font-semibold text-gray-900">
+                            <h4 className="text-sm font-semibold text-white">
                               {activity.title}
                             </h4>
                             {hasDetails && (
-                              <button className="text-gray-400 hover:text-gray-600">
+                              <button className="text-gray-400 hover:text-gray-300">
                                 {isExpanded ? (
                                   <ChevronDown className="w-3 h-3" />
                                 ) : (
@@ -290,19 +296,19 @@ export function ActivityFeed({ projectId, className = '' }: ActivityFeedProps) {
                               </button>
                             )}
                           </div>
-                          <span className="text-xs text-gray-500 flex-shrink-0 mt-0.5">
+                          <span className="text-xs text-gray-400 flex-shrink-0 mt-0.5">
                             {getRelativeTime(activity.timestamp)}
                           </span>
                         </div>
                         
                         {/* Job type description for jobs */}
                         {activity.metadata?.jobType && (
-                          <p className="text-xs text-gray-500 mb-1">
+                          <p className="text-xs text-gray-400 mb-1">
                             {getJobTypeDescription(activity.metadata.jobType)}
                           </p>
                         )}
                         
-                        <p className="text-xs text-gray-600 leading-relaxed mb-2">
+                        <p className="text-xs text-gray-300 leading-relaxed mb-2">
                           {activity.description}
                         </p>
                         
@@ -322,7 +328,7 @@ export function ActivityFeed({ projectId, className = '' }: ActivityFeedProps) {
                           
                           {/* Quick output summary */}
                           {activity.metadata?.output && !isExpanded && (
-                            <span className="text-xs text-gray-500">
+                            <span className="text-xs text-gray-400">
                               {formatOutput(activity.metadata.output)}
                             </span>
                           )}
@@ -332,11 +338,11 @@ export function ActivityFeed({ projectId, className = '' }: ActivityFeedProps) {
                     
                     {/* Expanded details */}
                     {isExpanded && hasDetails && (
-                      <div className="mt-3 pt-3 border-t border-gray-100 space-y-2">
+                      <div className="mt-3 pt-3 border-t border-gray-700 space-y-2">
                         {activity.metadata?.output && (
                           <div>
-                            <div className="text-xs font-medium text-gray-700 mb-1">Output:</div>
-                            <div className="text-xs text-gray-600 bg-gray-50 p-2 rounded font-mono">
+                            <div className="text-xs font-medium text-gray-300 mb-1">Output:</div>
+                            <div className="text-xs text-gray-300 bg-gray-900 p-2 rounded font-mono">
                               {activity.metadata.output.length > 500 
                                 ? activity.metadata.output.substring(0, 500) + '...'
                                 : activity.metadata.output
@@ -347,8 +353,8 @@ export function ActivityFeed({ projectId, className = '' }: ActivityFeedProps) {
                         
                         {activity.metadata?.error && (
                           <div>
-                            <div className="text-xs font-medium text-red-700 mb-1">Error:</div>
-                            <div className="text-xs text-red-600 bg-red-50 p-2 rounded font-mono">
+                            <div className="text-xs font-medium text-red-400 mb-1">Error:</div>
+                            <div className="text-xs text-red-300 bg-red-900/20 p-2 rounded font-mono">
                               {activity.metadata.error}
                             </div>
                           </div>
@@ -356,8 +362,8 @@ export function ActivityFeed({ projectId, className = '' }: ActivityFeedProps) {
                         
                         {activity.metadata?.jobMetadata && (
                           <div>
-                            <div className="text-xs font-medium text-gray-700 mb-1">Metadata:</div>
-                            <div className="text-xs text-gray-600 bg-gray-50 p-2 rounded font-mono">
+                            <div className="text-xs font-medium text-gray-300 mb-1">Metadata:</div>
+                            <div className="text-xs text-gray-300 bg-gray-900 p-2 rounded font-mono">
                               {JSON.stringify(activity.metadata.jobMetadata, null, 2)}
                             </div>
                           </div>

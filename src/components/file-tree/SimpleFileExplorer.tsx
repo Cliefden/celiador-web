@@ -97,10 +97,10 @@ export function SimpleFileExplorer({
   };
 
   return (
-    <div className={`h-full flex flex-col bg-gray-50 ${className}`}>
+    <div className={`h-full flex flex-col bg-gray-900 ${className}`}>
       {/* Header with create buttons */}
-      <div className="flex items-center justify-between p-2 border-b border-gray-200">
-        <span className="text-sm font-medium text-gray-700">Files</span>
+      <div className="flex items-center justify-between p-2 border-b border-gray-700">
+        <span className="text-sm font-medium text-white">Files</span>
         <div className="flex items-center space-x-1">
           <Button
             variant="ghost"
@@ -126,7 +126,7 @@ export function SimpleFileExplorer({
       {/* File Tree */}
       <div className="flex-1 overflow-auto p-1">
         {files.length === 0 ? (
-          <div className="flex items-center justify-center h-32 text-gray-500">
+          <div className="flex items-center justify-center h-32 text-gray-400">
             <div className="text-center">
               {isScaffolding ? (
                 <>
@@ -135,13 +135,13 @@ export function SimpleFileExplorer({
                       <Code className="w-5 h-5 text-white animate-bounce" />
                     </div>
                   </div>
-                  <p className="text-sm text-blue-600 font-medium">Creating project files...</p>
-                  <p className="text-xs text-blue-400 mt-1">Files will appear as they are generated</p>
+                  <p className="text-sm text-blue-400 font-medium">Creating project files...</p>
+                  <p className="text-xs text-blue-300 mt-1">Files will appear as they are generated</p>
                 </>
               ) : (
                 <>
                   <Folder className="w-8 h-8 mx-auto mb-2 opacity-50" />
-                  <p className="text-sm">No files</p>
+                  <p className="text-sm text-gray-300">No files</p>
                 </>
               )}
             </div>
@@ -284,8 +284,8 @@ function FileTreeNode({
       <div
         className={`flex items-center justify-between py-0.5 px-2 rounded cursor-pointer group transition-colors ${
           isSelected 
-            ? 'bg-blue-100 text-blue-900' 
-            : 'hover:bg-gray-100'
+            ? 'bg-blue-600 text-white' 
+            : 'hover:bg-gray-700 text-gray-300'
         }`}
         style={{ paddingLeft: `${level * 12 + 8}px` }}
         onClick={handleClick}
@@ -297,9 +297,9 @@ function FileTreeNode({
             <div className="flex items-center mr-1">
               {hasChildren ? (
                 isExpanded ? (
-                  <ChevronDown className="w-3 h-3 text-gray-500" />
+                  <ChevronDown className="w-3 h-3 text-gray-400" />
                 ) : (
-                  <ChevronRight className="w-3 h-3 text-gray-500" />
+                  <ChevronRight className="w-3 h-3 text-gray-400" />
                 )
               ) : (
                 <div className="w-3 h-3" />
@@ -334,21 +334,21 @@ function FileTreeNode({
             <>
               <button
                 onClick={handleCreateFile}
-                className="p-1 rounded text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors text-xs font-bold flex items-center justify-center w-6 h-6"
+                className="p-1 rounded text-gray-400 hover:text-blue-400 hover:bg-gray-700 transition-colors text-xs font-bold flex items-center justify-center w-6 h-6"
                 title="New File"
               >
                 <span>📄</span>
               </button>
               <button
                 onClick={handleCreateFolder}
-                className="p-1 rounded text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors text-xs font-bold flex items-center justify-center w-6 h-6"
+                className="p-1 rounded text-gray-400 hover:text-blue-400 hover:bg-gray-700 transition-colors text-xs font-bold flex items-center justify-center w-6 h-6"
                 title="New Folder"
               >
                 <span>📁</span>
               </button>
               <button
                 onClick={handleDelete}
-                className="p-1 rounded text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors flex items-center justify-center w-6 h-6"
+                className="p-1 rounded text-gray-400 hover:text-red-400 hover:bg-red-900/20 transition-colors flex items-center justify-center w-6 h-6"
                 title="Delete Folder"
               >
                 <Trash2 className="w-3 h-3" />
@@ -361,7 +361,7 @@ function FileTreeNode({
               <div className="w-6 h-6"></div>
               <button
                 onClick={handleDelete}
-                className="p-1 rounded text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors flex items-center justify-center w-6 h-6"
+                className="p-1 rounded text-gray-400 hover:text-red-400 hover:bg-red-900/20 transition-colors flex items-center justify-center w-6 h-6"
                 title="Delete File"
               >
                 <Trash2 className="w-3 h-3" />

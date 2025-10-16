@@ -76,7 +76,7 @@ export function GitHubConnectionModal({
   const checkGitHubStatus = async () => {
     try {
       setLoading(true);
-      const response = await fetch(`/api/orchestrator/auth/github/status`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_ORCHESTRATOR_URL || 'http://localhost:4000'}/auth/github/status`, {
         headers: {
           'Authorization': `Bearer ${user?.token}`
         }
@@ -110,7 +110,7 @@ export function GitHubConnectionModal({
       setLoading(true);
       setError(null);
       
-      const response = await fetch('/api/orchestrator/auth/github/connect', {
+      const response = await fetch('${process.env.NEXT_PUBLIC_ORCHESTRATOR_URL || 'http://localhost:4000'}/auth/github/connect', {
         headers: {
           'Authorization': `Bearer ${user?.token}`
         }
@@ -164,7 +164,7 @@ export function GitHubConnectionModal({
       setLoading(true);
       setError(null);
       
-      const response = await fetch(`/api/orchestrator/projects/${project.id}/github/connect`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_ORCHESTRATOR_URL || 'http://localhost:4000'}/projects/${project.id}/github/connect`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${user?.token}`,

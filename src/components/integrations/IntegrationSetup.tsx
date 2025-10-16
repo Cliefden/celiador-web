@@ -13,6 +13,7 @@ import {
   Unlink
 } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '../ui/dialog';
+import { useAuth } from '../../contexts/AuthContext';
 
 interface IntegrationStatus {
   github: {
@@ -51,6 +52,7 @@ interface IntegrationSetupProps {
 }
 
 export function IntegrationSetup({ projectId, onIntegrationChange }: IntegrationSetupProps) {
+  const { session } = useAuth();
   const [status, setStatus] = useState<IntegrationStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [vercelSetupOpen, setVercelSetupOpen] = useState(false);
@@ -64,14 +66,18 @@ export function IntegrationSetup({ projectId, onIntegrationChange }: Integration
   const [vercelLoading, setVercelLoading] = useState(false);
 
   useEffect(() => {
-    loadIntegrationStatus();
-  }, [projectId]);
+    if (session && projectId) {
+      loadIntegrationStatus();
+    }
+  }, [projectId, session]);
 
   const loadIntegrationStatus = async () => {
+    if (!session) return;
+    
     try {
-      const response = await fetch(`/api/orchestrator/api/integrations/projects/${projectId}/status`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_ORCHESTRATOR_URL || 'http://localhost:4000'}/api/integrations/projects/${projectId}/status`, {
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Authorization': `Bearer ${session.access_token}`,
         },
       });
 
@@ -97,9 +103,9 @@ export function IntegrationSetup({ projectId, onIntegrationChange }: Integration
 
   const loadVercelTeams = async (token: string) => {
     try {
-      const response = await fetch('/api/orchestrator/api/integrations/vercel/teams', {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_ORCHESTRATOR_URL || 'http://localhost:4000'}/api/integrations/vercel/teams`, {
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Authorization': `Bearer ${session.access_token}`,
           'x-vercel-token': token,
         },
       });
@@ -116,12 +122,12 @@ export function IntegrationSetup({ projectId, onIntegrationChange }: Integration
   const loadVercelProjects = async (token: string, teamId?: string) => {
     try {
       const url = teamId 
-        ? `/api/orchestrator/api/integrations/vercel/projects?teamId=${teamId}`
-        : '/api/orchestrator/api/integrations/vercel/projects';
+        ? `${process.env.NEXT_PUBLIC_ORCHESTRATOR_URL || 'http://localhost:4000'}/api/integrations/vercel/projects?teamId=${teamId}`
+        : `${process.env.NEXT_PUBLIC_ORCHESTRATOR_URL || 'http://localhost:4000'}/api/integrations/vercel/projects`;
 
       const response = await fetch(url, {
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Authorization': `Bearer ${session.access_token}`,
           'x-vercel-token': token,
         },
       });
@@ -161,11 +167,11 @@ export function IntegrationSetup({ projectId, onIntegrationChange }: Integration
       const project = vercelProjects.find(p => p.id === selectedProject);
       const domain = project?.targets?.production?.domain;
 
-      const response = await fetch(`/api/orchestrator/api/integrations/projects/${projectId}/vercel`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_ORCHESTRATOR_URL || 'http://localhost:4000'}/api/integrations/projects/${projectId}/vercel`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Authorization': `Bearer ${session.access_token}`,
         },
         body: JSON.stringify({
           vercelProjectId: selectedProject,
@@ -192,10 +198,10 @@ export function IntegrationSetup({ projectId, onIntegrationChange }: Integration
 
   const handleVercelDisconnect = async () => {
     try {
-      const response = await fetch(`/api/orchestrator/api/integrations/projects/${projectId}/vercel`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_ORCHESTRATOR_URL || 'http://localhost:4000'}/api/integrations/projects/${projectId}/vercel`, {
         method: 'DELETE',
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Authorization': `Bearer ${session.access_token}`,
         },
       });
 

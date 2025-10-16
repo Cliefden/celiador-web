@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { SimpleFileExplorer } from './SimpleFileExplorer';
 import { supabase } from '../../lib/supabase';
 import { useFileRefresh } from './useFileRefresh';
+import { useAuth } from '../../contexts/AuthContext';
 
 interface FileNode {
   name: string;
@@ -28,22 +29,46 @@ export function ProjectFileExplorer({
   className,
   onRefresh
 }: ProjectFileExplorerProps) {
+  const { session } = useAuth();
   const [files, setFiles] = useState<FileNode[]>([]);
   const [loading, setLoading] = useState(false);
   const [isScaffolding, setIsScaffolding] = useState(false);
   const { onFileRefresh } = useFileRefresh(projectId);
 
+  // Helper function to get valid session with automatic refresh
+  const getValidSession = async () => {
+    let { data: { session }, error } = await supabase.auth.getSession();
+    
+    
+    // Check if session is expired or invalid
+    const now = Math.floor(Date.now() / 1000);
+    const isExpired = session?.expires_at && session.expires_at < now;
+    
+    if (!session || error || isExpired) {
+      const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
+      
+      if (refreshError || !refreshData.session) {
+        return null;
+      }
+      
+      session = refreshData.session;
+    }
+    
+    return session;
+  };
+
   useEffect(() => {
-    fetchFiles();
-    checkScaffoldingStatus();
-  }, [projectId]);
+    if (session && projectId) {
+      fetchFiles();
+      checkScaffoldingStatus();
+    }
+  }, [projectId, session]);
 
   // Poll for files during scaffolding
   useEffect(() => {
     let interval: NodeJS.Timeout;
     
     if (isScaffolding) {
-      console.log('[ProjectFileExplorer] Starting progressive file polling during scaffolding');
       interval = setInterval(() => {
         fetchFiles(true); // Silent fetch during polling
         checkScaffoldingStatus();
@@ -61,7 +86,6 @@ export function ProjectFileExplorer({
   useEffect(() => {
     const cleanup = onFileRefresh((event) => {
       if (event.detail.projectId === projectId) {
-        console.log(`[ProjectFileExplorer] Received refresh event for ${event.detail.filePath} (${event.detail.operation})`);
         fetchFiles(true); // Silent refresh
       }
     });
@@ -79,11 +103,9 @@ export function ProjectFileExplorer({
 
   const handleCreateFile = async (parentPath?: string) => {
     const fileName = prompt('Enter file name:');
-    if (!fileName) return;
+    if (!fileName || !session) return;
 
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) return;
 
       const filePath = parentPath ? `${parentPath}/${fileName}` : fileName;
       
@@ -112,11 +134,9 @@ export function ProjectFileExplorer({
 
   const handleCreateFolder = async (parentPath?: string) => {
     const folderName = prompt('Enter folder name:');
-    if (!folderName) return;
+    if (!folderName || !session) return;
 
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) return;
 
       const folderPath = parentPath ? `${parentPath}/${folderName}` : folderName;
       
@@ -143,9 +163,9 @@ export function ProjectFileExplorer({
   };
 
   const handleDeleteFile = async (filePath: string) => {
+    if (!session) return;
+    
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) return;
 
       const response = await fetch(`${process.env.NEXT_PUBLIC_ORCHESTRATOR_URL || 'http://localhost:4000'}/projects/${projectId}/files/${encodeURIComponent(filePath)}`, {
         method: 'DELETE',
@@ -165,9 +185,9 @@ export function ProjectFileExplorer({
   };
 
   const handleDeleteFolder = async (folderPath: string) => {
+    if (!session) return;
+    
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) return;
 
       // Delete the folder by deleting all files in it (Supabase doesn't have folder concept)
       const response = await fetch(`${process.env.NEXT_PUBLIC_ORCHESTRATOR_URL || 'http://localhost:4000'}/projects/${projectId}/files/delete-folder`, {
@@ -192,11 +212,9 @@ export function ProjectFileExplorer({
   };
 
   const checkScaffoldingStatus = async () => {
-    if (!projectId) return;
+    if (!projectId || !session) return;
     
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) return;
 
       // Check for active scaffold jobs
       const response = await fetch(`${process.env.NEXT_PUBLIC_ORCHESTRATOR_URL || 'http://localhost:4000'}/projects/${projectId}/jobs?type=SCAFFOLD&status=PENDING,RUNNING`, {
@@ -210,9 +228,6 @@ export function ProjectFileExplorer({
         const hasActiveScaffold = data.jobs && data.jobs.length > 0;
         setIsScaffolding(hasActiveScaffold);
         
-        if (hasActiveScaffold) {
-          console.log('[ProjectFileExplorer] Active scaffold job detected - enabling progressive file loading');
-        }
       }
     } catch (error) {
       console.error('[ProjectFileExplorer] Error checking scaffolding status:', error);
@@ -220,24 +235,13 @@ export function ProjectFileExplorer({
   };
 
   const fetchFiles = async (silent = false) => {
-    if (!projectId) {
-      console.log('[ProjectFileExplorer] No projectId provided');
+    if (!projectId || !session) {
       return;
-    }
-    
-    if (!silent) {
-      console.log('[ProjectFileExplorer] Fetching files for project:', projectId);
     }
     
     try {
       if (!silent) setLoading(true);
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
-        if (!silent) console.log('[ProjectFileExplorer] No session available');
-        return;
-      }
-
-      if (!silent) console.log('[ProjectFileExplorer] Making API request for files...');
+      
       const response = await fetch(`${process.env.NEXT_PUBLIC_ORCHESTRATOR_URL || 'http://localhost:4000'}/projects/${projectId}/files/tree`, {
         headers: {
           'Authorization': `Bearer ${session.access_token}`
@@ -247,28 +251,17 @@ export function ProjectFileExplorer({
       if (response.ok) {
         const data = await response.json();
         const newFileCount = data.tree?.length || 0;
-        const oldFileCount = files.length;
-        
-        if (!silent) {
-          console.log('[ProjectFileExplorer] Received file tree:', newFileCount, 'files');
-        } else if (newFileCount > oldFileCount) {
-          console.log(`[ProjectFileExplorer] Progressive loading: ${newFileCount - oldFileCount} new files added`);
-        }
         
         setFiles(data.tree || []);
       } else if (response.status === 404) {
-        if (!silent) console.log('[ProjectFileExplorer] No files found (404)');
         setFiles([]);
       } else {
-        if (!silent) console.error('[ProjectFileExplorer] Failed to fetch file tree:', response.status);
         setFiles([]);
       }
     } catch (error) {
-      if (!silent) console.error('[ProjectFileExplorer] Error fetching files:', error);
       setFiles([]);
     } finally {
       if (!silent) {
-        console.log('[ProjectFileExplorer] Finished loading files');
         setLoading(false);
       }
     }

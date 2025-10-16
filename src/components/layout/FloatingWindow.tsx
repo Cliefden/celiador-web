@@ -1,11 +1,12 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { X, Files, MessageSquare, Settings, Activity, Code2 } from 'lucide-react';
+import { X, Files, MessageSquare, Settings, Activity, Code2, Github } from 'lucide-react';
 import { ProjectFileExplorer } from '../file-tree/ProjectFileExplorer';
 import { ActivityFeed } from '../activity/ActivityFeed';
+import { GitHubIntegrationPanel } from '../integrations/GitHubIntegrationPanel';
 
-export type FloatingWindowContent = 'files' | 'chat' | 'activity' | 'settings' | 'code';
+export type FloatingWindowContent = 'files' | 'chat' | 'activity' | 'settings' | 'code' | 'integrations';
 
 interface FloatingWindowProps {
   isOpen: boolean;
@@ -41,6 +42,11 @@ const contentConfig = {
     title: 'Code Assistant',
     icon: Code2,
     description: 'AI-powered code assistance'
+  },
+  integrations: {
+    title: 'GitHub Integration',
+    icon: Github,
+    description: 'Manage GitHub connections and tokens'
   }
 };
 
@@ -120,6 +126,18 @@ export function FloatingWindow({
               <Code2 className="w-12 h-12 mx-auto mb-4 text-gray-300" />
               <p>Code assistant coming soon...</p>
             </div>
+          </div>
+        );
+      
+      case 'integrations':
+        return projectId ? (
+          <GitHubIntegrationPanel
+            projectId={projectId}
+            className="h-full overflow-y-auto"
+          />
+        ) : (
+          <div className="flex items-center justify-center h-64 text-gray-300">
+            <p>No project selected</p>
           </div>
         );
       
