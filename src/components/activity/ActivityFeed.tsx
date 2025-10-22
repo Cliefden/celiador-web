@@ -109,30 +109,56 @@ export function ActivityFeed({ projectId, className = '' }: ActivityFeedProps) {
 
   const getActivityIcon = (activity: ActivityItem) => {
     if (activity.type === 'job') {
-      // First show status icon for running/failed states
-      if (activity.status === 'RUNNING') {
-        return <Loader2 className="w-4 h-4 text-blue-500 animate-spin" />;
-      }
-      if (activity.status === 'FAILED') {
-        return <AlertCircle className="w-4 h-4 text-red-500" />;
+      // Status takes priority over job type - show status-based icons first
+      switch (activity.status) {
+        case 'RUNNING':
+          return <Loader2 className="w-4 h-4 text-blue-500 animate-spin" />;
+        case 'FAILED':
+          return <AlertCircle className="w-4 h-4 text-red-500" />;
+        case 'CANCELLED':
+          return <AlertCircle className="w-4 h-4 text-gray-500" />;
+        case 'PENDING':
+          return <Clock className="w-4 h-4 text-yellow-500" />;
+        case 'COMPLETED':
+          // For completed jobs, show success icon only if no error metadata exists
+          if (activity.metadata?.error) {
+            return <AlertCircle className="w-4 h-4 text-red-500" />;
+          }
+          break; // Fall through to job type specific icons for successful completion
+        default:
+          // Unknown status - show job type specific icon or generic
+          break;
       }
       
-      // Then show job type specific icons
+      // For successful completion or unknown status, show job type specific icons
       const jobType = activity.metadata?.jobType;
       switch (jobType) {
         case 'SCAFFOLD':
-          return <Settings className="w-4 h-4 text-purple-500" />;
+          return activity.status === 'COMPLETED' 
+            ? <CheckCircle className="w-4 h-4 text-green-500" />
+            : <Settings className="w-4 h-4 text-purple-500" />;
         case 'AI_ACTION':
-          return <Zap className="w-4 h-4 text-yellow-500" />;
+          return activity.status === 'COMPLETED' 
+            ? <CheckCircle className="w-4 h-4 text-green-500" />
+            : <Zap className="w-4 h-4 text-yellow-500" />;
         case 'EDIT':
-          return <Code className="w-4 h-4 text-blue-500" />;
+          return activity.status === 'COMPLETED' 
+            ? <CheckCircle className="w-4 h-4 text-green-500" />
+            : <Code className="w-4 h-4 text-blue-500" />;
         case 'TEST':
-          return <Play className="w-4 h-4 text-green-500" />;
+          return activity.status === 'COMPLETED' 
+            ? <CheckCircle className="w-4 h-4 text-green-500" />
+            : <Play className="w-4 h-4 text-green-500" />;
         case 'BUILD':
-          return <Package className="w-4 h-4 text-orange-500" />;
+          return activity.status === 'COMPLETED' 
+            ? <CheckCircle className="w-4 h-4 text-green-500" />
+            : <Package className="w-4 h-4 text-orange-500" />;
         case 'DEPLOY':
-          return <Rocket className="w-4 h-4 text-indigo-500" />;
+          return activity.status === 'COMPLETED' 
+            ? <CheckCircle className="w-4 h-4 text-green-500" />
+            : <Rocket className="w-4 h-4 text-indigo-500" />;
         default:
+          // Unknown job type - only show success for truly completed jobs without errors
           return activity.status === 'COMPLETED' 
             ? <CheckCircle className="w-4 h-4 text-green-500" />
             : <Clock className="w-4 h-4 text-gray-500" />;
@@ -157,7 +183,9 @@ export function ActivityFeed({ projectId, className = '' }: ActivityFeedProps) {
     switch (activity.status) {
       case 'PENDING': return 'text-yellow-600';
       case 'RUNNING': return 'text-blue-600';
-      case 'COMPLETED': return 'text-green-600';
+      case 'COMPLETED': 
+        // If job is marked completed but has error metadata, show as failed
+        return activity.metadata?.error ? 'text-red-600' : 'text-green-600';
       case 'FAILED': return 'text-red-600';
       case 'CANCELLED': return 'text-gray-600';
       default: return 'text-gray-600';
@@ -264,10 +292,12 @@ export function ActivityFeed({ projectId, className = '' }: ActivityFeedProps) {
                 >
                   {/* Status indicator bar */}
                   <div className={`absolute left-0 top-0 bottom-0 w-1 ${
-                    activity.status === 'COMPLETED' ? 'bg-green-400' :
+                    activity.status === 'COMPLETED' && !activity.metadata?.error ? 'bg-green-400' :
+                    activity.status === 'COMPLETED' && activity.metadata?.error ? 'bg-red-400' :
                     activity.status === 'RUNNING' ? 'bg-blue-400' :
                     activity.status === 'FAILED' ? 'bg-red-400' :
                     activity.status === 'PENDING' ? 'bg-yellow-400' :
+                    activity.status === 'CANCELLED' ? 'bg-gray-400' :
                     'bg-gray-300'
                   }`} />
                   
@@ -316,13 +346,18 @@ export function ActivityFeed({ projectId, className = '' }: ActivityFeedProps) {
                         <div className="flex items-center justify-between">
                           {activity.status && (
                             <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                              activity.status === 'COMPLETED' ? 'bg-green-100 text-green-800' :
+                              activity.status === 'COMPLETED' && !activity.metadata?.error ? 'bg-green-100 text-green-800' :
+                              activity.status === 'COMPLETED' && activity.metadata?.error ? 'bg-red-100 text-red-800' :
                               activity.status === 'RUNNING' ? 'bg-blue-100 text-blue-800' :
                               activity.status === 'FAILED' ? 'bg-red-100 text-red-800' :
                               activity.status === 'PENDING' ? 'bg-yellow-100 text-yellow-800' :
+                              activity.status === 'CANCELLED' ? 'bg-gray-100 text-gray-800' :
                               'bg-gray-100 text-gray-800'
                             }`}>
-                              {activity.status.toLowerCase()}
+                              {activity.status === 'COMPLETED' && activity.metadata?.error 
+                                ? 'failed' 
+                                : activity.status.toLowerCase()
+                              }
                             </span>
                           )}
                           

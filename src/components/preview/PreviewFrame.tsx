@@ -151,6 +151,7 @@ export function PreviewFrame({
 
   const [proxyUrl, setProxyUrl] = useState<string | null>(null);
   const [authReady, setAuthReady] = useState(false);
+  const [authSetupTimeout, setAuthSetupTimeout] = useState(false);
 
   // Listen for navigation changes in the preview iframe
   useEffect(() => {
@@ -301,12 +302,21 @@ export function PreviewFrame({
     console.log('[PreviewFrame] Effect triggered - preview status:', preview?.status, 'URL:', preview?.url);
     console.log('[PreviewFrame] Current path:', currentPath, 'Inspection mode:', inspectionMode);
     
+    // Reset timeout when effect runs
+    setAuthSetupTimeout(false);
+    
     if (preview?.url && preview.status === 'running') {
       console.log('[PreviewFrame] ✅ Preview is running, generating proxy URL...');
       console.log('[PreviewFrame] 🔍 Preview URL to check:', preview.url);
       console.log('[PreviewFrame] 🔍 URL contains /projects/:', preview.url.includes('/projects/'));
       console.log('[PreviewFrame] 🔍 URL contains /preview/:', preview.url.includes('/preview/'));
       console.log('[PreviewFrame] 🔍 URL contains /proxy/:', preview.url.includes('/proxy/'));
+      
+      // Set timeout for auth setup (10 seconds)
+      const authTimeout = setTimeout(() => {
+        console.warn('[PreviewFrame] ⏰ Auth setup timeout - falling back to direct URL');
+        setAuthSetupTimeout(true);
+      }, 10000);
       
       // Generate proxy URL with path preservation for inspection mode
       const generateProxyUrl = async () => {
@@ -328,15 +338,22 @@ export function PreviewFrame({
           console.log('[PreviewFrame] 📍 Preserved path:', pathToPreserve);
           setProxyUrl(url);
           setAuthReady(!!url);
+          clearTimeout(authTimeout); // Clear timeout on success
           console.log('[PreviewFrame] 🔄 Auth ready set to:', !!url);
         } catch (error) {
           console.error('[PreviewFrame] ❌ Failed to generate proxy URL:', error);
           setProxyUrl(null);
           setAuthReady(false);
+          clearTimeout(authTimeout); // Clear timeout on error
         }
       };
       
       generateProxyUrl();
+      
+      // Return cleanup function
+      return () => {
+        clearTimeout(authTimeout);
+      };
     } else {
       console.log('[PreviewFrame] ⏸️ Preview not ready - status:', preview?.status, 'URL exists:', !!preview?.url);
       setProxyUrl(null);
@@ -650,8 +667,8 @@ export function PreviewFrame({
               </Badge>
             )}
           </div>
-        ) : preview.status === 'running' && inspectionMode && (!authReady || !proxyUrl) ? (
-          /* Auth/Proxy Setup State - Only for inspection mode */
+        ) : preview.status === 'running' && inspectionMode && (!authReady || !proxyUrl) && !authSetupTimeout ? (
+          /* Auth/Proxy Setup State - Only for inspection mode with timeout */
           <div className="text-center max-w-md">
             <Loader2 className="w-12 h-12 animate-spin text-purple-500 mx-auto mb-4" />
             <h3 className="text-lg font-medium text-gray-700 mb-2">
@@ -662,6 +679,63 @@ export function PreviewFrame({
             </p>
             <div className="mt-3 text-xs text-gray-400">
               authReady: {String(authReady)}, hasProxyUrl: {String(!!proxyUrl)}
+            </div>
+            <div className="mt-4">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  console.log('[PreviewFrame] Force refresh proxy URL generation');
+                  // Force refresh the proxy URL generation
+                  setAuthReady(false);
+                  setProxyUrl(null);
+                  setAuthSetupTimeout(false);
+                }}
+                className="text-purple-400 border-purple-400 hover:bg-purple-400/10"
+              >
+                <RefreshCw className="w-3 h-3 mr-1" />
+                Retry Setup
+              </Button>
+            </div>
+          </div>
+        ) : preview.status === 'running' && inspectionMode && authSetupTimeout ? (
+          /* Auth Setup Timeout - Fallback to direct URL */
+          <div className="text-center max-w-md">
+            <AlertCircle className="w-12 h-12 text-orange-500 mx-auto mb-4" />
+            <h3 className="text-lg font-medium text-orange-600 mb-2">
+              Inspection Setup Timeout
+            </h3>
+            <p className="text-sm text-gray-500 mb-4">
+              Unable to configure inspection mode proxy. You can still view the preview directly.
+            </p>
+            <div className="space-y-2">
+              <Button
+                variant="default"
+                size="sm"
+                onClick={() => {
+                  console.log('[PreviewFrame] Fallback to direct URL');
+                  // Exit inspection mode and use direct URL
+                  onToggleInspection?.();
+                }}
+                className="bg-blue-600 hover:bg-blue-700"
+              >
+                <ExternalLink className="w-3 h-3 mr-1" />
+                View Direct Preview
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  console.log('[PreviewFrame] Retry inspection setup');
+                  setAuthSetupTimeout(false);
+                  setAuthReady(false);
+                  setProxyUrl(null);
+                }}
+                className="text-orange-500 border-orange-500 hover:bg-orange-500/10"
+              >
+                <RefreshCw className="w-3 h-3 mr-1" />
+                Retry Inspection Setup
+              </Button>
             </div>
           </div>
         ) : preview.status === 'running' && ((!inspectionMode && preview.url) || (inspectionMode && authReady && proxyUrl)) ? (

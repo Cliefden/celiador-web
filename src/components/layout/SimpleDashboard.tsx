@@ -7,6 +7,9 @@ import { useConversation } from '../conversation/useConversation';
 import { usePreview } from '../../hooks/usePreview';
 import { PreviewOverlay } from '../inspection/PreviewOverlay';
 import { FloatingWindowController } from './FloatingWindowController';
+import { OnboardingFlow } from '../onboarding/OnboardingFlow';
+import { WelcomeBanner } from '../onboarding/WelcomeBanner';
+import { useOnboarding } from '../../hooks/useOnboarding';
 import { 
   Plus, 
   Send, 
@@ -98,6 +101,15 @@ export function SimpleDashboard({ initialUser, onLogout }: SimpleDashboardProps)
   const [inspectionMode, setInspectionMode] = useState(false);
   const [selectedElement, setSelectedElement] = useState<UIElement | null>(null);
   const [uiElements, setUIElements] = useState<UIElement[]>([]);
+
+  // Onboarding state
+  const {
+    shouldShowOnboarding,
+    isNewUser,
+    onboardingState,
+    completeOnboarding,
+    markFirstProjectCreated,
+  } = useOnboarding(user.id);
   const [iframeLoaded, setIframeLoaded] = useState(false);
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
   const [currentPreviewUrl, setCurrentPreviewUrl] = useState<string | null>(null);
@@ -401,6 +413,9 @@ The user has visually selected this specific UI element and wants to modify it. 
     setProjects(prev => [newProject, ...prev]);
     setSelectedProject(newProject);
     setShowCreateProject(false);
+    
+    // Mark first project creation for onboarding
+    markFirstProjectCreated();
   };
 
   const handleDeleteProject = async (project: Project) => {
@@ -843,7 +858,20 @@ The user has visually selected this specific UI element and wants to modify it. 
           </div>
         ) : (
           /* Main Workspace */
-          <div className="flex-1 min-h-0 flex flex-col lg:flex-row">
+          <div className="flex-1 min-h-0 flex flex-col">
+            {/* Welcome Banner for returning users */}
+            {!shouldShowOnboarding && !onboardingState.hasCreatedFirstProject && (
+              <WelcomeBanner
+                userName={user.name}
+                hasCreatedFirstProject={onboardingState.hasCreatedFirstProject}
+                hasConnectedGitHub={onboardingState.hasConnectedGitHub}
+                hasDeployedProject={onboardingState.hasDeployedProject}
+                onCreateProject={() => setShowCreateProject(true)}
+                onDismiss={() => {}}
+              />
+            )}
+            
+            <div className="flex-1 min-h-0 flex flex-col lg:flex-row">
             {/* Chat Panel - Resizable sidebar */}
             <div 
               className="w-full flex-shrink-0 flex flex-col bg-gray-900/50 backdrop-blur-sm rounded-2xl shadow-xl border border-gray-700/50 overflow-hidden mr-2"
@@ -1056,8 +1084,12 @@ The user has visually selected this specific UI element and wants to modify it. 
                       <span>Reset</span>
                     </button>
                     
-                    {/* Deploy Button */}
-                    <button className="flex items-center space-x-2 bg-gradient-to-r from-green-600 to-emerald-600 text-white px-3 py-2 rounded-lg hover:from-green-700 hover:to-emerald-700 transition-all shadow-sm">
+                    {/* Deploy Button - Opens integrations panel */}
+                    <button 
+                      onClick={() => setActiveTab('integrations')}
+                      className="flex items-center space-x-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-3 py-2 rounded-lg hover:from-blue-700 hover:to-indigo-700 transition-all shadow-sm"
+                      title="Open deployment options in integrations panel"
+                    >
                       <Rocket className="h-4 w-4" />
                       <span className="text-sm font-medium">Deploy</span>
                     </button>
@@ -1191,8 +1223,20 @@ The user has visually selected this specific UI element and wants to modify it. 
               </div>
             </div>
           </div>
+          </div>
         )}
       </div>
+
+      {/* Onboarding Flow */}
+      {shouldShowOnboarding && (
+        <OnboardingFlow
+          userName={user.name}
+          onComplete={completeOnboarding}
+          onCreateFirstProject={() => {
+            setShowCreateProject(true);
+          }}
+        />
+      )}
 
       {/* Create Project Modal */}
       {showCreateProject && (

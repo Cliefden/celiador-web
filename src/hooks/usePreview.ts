@@ -27,6 +27,7 @@ export function usePreview(projectId: string | null) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loadingMessage, setLoadingMessage] = useState<string>('');
+  const [currentPollingCleanup, setCurrentPollingCleanup] = useState<(() => void) | null>(null);
 
   // Load existing preview for project
   const loadPreview = useCallback(async () => {
@@ -62,7 +63,8 @@ export function usePreview(projectId: string | null) {
         // If preview is running, we're done. If it's starting/syncing, poll for updates
         if (activePreview.status === 'starting' || activePreview.status === 'syncing') {
           console.log('[usePreview] Preview is starting/syncing, polling for updates');
-          pollPreviewStatus(activePreview.id);
+          const cleanup = pollPreviewStatus(activePreview.id);
+          setCurrentPollingCleanup(() => cleanup);
         }
       } else {
         console.log('[usePreview] No active preview found');
@@ -109,7 +111,8 @@ export function usePreview(projectId: string | null) {
       console.log('[usePreview] Started preview:', data.preview.id, 'status:', data.preview.status);
       
       // Poll for status updates
-      pollPreviewStatus(data.preview.id);
+      const cleanup = pollPreviewStatus(data.preview.id);
+      setCurrentPollingCleanup(() => cleanup);
     } catch (error) {
       console.error('[usePreview] Error starting preview:', error);
       const errorMessage = error instanceof Error ? error.message : 'Failed to start preview';
@@ -152,15 +155,22 @@ export function usePreview(projectId: string | null) {
     }
   }, [preview, stopPreview, startPreview]);
 
-  // Poll for preview status updates with timeout
+  // Poll for preview status updates with timeout and proper cleanup
   const pollPreviewStatus = useCallback(async (previewId: string) => {
     if (!projectId) return;
 
     let pollCount = 0;
     const maxPolls = 60; // 60 polls * 2s = 2 minutes timeout
     const startTime = Date.now();
+    let isPollingActive = true; // Flag to control polling lifecycle
 
     const poll = async () => {
+      // Exit early if polling was cancelled
+      if (!isPollingActive) {
+        console.log('[usePreview] Polling cancelled for preview:', previewId);
+        return;
+      }
+
       try {
         pollCount++;
         const elapsed = Math.floor((Date.now() - startTime) / 1000);
@@ -169,6 +179,7 @@ export function usePreview(projectId: string | null) {
         if (pollCount > maxPolls) {
           console.warn(`[usePreview] ⏰ Polling timeout after ${elapsed}s - preview may be stuck`);
           setError('Preview startup timed out. Try clicking the Reset button to restart the preview.');
+          setLoading(false); // Clear loading state on timeout
           return;
         }
         
@@ -176,8 +187,8 @@ export function usePreview(projectId: string | null) {
         const updatedPreview = data.preview; // API returns {success: true, preview: {...}}
         
         setPreview(prev => {
-          // Only update if this is still the current preview
-          if (prev?.id === previewId) {
+          // Only update if this is still the current preview and polling is active
+          if (prev?.id === previewId && isPollingActive) {
             console.log('[usePreview] Status update:', prev?.status, '->', updatedPreview.status);
             return updatedPreview;
           }
@@ -189,38 +200,58 @@ export function usePreview(projectId: string | null) {
         // Continue polling until preview reaches a final state
         if (updatedPreview.status === 'starting' || updatedPreview.status === 'syncing') {
           console.log(`[usePreview] Preview still ${updatedPreview.status} - continuing to poll (${pollCount}/${maxPolls})`);
-          setTimeout(poll, 2000);
+          if (isPollingActive) {
+            setTimeout(poll, 2000);
+          }
         } else if (updatedPreview.status === 'running') {
           console.log('[usePreview] ✅ Preview is now running - polling complete');
           setError(null); // Clear any previous timeout errors
+          setLoading(false); // Clear loading state when successful
         } else {
           console.log('[usePreview] Preview in final state:', updatedPreview.status, '- polling stopped');
+          setLoading(false); // Clear loading state for final states
         }
       } catch (error) {
         console.error('[usePreview] Error polling status:', error);
         
         // On error, retry with exponential backoff, but respect the timeout
-        if (pollCount < maxPolls) {
+        if (pollCount < maxPolls && isPollingActive) {
           const retryDelay = Math.min(5000 + (pollCount * 500), 10000); // Max 10s delay
           console.log(`[usePreview] Retrying poll after error in ${retryDelay}ms (attempt ${pollCount}/${maxPolls})`);
           setTimeout(poll, retryDelay);
         } else {
           console.error('[usePreview] Max polling attempts reached after errors');
           setError('Preview startup failed after multiple attempts. Try clicking the Reset button.');
+          setLoading(false); // Clear loading state on error
         }
       }
     };
 
     // Start polling
     setTimeout(poll, 1000);
+
+    // Return cleanup function to stop polling
+    return () => {
+      console.log('[usePreview] Stopping polling for preview:', previewId);
+      isPollingActive = false;
+    };
   }, [projectId]);
 
   // Clear preview immediately when project changes, then load new one
   useEffect(() => {
     console.log('[usePreview] Project changed to:', projectId);
+    
+    // Clean up any existing polling before switching projects
+    if (currentPollingCleanup) {
+      console.log('[usePreview] Cleaning up previous polling');
+      currentPollingCleanup();
+      setCurrentPollingCleanup(null);
+    }
+    
     // Immediately clear current preview to avoid showing old project
     setPreview(null);
     setError(null);
+    setLoading(false); // Clear loading state when switching projects
     console.log('[usePreview] Cleared previous preview state');
     
     // Load new project's preview if projectId exists
@@ -234,9 +265,13 @@ export function usePreview(projectId: string | null) {
   // Cleanup on unmount
   useEffect(() => {
     return () => {
-      // Could add cleanup logic here if needed
+      // Clean up polling when component unmounts
+      if (currentPollingCleanup) {
+        console.log('[usePreview] Component unmounting - cleaning up polling');
+        currentPollingCleanup();
+      }
     };
-  }, []);
+  }, [currentPollingCleanup]);
 
   return {
     preview,

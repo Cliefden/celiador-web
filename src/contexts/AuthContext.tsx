@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import { createContext, useContext, useEffect, useState, ReactNode, useRef } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
 
@@ -29,6 +29,10 @@ interface AuthContextType {
   updateProfile: (updates: Partial<Profile>) => Promise<{ error: any }>;
   refreshProfile: () => Promise<void>;
   refreshAuth: () => Promise<void>;
+  // Session tracking data
+  sessionData: any;
+  isSessionTracking: boolean;
+  sessionActivityCount: number;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -38,6 +42,202 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  
+  // Session tracking state
+  const [sessionData, setSessionData] = useState<any>(null);
+  const [isSessionTracking, setIsSessionTracking] = useState(false);
+  const [sessionActivityCount, setSessionActivityCount] = useState(0);
+  
+  const heartbeatIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const sessionStartTimeRef = useRef<Date | null>(null);
+  const lastActivityRef = useRef<Date>(new Date());
+
+  // Session tracking functions
+  const generateSessionId = () => {
+    return `web-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  };
+
+  const getDeviceInfo = () => {
+    if (typeof navigator === 'undefined') return {};
+    const userAgent = navigator.userAgent;
+    const platform = navigator.platform;
+    const language = navigator.language;
+    const screen = typeof window !== 'undefined' ? window.screen : null;
+    
+    return {
+      userAgent,
+      platform,
+      language,
+      screenResolution: screen ? `${screen.width}x${screen.height}` : 'unknown',
+      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      cookieEnabled: navigator.cookieEnabled,
+      onlineStatus: navigator.onLine
+    };
+  };
+
+  const getLocationInfo = () => {
+    return {
+      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      language: typeof navigator !== 'undefined' ? navigator.language : 'unknown',
+    };
+  };
+
+  const startSessionTracking = async () => {
+    if (!session?.access_token || isSessionTracking) return;
+
+    try {
+      const sessionId = generateSessionId();
+      const deviceInfo = getDeviceInfo();
+      const locationInfo = getLocationInfo();
+
+      console.log('[SessionTracking] Starting session:', sessionId);
+
+      const response = await fetch(`${process.env.NEXT_PUBLIC_ORCHESTRATOR_URL || 'http://localhost:4000'}/api/sessions/start`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({
+          sessionId,
+          platform: 'web',
+          deviceInfo,
+          locationInfo,
+          userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : 'unknown'
+        }),
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        sessionStartTimeRef.current = new Date();
+        
+        setSessionData({
+          sessionId,
+          platform: 'web',
+          status: 'active',
+          startedAt: result.session.startedAt,
+          duration: 0
+        });
+        
+        setIsSessionTracking(true);
+        setSessionActivityCount(0);
+        
+        // Start heartbeat
+        startHeartbeat(sessionId);
+        
+        console.log('[SessionTracking] Session started successfully');
+      } else {
+        console.error('[SessionTracking] Failed to start session:', response.statusText);
+      }
+    } catch (error) {
+      console.error('[SessionTracking] Error starting session:', error);
+    }
+  };
+
+  const endSessionTracking = async (endReason: string = 'manual') => {
+    if (!sessionData || !isSessionTracking) return;
+
+    try {
+      console.log('[SessionTracking] Ending session:', sessionData.sessionId);
+
+      // Stop heartbeat
+      if (heartbeatIntervalRef.current) {
+        clearInterval(heartbeatIntervalRef.current);
+        heartbeatIntervalRef.current = null;
+      }
+
+      const response = await fetch(`${process.env.NEXT_PUBLIC_ORCHESTRATOR_URL || 'http://localhost:4000'}/api/sessions/end`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session?.access_token}`,
+        },
+        body: JSON.stringify({
+          sessionId: sessionData.sessionId,
+          endReason
+        }),
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        setSessionData(prev => prev ? {
+          ...prev,
+          status: 'ended',
+          duration: result.session.durationSeconds
+        } : null);
+        
+        setIsSessionTracking(false);
+        console.log('[SessionTracking] Session ended successfully');
+      } else {
+        console.error('[SessionTracking] Failed to end session:', response.statusText);
+      }
+    } catch (error) {
+      console.error('[SessionTracking] Error ending session:', error);
+    }
+  };
+
+  const sendHeartbeat = async (sessionId: string) => {
+    if (!session?.access_token) return;
+
+    try {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_ORCHESTRATOR_URL || 'http://localhost:4000'}/api/sessions/heartbeat`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({
+          sessionId,
+          activityCount: sessionActivityCount
+        }),
+      });
+
+      if (!response.ok) {
+        console.error('[SessionTracking] Heartbeat failed:', response.statusText);
+        if (response.status === 404) {
+          // Session not found on server
+          setIsSessionTracking(false);
+          if (heartbeatIntervalRef.current) {
+            clearInterval(heartbeatIntervalRef.current);
+            heartbeatIntervalRef.current = null;
+          }
+        } else if (response.status === 401) {
+          // Unauthorized - token expired or invalid
+          console.log('[SessionTracking] Token expired, stopping heartbeat');
+          setIsSessionTracking(false);
+          if (heartbeatIntervalRef.current) {
+            clearInterval(heartbeatIntervalRef.current);
+            heartbeatIntervalRef.current = null;
+          }
+          // Note: We don't trigger logout here since Supabase handles token refresh automatically
+          // The session will restart when the user becomes active again with a fresh token
+        }
+      }
+    } catch (error) {
+      console.error('[SessionTracking] Heartbeat error:', error);
+    }
+  };
+
+  const startHeartbeat = (sessionId: string) => {
+    if (heartbeatIntervalRef.current) {
+      clearInterval(heartbeatIntervalRef.current);
+    }
+
+    heartbeatIntervalRef.current = setInterval(() => {
+      sendHeartbeat(sessionId);
+      
+      // Update session duration
+      if (sessionStartTimeRef.current) {
+        const duration = Math.floor((new Date().getTime() - sessionStartTimeRef.current.getTime()) / 1000 / 60);
+        setSessionData(prev => prev ? { ...prev, duration } : null);
+      }
+    }, 30000); // 30 seconds
+  };
+
+  const trackActivity = () => {
+    lastActivityRef.current = new Date();
+    setSessionActivityCount(prev => prev + 1);
+  };
 
   // Fetch user profile from profiles table
   const fetchProfile = async (userId: string) => {
@@ -67,6 +267,111 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return null;
     }
   };
+
+  // Auto-start session when user is authenticated
+  useEffect(() => {
+    if (session && !isSessionTracking) {
+      startSessionTracking();
+    }
+  }, [session, isSessionTracking]);
+
+  // Auto-end session when user logs out
+  useEffect(() => {
+    if (!session && isSessionTracking) {
+      endSessionTracking('logout');
+    }
+  }, [session, isSessionTracking]);
+
+  // Set up activity listeners
+  useEffect(() => {
+    if (!isSessionTracking) return;
+
+    const activityEvents = ['click', 'keydown', 'scroll', 'mousemove'];
+    
+    const throttledTrackActivity = (() => {
+      let timeout: NodeJS.Timeout | null = null;
+      return () => {
+        if (timeout) return;
+        timeout = setTimeout(() => {
+          trackActivity();
+          timeout = null;
+        }, 1000); // Throttle to once per second
+      };
+    })();
+
+    activityEvents.forEach(event => {
+      document.addEventListener(event, throttledTrackActivity, { passive: true });
+    });
+
+    return () => {
+      activityEvents.forEach(event => {
+        document.removeEventListener(event, throttledTrackActivity);
+      });
+    };
+  }, [isSessionTracking]);
+
+  // Handle page visibility changes
+  useEffect(() => {
+    if (!isSessionTracking) return;
+
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        // Page is hidden - don't end session but stop heartbeat temporarily
+        if (heartbeatIntervalRef.current) {
+          clearInterval(heartbeatIntervalRef.current);
+          heartbeatIntervalRef.current = null;
+        }
+      } else {
+        // Page is visible - resume heartbeat
+        if (sessionData) {
+          startHeartbeat(sessionData.sessionId);
+        }
+        trackActivity();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [isSessionTracking, sessionData]);
+
+  // Handle page unload
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      if (isSessionTracking && sessionData) {
+        // Use navigator.sendBeacon for reliable delivery during page unload
+        const data = JSON.stringify({
+          sessionId: sessionData.sessionId,
+          endReason: 'page_unload'
+        });
+
+        if (navigator.sendBeacon) {
+          const blob = new Blob([data], { type: 'application/json' });
+          navigator.sendBeacon(
+            `${process.env.NEXT_PUBLIC_ORCHESTRATOR_URL || 'http://localhost:4000'}/api/sessions/end`,
+            blob
+          );
+        }
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, [isSessionTracking, sessionData]);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (heartbeatIntervalRef.current) {
+        clearInterval(heartbeatIntervalRef.current);
+      }
+    };
+  }, []);
 
   // Initialize auth state
   useEffect(() => {
@@ -206,9 +511,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         options: {
           data: {
             full_name: profileData.full_name,
-            username: profileData.username,
-            website: profileData.website,
-            avatar_url: profileData.avatar_url,
+            // username and website are now optional and can be added later
+            ...(profileData.username && { username: profileData.username }),
+            ...(profileData.website && { website: profileData.website }),
+            ...(profileData.avatar_url && { avatar_url: profileData.avatar_url }),
           }
         }
       });
@@ -258,6 +564,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signOut = async () => {
     try {
       console.log('Starting sign out process...');
+      
+      // End session tracking before signing out
+      if (isSessionTracking && sessionData) {
+        console.log('Ending session tracking before logout...');
+        await endSessionTracking('logout');
+      }
       
       // Clear local state first
       setUser(null);
@@ -345,6 +657,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     updateProfile,
     refreshProfile,
     refreshAuth,
+    // Session tracking data
+    sessionData,
+    isSessionTracking,
+    sessionActivityCount,
   };
 
   return (

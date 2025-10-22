@@ -23,7 +23,8 @@ import {
   AlertTriangle,
   ArrowRight,
   Calendar,
-  Timer
+  Timer,
+  HelpCircle
 } from 'lucide-react';
 
 interface GitHubConnection {
@@ -54,6 +55,8 @@ interface GitHubIntegrationStatus {
     fullName: string;
     private: boolean;
     defaultBranch: string;
+    status: 'exists' | 'not_found' | 'access_denied' | 'api_error' | 'timeout' | 'validation_error' | 'unknown';
+    validated: boolean;
   };
 }
 
@@ -193,6 +196,60 @@ export function GitHubIntegrationPanel({ projectId, className = '' }: GitHubInte
     });
   };
 
+  const getRepositoryStatusInfo = (status: string) => {
+    switch (status) {
+      case 'exists':
+        return { 
+          color: 'text-green-400', 
+          bgColor: 'bg-green-900/20', 
+          borderColor: 'border-green-400',
+          icon: CheckCircle,
+          message: 'Repository validated'
+        };
+      case 'not_found':
+        return { 
+          color: 'text-red-400', 
+          bgColor: 'bg-red-900/20', 
+          borderColor: 'border-red-400',
+          icon: AlertCircle,
+          message: 'Repository not found'
+        };
+      case 'access_denied':
+        return { 
+          color: 'text-orange-400', 
+          bgColor: 'bg-orange-900/20', 
+          borderColor: 'border-orange-400',
+          icon: AlertTriangle,
+          message: 'Access denied'
+        };
+      case 'timeout':
+        return { 
+          color: 'text-yellow-400', 
+          bgColor: 'bg-yellow-900/20', 
+          borderColor: 'border-yellow-400',
+          icon: Clock,
+          message: 'Validation timeout'
+        };
+      case 'api_error':
+      case 'validation_error':
+        return { 
+          color: 'text-gray-400', 
+          bgColor: 'bg-gray-900/20', 
+          borderColor: 'border-gray-400',
+          icon: AlertCircle,
+          message: 'Validation error'
+        };
+      default:
+        return { 
+          color: 'text-gray-400', 
+          bgColor: 'bg-gray-900/20', 
+          borderColor: 'border-gray-400',
+          icon: HelpCircle,
+          message: 'Status unknown'
+        };
+    }
+  };
+
   const renderTrialInfo = (connection: GitHubConnection) => {
     if (!connection.trial || connection.type !== 'platform') return null;
     
@@ -303,10 +360,42 @@ export function GitHubIntegrationPanel({ projectId, className = '' }: GitHubInte
           </div>
           
           {connection.connected ? (
-            <Badge variant="outline" className="text-green-400 border-green-400">
-              <CheckCircle className="w-3 h-3 mr-1" />
-              Connected
-            </Badge>
+            (() => {
+              // For platform connections, show repository-specific status if we have repo info
+              if (connection.type === 'platform' && status.repoInfo?.status) {
+                const repoStatus = status.repoInfo.status;
+                if (repoStatus === 'exists') {
+                  return (
+                    <Badge variant="outline" className="text-green-400 border-green-400">
+                      <CheckCircle className="w-3 h-3 mr-1" />
+                      Connected
+                    </Badge>
+                  );
+                } else if (repoStatus === 'not_found') {
+                  return (
+                    <Badge variant="outline" className="text-red-400 border-red-400">
+                      <AlertCircle className="w-3 h-3 mr-1" />
+                      Repo Not Found
+                    </Badge>
+                  );
+                } else {
+                  return (
+                    <Badge variant="outline" className="text-yellow-400 border-yellow-400">
+                      <AlertTriangle className="w-3 h-3 mr-1" />
+                      Repo Issue
+                    </Badge>
+                  );
+                }
+              }
+              
+              // Default connected status
+              return (
+                <Badge variant="outline" className="text-green-400 border-green-400">
+                  <CheckCircle className="w-3 h-3 mr-1" />
+                  Connected
+                </Badge>
+              );
+            })()
           ) : (
             <Badge variant="outline" className="text-gray-400 border-gray-500">
               <XCircle className="w-3 h-3 mr-1" />
@@ -324,17 +413,54 @@ export function GitHubIntegrationPanel({ projectId, className = '' }: GitHubInte
             
             {connection.tokenStatus && (
               <div className="flex items-center justify-between text-sm">
-                <span className="text-gray-400">Token Status:</span>
-                <Badge 
-                  variant="outline" 
-                  className={`
-                    ${connection.tokenStatus === 'valid' ? 'text-green-400 border-green-400' : ''}
-                    ${connection.tokenStatus === 'expired' ? 'text-yellow-400 border-yellow-400' : ''}
-                    ${connection.tokenStatus === 'revoked' ? 'text-red-400 border-red-400' : ''}
-                  `}
-                >
-                  {connection.tokenStatus}
-                </Badge>
+                <span className="text-gray-400">
+                  {connection.type === 'platform' && status.repoInfo ? 'Repo Access:' : 'Token Status:'}
+                </span>
+                {(() => {
+                  // For platform connections with repo info, show repository access status
+                  if (connection.type === 'platform' && status.repoInfo?.status) {
+                    const repoStatus = status.repoInfo.status;
+                    if (repoStatus === 'exists') {
+                      return (
+                        <Badge variant="outline" className="text-green-400 border-green-400">
+                          accessible
+                        </Badge>
+                      );
+                    } else if (repoStatus === 'not_found') {
+                      return (
+                        <Badge variant="outline" className="text-red-400 border-red-400">
+                          not found
+                        </Badge>
+                      );
+                    } else if (repoStatus === 'access_denied') {
+                      return (
+                        <Badge variant="outline" className="text-orange-400 border-orange-400">
+                          access denied
+                        </Badge>
+                      );
+                    } else {
+                      return (
+                        <Badge variant="outline" className="text-yellow-400 border-yellow-400">
+                          {repoStatus.replace('_', ' ')}
+                        </Badge>
+                      );
+                    }
+                  }
+                  
+                  // Default token status
+                  return (
+                    <Badge 
+                      variant="outline" 
+                      className={`
+                        ${connection.tokenStatus === 'valid' ? 'text-green-400 border-green-400' : ''}
+                        ${connection.tokenStatus === 'expired' ? 'text-yellow-400 border-yellow-400' : ''}
+                        ${connection.tokenStatus === 'revoked' ? 'text-red-400 border-red-400' : ''}
+                      `}
+                    >
+                      {connection.tokenStatus}
+                    </Badge>
+                  );
+                })()}
               </div>
             )}
 
@@ -366,7 +492,15 @@ export function GitHubIntegrationPanel({ projectId, className = '' }: GitHubInte
                 className="text-red-400 border-red-400 hover:bg-red-400/10"
               >
                 <Unlink className="w-4 h-4 mr-1" />
-                Disconnect
+                {(() => {
+                  // For platform connections with repo issues, show more appropriate button text
+                  if (type === 'platform' && status.repoInfo?.status === 'not_found') {
+                    return 'Clear Config';
+                  } else if (type === 'platform' && status.repoInfo?.status && status.repoInfo.status !== 'exists') {
+                    return 'Reset Link';
+                  }
+                  return 'Disconnect';
+                })()}
               </Button>
               
               {connection.repoUrl && (
@@ -446,13 +580,43 @@ export function GitHubIntegrationPanel({ projectId, className = '' }: GitHubInte
 
       {/* Active Connection Status */}
       {status.activeConnection && status.projectLinked && status.repoInfo && (
-        <Card className="p-4 border-green-600 bg-green-600/10">
+        <Card className={`p-4 ${
+          status.repoInfo.status === 'exists' 
+            ? 'border-green-600 bg-green-600/10' 
+            : status.repoInfo.status === 'not_found'
+            ? 'border-red-600 bg-red-600/10'
+            : 'border-yellow-600 bg-yellow-600/10'
+        }`}>
           <div className="flex items-center space-x-3 mb-3">
-            <CheckCircle className="w-5 h-5 text-green-400" />
+            {status.repoInfo.status === 'exists' ? (
+              <CheckCircle className="w-5 h-5 text-green-400" />
+            ) : status.repoInfo.status === 'not_found' ? (
+              <AlertCircle className="w-5 h-5 text-red-400" />
+            ) : (
+              <AlertTriangle className="w-5 h-5 text-yellow-400" />
+            )}
             <div>
-              <h3 className="font-medium text-green-400">Project Linked</h3>
+              <h3 className={`font-medium ${
+                status.repoInfo.status === 'exists' 
+                  ? 'text-green-400' 
+                  : status.repoInfo.status === 'not_found'
+                  ? 'text-red-400'
+                  : 'text-yellow-400'
+              }`}>
+                {status.repoInfo.status === 'exists' 
+                  ? 'Repository Connected' 
+                  : status.repoInfo.status === 'not_found'
+                  ? 'Repository Not Found'
+                  : 'Repository Issue'
+                }
+              </h3>
               <p className="text-sm text-gray-300">
-                Using {status.activeConnection === 'customer' ? 'customer' : 'platform'} connection
+                {status.repoInfo.status === 'exists' 
+                  ? `Using ${status.activeConnection === 'customer' ? 'customer' : 'platform'} connection`
+                  : status.repoInfo.status === 'not_found'
+                  ? 'Repository configured but does not exist'
+                  : 'Repository validation had issues'
+                }
               </p>
             </div>
           </div>
@@ -472,6 +636,33 @@ export function GitHubIntegrationPanel({ projectId, className = '' }: GitHubInte
                 {status.repoInfo.private ? 'Private' : 'Public'}
               </Badge>
             </div>
+            
+            {/* Repository Status */}
+            {(() => {
+              const statusInfo = getRepositoryStatusInfo(status.repoInfo.status);
+              const StatusIcon = statusInfo.icon;
+              
+              return (
+                <div className={`p-2 rounded border ${statusInfo.bgColor} ${statusInfo.borderColor}`}>
+                  <div className="flex items-center space-x-2">
+                    <StatusIcon className={`w-4 h-4 ${statusInfo.color}`} />
+                    <span className={`text-sm font-medium ${statusInfo.color}`}>
+                      {statusInfo.message}
+                    </span>
+                  </div>
+                  {status.repoInfo.status === 'not_found' && (
+                    <p className="text-xs text-gray-400 mt-1">
+                      Repository may need to be created or database info may be stale.
+                    </p>
+                  )}
+                  {status.repoInfo.status === 'access_denied' && (
+                    <p className="text-xs text-gray-400 mt-1">
+                      Check repository permissions or GitHub token access.
+                    </p>
+                  )}
+                </div>
+              );
+            })()}
           </div>
         </Card>
       )}

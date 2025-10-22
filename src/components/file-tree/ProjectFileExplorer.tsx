@@ -5,6 +5,7 @@ import { SimpleFileExplorer } from './SimpleFileExplorer';
 import { supabase } from '../../lib/supabase';
 import { useFileRefresh } from './useFileRefresh';
 import { useAuth } from '../../contexts/AuthContext';
+import { AlertCircle, Loader2, RefreshCw, X } from 'lucide-react';
 
 interface FileNode {
   name: string;
@@ -33,6 +34,8 @@ export function ProjectFileExplorer({
   const [files, setFiles] = useState<FileNode[]>([]);
   const [loading, setLoading] = useState(false);
   const [isScaffolding, setIsScaffolding] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [operationLoading, setOperationLoading] = useState<string | null>(null);
   const { onFileRefresh } = useFileRefresh(projectId);
 
   // Helper function to get valid session with automatic refresh
@@ -106,6 +109,8 @@ export function ProjectFileExplorer({
     if (!fileName || !session) return;
 
     try {
+      setOperationLoading(`Creating file: ${fileName}`);
+      setError(null);
 
       const filePath = parentPath ? `${parentPath}/${fileName}` : fileName;
       
@@ -126,9 +131,15 @@ export function ProjectFileExplorer({
         // Refresh file tree
         fetchFiles();
         onRefresh?.();
+      } else {
+        const errorText = await response.text();
+        setError(`Failed to create file: ${response.status} ${errorText || response.statusText}`);
       }
     } catch (error) {
       console.error('Error creating file:', error);
+      setError(`Failed to create file: ${error instanceof Error ? error.message : 'Network error'}`);
+    } finally {
+      setOperationLoading(null);
     }
   };
 
@@ -137,6 +148,8 @@ export function ProjectFileExplorer({
     if (!folderName || !session) return;
 
     try {
+      setOperationLoading(`Creating folder: ${folderName}`);
+      setError(null);
 
       const folderPath = parentPath ? `${parentPath}/${folderName}` : folderName;
       
@@ -156,9 +169,15 @@ export function ProjectFileExplorer({
         // Refresh file tree
         fetchFiles();
         onRefresh?.();
+      } else {
+        const errorText = await response.text();
+        setError(`Failed to create folder: ${response.status} ${errorText || response.statusText}`);
       }
     } catch (error) {
       console.error('Error creating folder:', error);
+      setError(`Failed to create folder: ${error instanceof Error ? error.message : 'Network error'}`);
+    } finally {
+      setOperationLoading(null);
     }
   };
 
@@ -166,6 +185,8 @@ export function ProjectFileExplorer({
     if (!session) return;
     
     try {
+      setOperationLoading(`Deleting file: ${filePath}`);
+      setError(null);
 
       const response = await fetch(`${process.env.NEXT_PUBLIC_ORCHESTRATOR_URL || 'http://localhost:4000'}/projects/${projectId}/files/${encodeURIComponent(filePath)}`, {
         method: 'DELETE',
@@ -178,9 +199,15 @@ export function ProjectFileExplorer({
         // Refresh file tree
         fetchFiles();
         onRefresh?.();
+      } else {
+        const errorText = await response.text();
+        setError(`Failed to delete file: ${response.status} ${errorText || response.statusText}`);
       }
     } catch (error) {
       console.error('Error deleting file:', error);
+      setError(`Failed to delete file: ${error instanceof Error ? error.message : 'Network error'}`);
+    } finally {
+      setOperationLoading(null);
     }
   };
 
@@ -188,6 +215,8 @@ export function ProjectFileExplorer({
     if (!session) return;
     
     try {
+      setOperationLoading(`Deleting folder: ${folderPath}`);
+      setError(null);
 
       // Delete the folder by deleting all files in it (Supabase doesn't have folder concept)
       const response = await fetch(`${process.env.NEXT_PUBLIC_ORCHESTRATOR_URL || 'http://localhost:4000'}/projects/${projectId}/files/delete-folder`, {
@@ -205,9 +234,15 @@ export function ProjectFileExplorer({
         // Refresh file tree
         fetchFiles();
         onRefresh?.();
+      } else {
+        const errorText = await response.text();
+        setError(`Failed to delete folder: ${response.status} ${errorText || response.statusText}`);
       }
     } catch (error) {
       console.error('Error deleting folder:', error);
+      setError(`Failed to delete folder: ${error instanceof Error ? error.message : 'Network error'}`);
+    } finally {
+      setOperationLoading(null);
     }
   };
 
@@ -241,6 +276,7 @@ export function ProjectFileExplorer({
     
     try {
       if (!silent) setLoading(true);
+      if (!silent) setError(null); // Clear errors when doing manual refresh
       
       const response = await fetch(`${process.env.NEXT_PUBLIC_ORCHESTRATOR_URL || 'http://localhost:4000'}/projects/${projectId}/files/tree`, {
         headers: {
@@ -253,13 +289,22 @@ export function ProjectFileExplorer({
         const newFileCount = data.tree?.length || 0;
         
         setFiles(data.tree || []);
+        if (!silent) setError(null); // Clear any previous errors on success
       } else if (response.status === 404) {
         setFiles([]);
+        if (!silent) setError(null); // 404 is not really an error for empty projects
       } else {
         setFiles([]);
+        if (!silent) {
+          const errorText = await response.text();
+          setError(`Failed to load files: ${response.status} ${errorText || response.statusText}`);
+        }
       }
     } catch (error) {
       setFiles([]);
+      if (!silent) {
+        setError(`Failed to load files: ${error instanceof Error ? error.message : 'Network error'}`);
+      }
     } finally {
       if (!silent) {
         setLoading(false);
@@ -276,17 +321,60 @@ export function ProjectFileExplorer({
   }
 
   return (
-    <SimpleFileExplorer
-      files={files}
-      onFileSelect={handleFileSelect}
-      onCreateFile={handleCreateFile}
-      onCreateFolder={handleCreateFolder}
-      onDeleteFile={handleDeleteFile}
-      onDeleteFolder={handleDeleteFolder}
-      selectedFile={selectedFile || undefined}
-      projectId={projectId}
-      className={className}
-      isScaffolding={isScaffolding}
-    />
+    <div className={`flex flex-col h-full ${className}`}>
+      {/* Error Banner */}
+      {error && (
+        <div className="mx-2 mt-2 p-3 bg-red-900/20 border border-red-500 rounded-lg">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-2">
+              <AlertCircle className="w-4 h-4 text-red-400 flex-shrink-0" />
+              <p className="text-sm text-red-300">{error}</p>
+            </div>
+            <div className="flex items-center space-x-1">
+              <button
+                onClick={() => fetchFiles()}
+                className="p-1 hover:bg-red-800/20 rounded transition-colors"
+                title="Retry"
+              >
+                <RefreshCw className="w-3 h-3 text-red-400" />
+              </button>
+              <button
+                onClick={() => setError(null)}
+                className="p-1 hover:bg-red-800/20 rounded transition-colors"
+                title="Dismiss"
+              >
+                <X className="w-3 h-3 text-red-400" />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Operation Loading Banner */}
+      {operationLoading && (
+        <div className="mx-2 mt-2 p-3 bg-blue-900/20 border border-blue-500 rounded-lg">
+          <div className="flex items-center space-x-2">
+            <Loader2 className="w-4 h-4 text-blue-400 animate-spin flex-shrink-0" />
+            <p className="text-sm text-blue-300">{operationLoading}</p>
+          </div>
+        </div>
+      )}
+
+      {/* File Explorer */}
+      <div className="flex-1 overflow-hidden">
+        <SimpleFileExplorer
+          files={files}
+          onFileSelect={handleFileSelect}
+          onCreateFile={handleCreateFile}
+          onCreateFolder={handleCreateFolder}
+          onDeleteFile={handleDeleteFile}
+          onDeleteFolder={handleDeleteFolder}
+          selectedFile={selectedFile || undefined}
+          projectId={projectId}
+          className=""
+          isScaffolding={isScaffolding}
+        />
+      </div>
+    </div>
   );
 }

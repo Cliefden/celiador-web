@@ -18,8 +18,6 @@ export default function SignUpModal({ isOpen, onClose, onSwitchToSignIn }: SignU
     password: '',
     confirmPassword: '',
     fullName: '',
-    username: '',
-    website: '',
   });
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
@@ -57,8 +55,6 @@ export default function SignUpModal({ isOpen, onClose, onSwitchToSignIn }: SignU
 
     const profileData = {
       full_name: formData.fullName,
-      username: formData.username,
-      website: formData.website,
     };
 
     const { error } = await signUp(formData.email, formData.password, profileData);
@@ -169,36 +165,6 @@ export default function SignUpModal({ isOpen, onClose, onSwitchToSignIn }: SignU
               value={formData.fullName}
               onChange={handleInputChange}
               placeholder="Enter your full name"
-              className="w-full"
-            />
-          </div>
-
-          <div>
-            <label htmlFor="username" className="block text-sm font-medium text-gray-700 mb-2">
-              Username
-            </label>
-            <Input
-              id="username"
-              name="username"
-              type="text"
-              value={formData.username}
-              onChange={handleInputChange}
-              placeholder="Choose a username"
-              className="w-full"
-            />
-          </div>
-
-          <div>
-            <label htmlFor="website" className="block text-sm font-medium text-gray-700 mb-2">
-              Website
-            </label>
-            <Input
-              id="website"
-              name="website"
-              type="url"
-              value={formData.website}
-              onChange={handleInputChange}
-              placeholder="https://yourwebsite.com"
               className="w-full"
             />
           </div>

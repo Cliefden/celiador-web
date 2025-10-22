@@ -1,10 +1,12 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { X, Files, MessageSquare, Settings, Activity, Code2, Github } from 'lucide-react';
+import { X, Files, MessageSquare, Settings, Activity, Code2, Github, Triangle } from 'lucide-react';
 import { ProjectFileExplorer } from '../file-tree/ProjectFileExplorer';
 import { ActivityFeed } from '../activity/ActivityFeed';
 import { GitHubIntegrationPanel } from '../integrations/GitHubIntegrationPanel';
+import { VercelIntegrationPanel } from '../integrations/VercelIntegrationPanel';
+import { FloatingSettingsPanel } from '../settings/FloatingSettingsPanel';
 
 export type FloatingWindowContent = 'files' | 'chat' | 'activity' | 'settings' | 'code' | 'integrations';
 
@@ -44,9 +46,9 @@ const contentConfig = {
     description: 'AI-powered code assistance'
   },
   integrations: {
-    title: 'GitHub Integration',
+    title: 'Integrations',
     icon: Github,
-    description: 'Manage GitHub connections and tokens'
+    description: 'Manage GitHub and Vercel integrations'
   }
 };
 
@@ -111,12 +113,7 @@ export function FloatingWindow({
       
       case 'settings':
         return (
-          <div className="p-4 h-full flex items-center justify-center text-gray-300">
-            <div className="text-center">
-              <Settings className="w-12 h-12 mx-auto mb-4 text-gray-300" />
-              <p>Settings panel coming soon...</p>
-            </div>
-          </div>
+          <FloatingSettingsPanel className="h-full" />
         );
       
       case 'code':
@@ -131,10 +128,7 @@ export function FloatingWindow({
       
       case 'integrations':
         return projectId ? (
-          <GitHubIntegrationPanel
-            projectId={projectId}
-            className="h-full overflow-y-auto"
-          />
+          <IntegrationsTabPanel projectId={projectId} />
         ) : (
           <div className="flex items-center justify-center h-64 text-gray-300">
             <p>No project selected</p>
@@ -194,6 +188,60 @@ export function FloatingWindow({
         </div>
       </div>
     </>
+  );
+}
+
+{/* Integrations Tab Panel Component */}
+interface IntegrationsTabPanelProps {
+  projectId: string;
+}
+
+function IntegrationsTabPanel({ projectId }: IntegrationsTabPanelProps) {
+  const [activeTab, setActiveTab] = useState<'github' | 'vercel'>('github');
+
+  return (
+    <div className="h-full flex flex-col">
+      {/* Tab Header */}
+      <div className="flex border-b border-gray-700 bg-gray-800/50">
+        <button
+          onClick={() => setActiveTab('github')}
+          className={`flex-1 flex items-center justify-center space-x-2 px-4 py-3 text-sm font-medium transition-colors ${
+            activeTab === 'github'
+              ? 'bg-gray-700 text-white border-b-2 border-teal-400'
+              : 'text-gray-300 hover:text-white hover:bg-gray-700/50'
+          }`}
+        >
+          <Github className="w-4 h-4" />
+          <span>GitHub</span>
+        </button>
+        <button
+          onClick={() => setActiveTab('vercel')}
+          className={`flex-1 flex items-center justify-center space-x-2 px-4 py-3 text-sm font-medium transition-colors ${
+            activeTab === 'vercel'
+              ? 'bg-gray-700 text-white border-b-2 border-teal-400'
+              : 'text-gray-300 hover:text-white hover:bg-gray-700/50'
+          }`}
+        >
+          <Triangle className="w-4 h-4" />
+          <span>Vercel</span>
+        </button>
+      </div>
+
+      {/* Tab Content */}
+      <div className="flex-1 overflow-hidden">
+        {activeTab === 'github' ? (
+          <GitHubIntegrationPanel
+            projectId={projectId}
+            className="h-full overflow-y-auto"
+          />
+        ) : (
+          <VercelIntegrationPanel
+            projectId={projectId}
+            className="h-full overflow-y-auto"
+          />
+        )}
+      </div>
+    </div>
   );
 }
 
