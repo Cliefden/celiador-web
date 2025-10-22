@@ -64,7 +64,7 @@ export function usePreview(projectId: string | null) {
         if (activePreview.status === 'starting' || activePreview.status === 'syncing') {
           console.log('[usePreview] Preview is starting/syncing, polling for updates');
           const cleanup = pollPreviewStatus(activePreview.id);
-          setCurrentPollingCleanup(() => cleanup);
+          setCurrentPollingCleanup(cleanup);
         }
       } else {
         console.log('[usePreview] No active preview found');
@@ -112,7 +112,7 @@ export function usePreview(projectId: string | null) {
       
       // Poll for status updates
       const cleanup = pollPreviewStatus(data.preview.id);
-      setCurrentPollingCleanup(() => cleanup);
+      setCurrentPollingCleanup(cleanup);
     } catch (error) {
       console.error('[usePreview] Error starting preview:', error);
       const errorMessage = error instanceof Error ? error.message : 'Failed to start preview';
@@ -156,7 +156,7 @@ export function usePreview(projectId: string | null) {
   }, [preview, stopPreview, startPreview]);
 
   // Poll for preview status updates with timeout and proper cleanup
-  const pollPreviewStatus = useCallback(async (previewId: string) => {
+  const pollPreviewStatus = useCallback((previewId: string) => {
     if (!projectId) return;
 
     let pollCount = 0;
