@@ -89,9 +89,10 @@ export function PreviewFrame({
   };
 
   // Generate same-origin preview URL with auth token and preserve current path
-  const getSameOriginPreviewUrl = async (originalUrl: string, preservePath?: string) => {
+  const getSameOriginPreviewUrl = async (originalUrl: string, preservePath?: string, forInspection: boolean = false) => {
     console.log('[getSameOriginPreviewUrl] 🔍 Starting with URL:', originalUrl);
     console.log('[getSameOriginPreviewUrl] 🔍 Preserve path:', preservePath);
+    console.log('[getSameOriginPreviewUrl] 🔍 For inspection:', forInspection);
     
     if (!originalUrl) {
       console.log('[getSameOriginPreviewUrl] ❌ No URL provided');
@@ -110,6 +111,28 @@ export function PreviewFrame({
       }
       
       console.log('[getSameOriginPreviewUrl] ✅ Session found, user:', session.user?.id);
+      
+      // If this is for inspection mode, generate inspection URL
+      if (forInspection) {
+        console.log('[getSameOriginPreviewUrl] 🎯 Generating inspection URL');
+        
+        // Extract project ID and preview ID from the original URL
+        const urlMatch = originalUrl.match(/\/projects\/([^\/]+)\/preview\/([^\/]+)\/proxy/);
+        if (!urlMatch) {
+          console.error('[getSameOriginPreviewUrl] ❌ Could not extract project/preview IDs from URL:', originalUrl);
+          return null;
+        }
+        
+        const [, projectId, previewId] = urlMatch;
+        console.log('[getSameOriginPreviewUrl] 🎯 Extracted IDs:', { projectId, previewId });
+        
+        const apiUrl = process.env.NEXT_PUBLIC_ORCHESTRATOR_URL || 'http://localhost:4000';
+        const pathParam = preservePath && preservePath !== '/' ? preservePath : '/';
+        const inspectionUrl = `${apiUrl}/projects/${projectId}/preview/${previewId}/inspection?token=${encodeURIComponent(session.access_token)}&path=${encodeURIComponent(pathParam)}`;
+        
+        console.log('[getSameOriginPreviewUrl] 🎯 Generated inspection URL:', inspectionUrl);
+        return inspectionUrl;
+      }
       
       // If the URL is already a backend proxy URL, just add the token
       console.log('[getSameOriginPreviewUrl] 🔍 Checking if URL is backend proxy URL...');
@@ -332,10 +355,11 @@ export function PreviewFrame({
         }
         
         try {
-          const url = await getSameOriginPreviewUrl(preview.url, pathToPreserve);
-          console.log('[PreviewFrame] ✅ Generated same-origin proxy URL:', url);
+          const url = await getSameOriginPreviewUrl(preview.url, pathToPreserve, inspectionMode);
+          console.log('[PreviewFrame] ✅ Generated same-origin URL:', url);
           console.log('[PreviewFrame] 📍 Original preview URL was:', preview.url);
           console.log('[PreviewFrame] 📍 Preserved path:', pathToPreserve);
+          console.log('[PreviewFrame] 📍 Inspection mode:', inspectionMode);
           setProxyUrl(url);
           setAuthReady(!!url);
           clearTimeout(authTimeout); // Clear timeout on success
