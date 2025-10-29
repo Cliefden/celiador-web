@@ -126,7 +126,23 @@ export function PreviewFrame({
         const [, projectId, previewId] = urlMatch;
         console.log('[getSameOriginPreviewUrl] 🎯 Extracted IDs:', { projectId, previewId });
         
-        const apiUrl = process.env.NEXT_PUBLIC_ORCHESTRATOR_URL || 'http://localhost:4000';
+        // Determine the correct API URL based on environment
+        let apiUrl = process.env.NEXT_PUBLIC_ORCHESTRATOR_URL;
+        
+        if (!apiUrl) {
+          // Auto-detect based on environment
+          if (typeof window !== 'undefined') {
+            // In browser - check if we're on Vercel or local
+            if (window.location.hostname.includes('vercel.app') || window.location.hostname.includes('celiador.ai')) {
+              apiUrl = 'https://celiador-unified-production.up.railway.app';
+            } else {
+              apiUrl = 'http://localhost:4000';
+            }
+          } else {
+            // On server - default to localhost for SSR
+            apiUrl = 'http://localhost:4000';
+          }
+        }
         const pathParam = preservePath && preservePath !== '/' ? preservePath : '/';
         const inspectionUrl = `${apiUrl}/projects/${projectId}/preview/${previewId}/inspection?token=${encodeURIComponent(session.access_token)}&path=${encodeURIComponent(pathParam)}`;
         
