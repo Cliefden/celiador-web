@@ -100,10 +100,29 @@ export function PreviewFrame({
     }
     
     try {
-      // Get auth token for the proxy URL
+      // Get auth token for the proxy URL - always get fresh session for inspection mode
       console.log('[getSameOriginPreviewUrl] 🔐 Getting auth session...');
       const { supabase } = await import('../../lib/supabase');
-      const { data: { session } } = await supabase.auth.getSession();
+      
+      let session;
+      if (forInspection) {
+        // For inspection mode, refresh the session to get a fresh token
+        console.log('[getSameOriginPreviewUrl] 🔄 Refreshing session for inspection mode...');
+        const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
+        if (refreshError) {
+          console.error('[getSameOriginPreviewUrl] ❌ Failed to refresh session:', refreshError);
+          // Fallback to getting current session
+          const { data: sessionData } = await supabase.auth.getSession();
+          session = sessionData.session;
+        } else {
+          session = refreshData.session;
+          console.log('[getSameOriginPreviewUrl] ✅ Session refreshed for inspection mode');
+        }
+      } else {
+        // For normal mode, use cached session
+        const { data: sessionData } = await supabase.auth.getSession();
+        session = sessionData.session;
+      }
       
       if (!session) {
         console.warn('[getSameOriginPreviewUrl] ❌ No session available for preview proxy');
