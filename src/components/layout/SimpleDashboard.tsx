@@ -860,10 +860,10 @@ The user has visually selected this specific UI element and wants to modify it. 
           /* Main Workspace */
           <div className="flex-1 min-h-0 flex flex-col">
             {/* Welcome Banner for returning users */}
-            {!shouldShowOnboarding && !onboardingState.hasCreatedFirstProject && (
+            {!shouldShowOnboarding && projects.length === 0 && (
               <WelcomeBanner
                 userName={user.name}
-                hasCreatedFirstProject={onboardingState.hasCreatedFirstProject}
+                hasCreatedFirstProject={projects.length > 0}
                 hasConnectedGitHub={onboardingState.hasConnectedGitHub}
                 hasDeployedProject={onboardingState.hasDeployedProject}
                 onCreateProject={() => setShowCreateProject(true)}
