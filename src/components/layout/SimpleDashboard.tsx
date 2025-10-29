@@ -634,7 +634,24 @@ The user has visually selected this specific UI element and wants to modify it. 
           return baseUrl; // Fall back to normal preview
         }
         
-        const apiUrl = process.env.NEXT_PUBLIC_ORCHESTRATOR_URL || 'http://localhost:4000';
+        // Determine the correct API URL based on environment (same logic as PreviewFrame)
+        let apiUrl = process.env.NEXT_PUBLIC_ORCHESTRATOR_URL;
+        
+        if (!apiUrl) {
+          // Auto-detect based on environment
+          if (typeof window !== 'undefined') {
+            // In browser - check if we're on Vercel or local
+            if (window.location.hostname.includes('vercel.app') || window.location.hostname.includes('celiador.ai')) {
+              apiUrl = 'https://celiador-unified-production.up.railway.app';
+            } else {
+              apiUrl = 'http://localhost:4000';
+            }
+          } else {
+            // On server - default to localhost for SSR
+            apiUrl = 'http://localhost:4000';
+          }
+        }
+        
         const inspectionUrl = `${apiUrl}/projects/${selectedProject.id}/preview/${preview.id}/inspection?token=${authToken}&path=${encodeURIComponent(currentPreviewPath)}`;
         console.log('🔍 Using server-side inspection URL with auth token and path:', currentPreviewPath);
         console.log('🔍 Full inspection URL:', inspectionUrl);
