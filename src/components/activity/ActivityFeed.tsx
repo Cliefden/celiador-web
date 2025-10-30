@@ -69,17 +69,51 @@ export function ActivityFeed({ projectId, className = '' }: ActivityFeedProps) {
     }
   };
 
-  // Simple WebSocket integration (only when session is available)
-  const { isConnected, connectionStatus, lastMessage } = useSimpleWebSocket({
+  // WebSocket integration with enhanced error handling
+  const { 
+    isConnected, 
+    connectionStatus, 
+    lastMessage, 
+    error: wsError,
+    reconnectAttempts,
+    maxReconnectAttempts,
+    hasError,
+    canRetry,
+    isRetrying,
+    getUserFriendlyStatus
+  } = useSimpleWebSocket({
     url: getWebSocketUrl(),
     token: session?.access_token || '',
     enabled: !!session?.access_token,
+    maxReconnectAttempts: 3, // Reduce retries for better UX
+    reconnectDelay: 2000, // 2 second initial delay
     onMessage: (data) => {
       // Handle real-time messages here
-      if (data.type === 'job_status_change' && data.projectId === projectId) {
-        console.log('📥 Real-time job update:', data);
-        handleJobStatusUpdate(data);
+      if (data.type === 'job_status_change') {
+        // Accept job updates for current project or system-level jobs (testing)
+        if (data.projectId === projectId || data.userId === 'system') {
+          console.log('📥 Real-time job update:', data);
+          handleJobStatusUpdate(data);
+        }
+      } else if (data.type === 'job_deleted') {
+        // Handle job deletion - filter by project
+        if (data.projectId === projectId || data.userId === 'system') {
+          console.log('🗑️ Real-time job deletion:', data);
+          handleJobDeletion(data);
+        }
       }
+    },
+    onError: (error) => {
+      // Enhanced error handling with user-friendly messages
+      // The hook already handles most logging appropriately based on error severity
+      if (error.severity === 'high') {
+        // Only show user-facing notification for high-severity errors
+        console.warn(`⚠️ Activity feed: ${error.userMessage}`);
+        if (error.suggestedAction) {
+          console.info(`💡 Suggestion: ${error.suggestedAction}`);
+        }
+      }
+      // Low and medium severity errors are already handled appropriately by the hook
     }
   });
   
@@ -87,6 +121,7 @@ export function ActivityFeed({ projectId, className = '' }: ActivityFeedProps) {
   const [loading, setLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [expandedCards, setExpandedCards] = useState<Set<string>>(new Set());
+  const [isPollingFallback, setIsPollingFallback] = useState(false);
 
 
   const loadActivities = async (silent = false) => {
@@ -135,6 +170,29 @@ export function ActivityFeed({ projectId, className = '' }: ActivityFeedProps) {
     }
   }, [projectId, session]);
 
+  // Fallback polling when WebSocket is persistently failing
+  useEffect(() => {
+    const shouldPoll = hasError && !canRetry && reconnectAttempts >= maxReconnectAttempts;
+    
+    if (shouldPoll && !isPollingFallback) {
+      console.info('🔄 WebSocket: Max retries reached, enabling polling fallback for reliable updates');
+      setIsPollingFallback(true);
+      
+      const pollInterval = setInterval(() => {
+        if (session && projectId) {
+          loadActivities(true); // Silent refresh
+        }
+      }, 10000); // Poll every 10 seconds
+      
+      return () => {
+        clearInterval(pollInterval);
+        setIsPollingFallback(false);
+      };
+    } else if (!shouldPoll && isPollingFallback) {
+      setIsPollingFallback(false);
+    }
+  }, [hasError, canRetry, reconnectAttempts, maxReconnectAttempts, session, projectId, isPollingFallback]);
+
   // Handler for real-time job status updates
   const handleJobStatusUpdate = useCallback((event: any) => {
     console.log('🔄 Updating activity for job:', event.jobId, 'status:', event.status);
@@ -175,6 +233,21 @@ export function ActivityFeed({ projectId, className = '' }: ActivityFeedProps) {
         };
         return [newActivity, ...prev];
       }
+    });
+  }, []);
+
+  // Handler for real-time job deletion
+  const handleJobDeletion = useCallback((event: any) => {
+    console.log('🗑️ Removing activity for deleted job:', event.jobId);
+    
+    setActivities(prev => {
+      // Remove activity for deleted job
+      const filtered = prev.filter(activity => 
+        activity.metadata?.jobId !== event.jobId
+      );
+      
+      console.log(`🔄 Removed job ${event.jobId} from activities (${prev.length} -> ${filtered.length} activities)`);
+      return filtered;
     });
   }, []);
 
@@ -338,11 +411,42 @@ export function ActivityFeed({ projectId, className = '' }: ActivityFeedProps) {
         <div className="flex items-center space-x-2">
           <Activity className="w-4 h-4 text-gray-400" />
           <h3 className="font-medium text-white">Activity</h3>
-          {/* WebSocket connection indicator */}
+          {isPollingFallback && (
+            <span className="text-xs text-yellow-400" title="Using polling fallback - updates every 10s">
+              (polling)
+            </span>
+          )}
+          {/* Enhanced WebSocket connection indicator */}
           {isConnected ? (
-            <Wifi className="w-3 h-3 text-green-400" title="Real-time connected" />
+            <Wifi 
+              className="w-3 h-3 text-green-400" 
+              title={`Real-time: ${getUserFriendlyStatus()}`} 
+            />
+          ) : isRetrying ? (
+            <Loader2 
+              className="w-3 h-3 text-blue-400 animate-spin" 
+              title={getUserFriendlyStatus()} 
+            />
+          ) : wsError?.type === 'authentication' && wsError.isTokenExpired ? (
+            <RefreshCw 
+              className="w-3 h-3 text-yellow-400 animate-spin" 
+              title={getUserFriendlyStatus()} 
+            />
+          ) : hasError && wsError?.severity === 'high' ? (
+            <AlertCircle 
+              className="w-3 h-3 text-red-400" 
+              title={getUserFriendlyStatus()} 
+            />
+          ) : hasError && wsError?.severity === 'medium' ? (
+            <AlertCircle 
+              className="w-3 h-3 text-yellow-400" 
+              title={getUserFriendlyStatus()} 
+            />
           ) : (
-            <WifiOff className="w-3 h-3 text-gray-500" title={`Real-time: ${connectionStatus}`} />
+            <WifiOff 
+              className="w-3 h-3 text-gray-500" 
+              title={getUserFriendlyStatus()} 
+            />
           )}
         </div>
         <button
