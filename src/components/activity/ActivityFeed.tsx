@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
+import { useSimpleWebSocket } from '../../hooks/useSimpleWebSocket';
 // import { useWebSocketContext } from '../../contexts/WebSocketContext';
 
 interface ActivityItem {
@@ -53,9 +54,35 @@ interface ActivityFeedProps {
 
 export function ActivityFeed({ projectId, className = '' }: ActivityFeedProps) {
   const { session } = useAuth();
-  // const { isConnected, connectionStatus, onJobStatusChange, onProjectUpdate, onMessageCreated } = useWebSocketContext();
-  const isConnected = false; // Temporarily disabled
-  const connectionStatus = 'Disconnected';
+  
+  // WebSocket URL logic: production uses same origin with wss, development uses separate port
+  const getWebSocketUrl = () => {
+    if (typeof window === 'undefined') return '';
+    
+    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+      // Development mode - use separate WebSocket port
+      return 'ws://localhost:8081';
+    } else {
+      // Production mode - use same origin with WebSocket protocol
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      return `${protocol}//${window.location.host}`;
+    }
+  };
+
+  // Simple WebSocket integration (only when session is available)
+  const { isConnected, connectionStatus, lastMessage } = useSimpleWebSocket({
+    url: getWebSocketUrl(),
+    token: session?.access_token || '',
+    enabled: !!session?.access_token,
+    onMessage: (data) => {
+      // Handle real-time messages here
+      if (data.type === 'job_status_change' && data.projectId === projectId) {
+        console.log('📥 Real-time job update:', data);
+        handleJobStatusUpdate(data);
+      }
+    }
+  });
+  
   const [activities, setActivities] = useState<ActivityItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -108,105 +135,50 @@ export function ActivityFeed({ projectId, className = '' }: ActivityFeedProps) {
     }
   }, [projectId, session]);
 
-  // Real-time event handlers
-  const handleJobStatusChange = useCallback((event: any) => {
-    if (event.projectId === projectId) {
-      console.log('📥 Real-time job status change:', event);
-      
-      setActivities(prev => {
-        // Find existing activity for this job
-        const existingIndex = prev.findIndex(activity => 
-          activity.metadata?.jobId === event.jobId
-        );
-        
-        if (existingIndex >= 0) {
-          // Update existing activity
-          const updated = [...prev];
-          updated[existingIndex] = {
-            ...updated[existingIndex],
-            status: event.status,
-            metadata: {
-              ...updated[existingIndex].metadata,
-              ...event.metadata
-            },
-            timestamp: event.timestamp || updated[existingIndex].timestamp
-          };
-          return updated;
-        } else {
-          // Create new activity for new job
-          const newActivity: ActivityItem = {
-            id: `job-${event.jobId}-${Date.now()}`,
-            type: 'job',
-            title: `Job ${event.status.toLowerCase()}`,
-            description: `Job ${event.jobId} status changed to ${event.status}`,
-            status: event.status,
-            timestamp: event.timestamp || new Date().toISOString(),
-            metadata: {
-              jobId: event.jobId,
-              jobType: event.metadata?.jobType || 'UNKNOWN',
-              ...event.metadata
-            }
-          };
-          return [newActivity, ...prev];
-        }
-      });
-    }
-  }, [projectId]);
-
-  const handleProjectUpdate = useCallback((event: any) => {
-    if (event.projectId === projectId) {
-      console.log('📥 Real-time project update:', event);
-      
-      // Add project update activity
-      const newActivity: ActivityItem = {
-        id: `project-${event.projectId}-${Date.now()}`,
-        type: 'system',
-        title: 'Project updated',
-        description: 'Project data has been modified',
-        timestamp: event.timestamp || new Date().toISOString(),
-        metadata: {
-          projectData: event.projectData
-        }
-      };
-      
-      setActivities(prev => [newActivity, ...prev]);
-    }
-  }, [projectId]);
-
-  const handleMessageCreated = useCallback((event: any) => {
-    console.log('📥 Real-time message created:', event);
+  // Handler for real-time job status updates
+  const handleJobStatusUpdate = useCallback((event: any) => {
+    console.log('🔄 Updating activity for job:', event.jobId, 'status:', event.status);
     
-    // Add conversation activity
-    const newActivity: ActivityItem = {
-      id: `message-${event.messageId}-${Date.now()}`,
-      type: 'conversation',
-      title: 'New message',
-      description: 'A new message was added to a conversation',
-      timestamp: event.timestamp || new Date().toISOString(),
-      metadata: {
-        conversationId: event.conversationId,
-        messageId: event.messageId,
-        messageData: event.messageData
+    setActivities(prev => {
+      // Find existing activity for this job
+      const existingIndex = prev.findIndex(activity => 
+        activity.metadata?.jobId === event.jobId
+      );
+      
+      if (existingIndex >= 0) {
+        // Update existing activity
+        const updated = [...prev];
+        updated[existingIndex] = {
+          ...updated[existingIndex],
+          status: event.status,
+          metadata: {
+            ...updated[existingIndex].metadata,
+            ...event.metadata
+          },
+          timestamp: event.timestamp || updated[existingIndex].timestamp
+        };
+        return updated;
+      } else {
+        // Create new activity for new job
+        const newActivity: ActivityItem = {
+          id: `job-${event.jobId}-${Date.now()}`,
+          type: 'job',
+          title: `Job ${event.status.toLowerCase()}`,
+          description: `Job ${event.jobId} status changed to ${event.status}`,
+          status: event.status,
+          timestamp: event.timestamp || new Date().toISOString(),
+          metadata: {
+            jobId: event.jobId,
+            jobType: event.metadata?.jobType || 'UNKNOWN',
+            ...event.metadata
+          }
+        };
+        return [newActivity, ...prev];
       }
-    };
-    
-    setActivities(prev => [newActivity, ...prev]);
+    });
   }, []);
 
-  // Register WebSocket event handlers (temporarily disabled)
-  // useEffect(() => {
-  //   if (!isConnected) return;
-
-  //   const unsubscribeJobStatus = onJobStatusChange(handleJobStatusChange);
-  //   const unsubscribeProjectUpdate = onProjectUpdate(handleProjectUpdate);
-  //   const unsubscribeMessageCreated = onMessageCreated(handleMessageCreated);
-
-  //   return () => {
-  //     unsubscribeJobStatus();
-  //     unsubscribeProjectUpdate();
-  //     unsubscribeMessageCreated();
-  //   };
-  // }, [isConnected, onJobStatusChange, onProjectUpdate, onMessageCreated, handleJobStatusChange, handleProjectUpdate, handleMessageCreated]);
+  // Note: Real-time updates are now handled directly in the useSimpleWebSocket onMessage callback
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
