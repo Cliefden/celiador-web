@@ -3,6 +3,7 @@ import { Inter } from 'next/font/google';
 import { AuthProvider } from '../contexts/AuthContext';
 import { SettingsProvider } from '../contexts/SettingsContext';
 import { SettingsPanelProvider } from '../contexts/SettingsPanelContext';
+// import { WebSocketProvider } from '../contexts/WebSocketContext';
 import { SettingsWindow } from '../components/settings/SettingsPanel';
 
 const inter = Inter({ 
