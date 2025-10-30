@@ -114,6 +114,8 @@ export function SimpleDashboard({ initialUser, onLogout }: SimpleDashboardProps)
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
   const [currentPreviewUrl, setCurrentPreviewUrl] = useState<string | null>(null);
   const [currentPreviewPath, setCurrentPreviewPath] = useState<string>('/');
+  const [inspectionSourcePath, setInspectionSourcePath] = useState<string>('/'); // Track the path when inspection was started
+  const [manuallySettingUrl, setManuallySettingUrl] = useState(false); // Flag to prevent useEffect from overriding manual URL changes
   const [chatPanelWidth, setChatPanelWidth] = useState(384); // Default 384px (w-96)
   const [isResizing, setIsResizing] = useState(false);
   const [isDesktop, setIsDesktop] = useState(false);
@@ -236,7 +238,20 @@ export function SimpleDashboard({ initialUser, onLogout }: SimpleDashboardProps)
   // Set preview URL when preview or inspection mode changes
   useEffect(() => {
     const updatePreviewUrl = async () => {
-      console.log('🔄 updatePreviewUrl called - preview status:', preview?.status, 'preview ID:', preview?.id);
+      console.log('🔄 updatePreviewUrl called - preview status:', preview?.status, 'preview ID:', preview?.id, 'manuallySettingUrl:', manuallySettingUrl);
+      
+      // Skip if we're manually setting the URL to avoid race conditions
+      if (manuallySettingUrl) {
+        console.log('🔄 Skipping automatic URL update - manual setting in progress');
+        return;
+      }
+      
+      // Skip if inspection mode is true to prevent overriding inspection URL
+      if (inspectionMode) {
+        console.log('🔄 Skipping automatic URL update - inspection mode is active');
+        return;
+      }
+      
       if (preview?.status === 'running') {
         console.log('🔄 Preview is running, getting preview URL...');
         const url = await getPreviewUrl();
@@ -250,7 +265,7 @@ export function SimpleDashboard({ initialUser, onLogout }: SimpleDashboardProps)
     };
     
     updatePreviewUrl();
-  }, [preview?.url, preview?.status, preview?.id, inspectionMode, selectedProject?.id]);
+  }, [preview?.url, preview?.status, preview?.id, inspectionMode, selectedProject?.id, manuallySettingUrl]);
 
   // Add a simple fallback timer for stuck previews
   useEffect(() => {
@@ -454,62 +469,68 @@ The user has visually selected this specific UI element and wants to modify it. 
   };
 
 
-  const toggleInspectionMode = () => {
+  const toggleInspectionMode = async () => {
     const newMode = !inspectionMode;
     console.log('🔍 Toggling inspection mode:', { current: inspectionMode, new: newMode });
+    console.log('🔍 Current iframe src before toggle:', previewIframeRef.current?.src);
     
     // When enabling inspection mode, try to get current path from tracking or iframe URL
     if (newMode) {
       console.log('🔍 Getting current path for inspection mode');
       console.log('🔍 currentPreviewPath from tracking:', currentPreviewPath);
+      console.log('🔍 iframe ref:', previewIframeRef.current);
+      console.log('🔍 iframe src:', previewIframeRef.current?.src);
       
       // First, try using the tracked path if we have navigation tracking
       if (currentPreviewPath && currentPreviewPath !== '/') {
         console.log('🔍 Using tracked navigation path:', currentPreviewPath);
         // Keep the tracked path
       } else {
-        console.log('🔍 No tracked path, trying iframe URL extraction...');
+        console.log('🔍 No tracked path, asking iframe for current path...');
         console.log('🔍 Debug iframe state:', {
           hasIframe: !!previewIframeRef.current,
           iframeSrc: previewIframeRef.current?.src,
           srcLength: previewIframeRef.current?.src?.length
         });
         
-        if (previewIframeRef.current?.src) {
+        // Try to get the current path from the iframe using postMessage
+        if (previewIframeRef.current?.contentWindow) {
+          console.log('🔍 Requesting current path from iframe...');
+          
           try {
-            const iframeSrc = previewIframeRef.current.src;
-            console.log('🔍 Extracting path from iframe URL:', iframeSrc);
-            
-            // Parse the iframe URL to extract the path
-            const url = new URL(iframeSrc);
-            let extractedPath = '/';
-            
-            console.log('🔍 URL parts:', {
-              pathname: url.pathname,
-              hasProxy: url.pathname.includes('/proxy/'),
-              fullURL: url.toString()
+            // Create a promise that resolves when we get the path response
+            const pathResponse = await new Promise<string>((resolve) => {
+              const handlePathResponse = (event: MessageEvent) => {
+                if (event.data?.type === 'CURRENT_PATH_RESPONSE') {
+                  console.log('🔍 Received current path from iframe:', event.data.path);
+                  window.removeEventListener('message', handlePathResponse);
+                  resolve(event.data.path || '/');
+                }
+              };
+              
+              window.addEventListener('message', handlePathResponse);
+              
+              // Request the current path from iframe
+              previewIframeRef.current!.contentWindow!.postMessage({
+                type: 'GET_CURRENT_PATH'
+              }, '*');
+              
+              // Fallback timeout in case iframe doesn't respond
+              setTimeout(() => {
+                console.warn('🔍 Iframe path request timed out, using fallback');
+                window.removeEventListener('message', handlePathResponse);
+                resolve('/');
+              }, 1000);
             });
             
-            // Check if it's a proxy URL and extract the path after /proxy/
-            if (url.pathname.includes('/proxy/')) {
-              const proxyIndex = url.pathname.indexOf('/proxy/');
-              const pathAfterProxy = url.pathname.substring(proxyIndex + '/proxy'.length);
-              extractedPath = pathAfterProxy || '/';
-              console.log('🔍 Path after proxy extraction:', {
-                proxyIndex,
-                pathAfterProxy,
-                extractedPath
-              });
-            }
-            
-            console.log('🔍 Final extracted path for inspection:', extractedPath);
-            setCurrentPreviewPath(extractedPath);
+            console.log('🔍 Setting path from iframe response:', pathResponse);
+            setCurrentPreviewPath(pathResponse);
           } catch (error) {
-            console.warn('🔍 Failed to extract path from iframe URL:', error);
-            setCurrentPreviewPath('/'); // Fallback to root
+            console.warn('🔍 Error getting path from iframe:', error);
+            setCurrentPreviewPath('/');
           }
         } else {
-          console.warn('🔍 No iframe src available, using fallback path');
+          console.warn('🔍 No iframe contentWindow available, using fallback path');
           setCurrentPreviewPath('/'); // Fallback to root
         }
       }
@@ -517,6 +538,14 @@ The user has visually selected this specific UI element and wants to modify it. 
     
     setInspectionMode(newMode);
     setSelectedElement(null);
+    
+    console.log('🔍 Inspection mode state updated to:', newMode);
+    console.log('🔍 This should trigger preview URL update...');
+    
+    // Force update the preview URL after state change
+    setTimeout(() => {
+      console.log('🔍 [TIMEOUT] Current inspection mode after state update:', inspectionMode);
+    }, 100);
   };
 
   const resetPreview = async () => {
@@ -618,9 +647,11 @@ The user has visually selected this specific UI element and wants to modify it. 
     
     // If inspection mode is enabled, use the server-side inspection route
     console.log('🔍 Debug inspection check:', { inspectionMode, previewId: preview.id, selectedProjectId: selectedProject?.id });
+    console.log('🔍 Inspection source path:', inspectionSourcePath);
     
     if (inspectionMode && preview.id) {
       console.log('🔍 Inspection mode enabled and preview.id exists, getting auth token...');
+      console.log('🔍 Will inspect path:', inspectionSourcePath);
       try {
         // Get auth token for inspection route
         console.log('🔍 About to call supabase.auth.getSession()...');
@@ -652,8 +683,9 @@ The user has visually selected this specific UI element and wants to modify it. 
           }
         }
         
-        const inspectionUrl = `${apiUrl}/projects/${selectedProject.id}/preview/${preview.id}/inspection?token=${authToken}&path=${encodeURIComponent(currentPreviewPath)}`;
-        console.log('🔍 Using server-side inspection URL with auth token and path:', currentPreviewPath);
+        // Pass the captured path to the inspection endpoint
+        const inspectionUrl = `${apiUrl}/projects/${selectedProject.id}/preview/${preview.id}/inspection?token=${authToken}&path=${encodeURIComponent(inspectionSourcePath)}`;
+        console.log('🔍 Using server-side inspection URL with captured path:', inspectionSourcePath);
         console.log('🔍 Full inspection URL:', inspectionUrl);
         return inspectionUrl;
       } catch (error) {
@@ -662,8 +694,11 @@ The user has visually selected this specific UI element and wants to modify it. 
       }
     }
     
-    // Normal mode: add authentication to proxy URL
+    // Normal mode: add authentication to proxy URL and preserve current path
     try {
+      console.log('🔍 [NORMAL MODE] currentPreviewPath:', currentPreviewPath);
+      console.log('🔍 [NORMAL MODE] baseUrl:', baseUrl);
+      
       const { data: { session } } = await supabase.auth.getSession();
       const authToken = session?.access_token;
       
@@ -672,7 +707,34 @@ The user has visually selected this specific UI element and wants to modify it. 
         return null;
       }
       
-      const urlWithAuth = `${baseUrl}?token=${encodeURIComponent(authToken)}`;
+      // When exiting inspection mode, get the current path from backend tracking
+      let targetUrl = baseUrl;
+      
+      try {
+        // Get the last accessed path from backend
+        const apiUrl = process.env.NEXT_PUBLIC_ORCHESTRATOR_URL || 'http://localhost:4000';
+        const lastPathResponse = await fetch(`${apiUrl}/projects/${selectedProject.id}/preview/${preview.id}/last-path`);
+        if (lastPathResponse.ok) {
+          const { path } = await lastPathResponse.json();
+          console.log('🔍 [NORMAL MODE] Got current path from backend:', path);
+          
+          if (path && path !== '/') {
+            // baseUrl already ends with /proxy, so just append the path
+            targetUrl = `${baseUrl}${path}`;
+            console.log('🔍 [NORMAL MODE] Using current path:', path);
+            console.log('🔍 [NORMAL MODE] Target URL with path:', targetUrl);
+          } else {
+            console.log('🔍 [NORMAL MODE] Using root path');
+          }
+        } else {
+          console.log('🔍 [NORMAL MODE] Could not get current path, using base URL');
+        }
+      } catch (error) {
+        console.log('🔍 [NORMAL MODE] Error getting current path:', error);
+        console.log('🔍 [NORMAL MODE] Falling back to base URL');
+      }
+      
+      const urlWithAuth = `${targetUrl}?token=${encodeURIComponent(authToken)}`;
       console.log('📺 Using authenticated preview URL:', urlWithAuth);
       console.log('🔑 Session details:', {
         userId: session.user?.id,
@@ -1064,10 +1126,69 @@ The user has visually selected this specific UI element and wants to modify it. 
                     
                     {/* Inspection Mode Toggle */}
                     <button 
-                      onClick={(e) => {
+                      onClick={async (e) => {
                         e.preventDefault();
                         console.log('🚨 BUTTON CLICKED! Current inspection mode:', inspectionMode);
-                        toggleInspectionMode();
+                        
+                        // Prevent race conditions during the operation
+                        setManuallySettingUrl(true);
+                        
+                        if (!inspectionMode) {
+                          // ENTERING inspection mode - Let backend determine current path
+                          console.log('🔍 ENTERING inspection mode - letting backend determine current path...');
+                          
+                          // Don't try to extract path from iframe src since SPA navigation
+                          // doesn't change the iframe src. Instead, let the backend use its
+                          // path tracking which correctly tracks navigation within the preview.
+                          let currentPath = null; // Use null to signal backend to use its tracking
+                          
+                          console.log('🔍 Using backend path tracking instead of iframe src extraction');
+                          console.log('🔍 Setting inspection source path to null (use backend tracking)');
+                          setInspectionSourcePath('');
+                          
+                          // Set inspection mode
+                          setInspectionMode(true);
+                          setSelectedElement(null);
+                          
+                          // Generate inspection URL with the captured path
+                          if (preview && selectedProject) {
+                            try {
+                              const { data: { session } } = await supabase.auth.getSession();
+                              const authToken = session?.access_token;
+                              if (authToken) {
+                                let apiUrl = process.env.NEXT_PUBLIC_ORCHESTRATOR_URL || 'http://localhost:4000';
+                                // Don't pass path parameter - let backend use its tracking
+                                const inspectionUrl = `${apiUrl}/projects/${selectedProject.id}/preview/${preview.id}/inspection?token=${authToken}`;
+                                console.log('🔍 Generated inspection URL without path (using backend tracking)');
+                                console.log('🔍 Full inspection URL:', inspectionUrl);
+                                setCurrentPreviewUrl(inspectionUrl);
+                                console.log('🔍 Set currentPreviewUrl to inspection URL');
+                              }
+                            } catch (error) {
+                              console.error('🔍 Error getting auth token:', error);
+                            }
+                          }
+                        } else {
+                          // EXITING inspection mode
+                          console.log('🔍 EXITING inspection mode - will use stored path:', inspectionSourcePath);
+                          
+                          setInspectionMode(false);
+                          setSelectedElement(null);
+                          
+                          // Get normal preview URL
+                          const url = await getPreviewUrl();
+                          if (url) {
+                            setCurrentPreviewUrl(url);
+                            console.log('🔍 Set normal preview URL:', url);
+                          }
+                        }
+                        
+                        // Clear manual flag after operation
+                        setTimeout(() => {
+                          setManuallySettingUrl(false);
+                        }, 100);
+                        
+                        console.log('🚨 Operation complete');
                       }}
                       className={`flex items-center space-x-2 px-3 py-2 rounded-lg transition-all text-sm font-medium ${
                         inspectionMode 
