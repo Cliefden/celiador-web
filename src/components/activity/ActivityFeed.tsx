@@ -29,21 +29,30 @@ import { useSimpleWebSocket } from '../../hooks/useSimpleWebSocket';
 
 interface ActivityItem {
   id: string;
-  type: 'job' | 'conversation' | 'file' | 'system';
+  type: 'job' | 'conversation' | 'file' | 'system' | 'user_activity' | 'message' | 'deployment';
   title: string;
   description: string;
   status?: 'PENDING' | 'RUNNING' | 'COMPLETED' | 'FAILED' | 'CANCELLED';
   timestamp: string;
+  level?: 'info' | 'warning' | 'error' | 'success';
   metadata?: {
     jobId?: string;
     conversationId?: string;
-    filePath?: string;
     messageId?: string;
+    filePath?: string;
     jobType?: string;
     output?: string;
     error?: string;
     jobMetadata?: any;
     userId?: string;
+    activityType?: string;
+    messageContent?: string;
+    messageRole?: string;
+    messageType?: string;
+    relatedJobId?: string;
+    projectId?: string;
+    deploymentId?: string;
+    deploymentUrl?: string;
   };
 }
 
@@ -89,10 +98,14 @@ export function ActivityFeed({ projectId, className = '' }: ActivityFeedProps) {
     reconnectDelay: 2000, // 2 second initial delay
     onMessage: (data) => {
       // Handle real-time messages here
-      if (data.type === 'job_status_change') {
-        // Accept job updates for current project or system-level jobs (testing)
+      if (data.type === 'activity_update') {
+        // New unified activity format
+        console.log('📥 Real-time activity update:', data);
+        handleActivityUpdate(data);
+      } else if (data.type === 'job_status_change') {
+        // Legacy format - still handle for backwards compatibility
         if (data.projectId === projectId || data.userId === 'system') {
-          console.log('📥 Real-time job update:', data);
+          console.log('📥 Real-time job update (legacy):', data);
           handleJobStatusUpdate(data);
         }
       } else if (data.type === 'job_deleted') {
@@ -101,6 +114,34 @@ export function ActivityFeed({ projectId, className = '' }: ActivityFeedProps) {
           console.log('🗑️ Real-time job deletion:', data);
           handleJobDeletion(data);
         }
+      } else if (data.type === 'user_activity') {
+        // Handle user activity events
+        if (data.projectId === projectId || data.userId === session?.user?.id) {
+          console.log('👤 Real-time user activity:', data);
+          handleUserActivity(data);
+        }
+      } else if (data.type === 'message_created') {
+        // Handle message creation events
+        if (data.projectId === projectId || data.conversationId) {
+          console.log('💬 Real-time message creation:', data);
+          handleMessageActivity(data);
+        }
+      } else if (data.type === 'conversation_created') {
+        // Handle conversation creation events
+        if (data.projectId === projectId) {
+          console.log('🗣️ Real-time conversation creation:', data);
+          handleConversationActivity(data);
+        }
+      } else if (data.type === 'deployment_status_change') {
+        // Handle deployment events
+        if (data.projectId === projectId) {
+          console.log('🚀 Real-time deployment update:', data);
+          handleDeploymentActivity(data);
+        }
+      } else if (data.type === 'system_notification') {
+        // Handle system notifications
+        console.log('🔔 Real-time system notification:', data);
+        handleSystemNotification(data);
       }
     },
     onError: (error) => {
@@ -193,9 +234,42 @@ export function ActivityFeed({ projectId, className = '' }: ActivityFeedProps) {
     }
   }, [hasError, canRetry, reconnectAttempts, maxReconnectAttempts, session, projectId, isPollingFallback]);
 
-  // Handler for real-time job status updates
+  // Handler for unified activity updates (new format from backend)
+  const handleActivityUpdate = useCallback((event: any) => {
+    console.log('📥 Unified activity update received:', event);
+    
+    if (!event.activity) {
+      console.warn('⚠️ Activity update event missing activity data');
+      return;
+    }
+    
+    const activity = event.activity;
+    
+    setActivities(prev => {
+      // Find existing activity by ID
+      const existingIndex = prev.findIndex(existing => existing.id === activity.id);
+      
+      if (existingIndex >= 0) {
+        // Update existing activity
+        const updated = [...prev];
+        updated[existingIndex] = {
+          ...activity,
+          timestamp: activity.timestamp || updated[existingIndex].timestamp
+        };
+        console.log('🔄 Updated existing activity:', activity.id);
+        return updated;
+      } else {
+        // Add new activity at the beginning
+        console.log('➕ Added new activity:', activity.id);
+        return [activity, ...prev.slice(0, 49)]; // Keep last 50 activities
+      }
+    });
+  }, []);
+
+  // Handler for real-time job status updates (legacy format - kept for backwards compatibility)
   const handleJobStatusUpdate = useCallback((event: any) => {
-    console.log('🔄 Updating activity for job:', event.jobId, 'status:', event.status);
+    console.log('🔄 Legacy job update received:', event.jobId, 'status:', event.status);
+    console.log('🔍 Job event data:', event);
     
     setActivities(prev => {
       // Find existing activity for this job
@@ -206,28 +280,39 @@ export function ActivityFeed({ projectId, className = '' }: ActivityFeedProps) {
       if (existingIndex >= 0) {
         // Update existing activity
         const updated = [...prev];
+        const existingActivity = updated[existingIndex];
+        const jobType = event.jobType || event.metadata?.jobType || existingActivity.metadata?.jobType || 'UNKNOWN';
+        
         updated[existingIndex] = {
-          ...updated[existingIndex],
+          ...existingActivity,
+          title: jobType !== 'UNKNOWN' ? getJobTitle(jobType, event.status) : `Job ${event.status.toLowerCase()}`,
+          description: jobType !== 'UNKNOWN' ? 
+            getJobTypeDescription(jobType) : 
+            `Job ${event.jobId} status changed to ${event.status}`,
           status: event.status,
           metadata: {
-            ...updated[existingIndex].metadata,
+            ...existingActivity.metadata,
+            jobType: jobType,
             ...event.metadata
           },
-          timestamp: event.timestamp || updated[existingIndex].timestamp
+          timestamp: event.timestamp || existingActivity.timestamp
         };
         return updated;
       } else {
         // Create new activity for new job
+        const jobType = event.jobType || event.metadata?.jobType || 'UNKNOWN';
         const newActivity: ActivityItem = {
           id: `job-${event.jobId}-${Date.now()}`,
           type: 'job',
-          title: `Job ${event.status.toLowerCase()}`,
-          description: `Job ${event.jobId} status changed to ${event.status}`,
+          title: jobType !== 'UNKNOWN' ? getJobTitle(jobType, event.status) : `Job ${event.status.toLowerCase()}`,
+          description: jobType !== 'UNKNOWN' ? 
+            getJobTypeDescription(jobType) : 
+            `Job ${event.jobId} status changed to ${event.status}`,
           status: event.status,
           timestamp: event.timestamp || new Date().toISOString(),
           metadata: {
             jobId: event.jobId,
-            jobType: event.metadata?.jobType || 'UNKNOWN',
+            jobType: jobType,
             ...event.metadata
           }
         };
@@ -249,6 +334,121 @@ export function ActivityFeed({ projectId, className = '' }: ActivityFeedProps) {
       console.log(`🔄 Removed job ${event.jobId} from activities (${prev.length} -> ${filtered.length} activities)`);
       return filtered;
     });
+  }, []);
+
+  // Handler for user activity events
+  const handleUserActivity = useCallback((event: any) => {
+    console.log('👤 Adding user activity:', event);
+    
+    const newActivity: ActivityItem = {
+      id: `activity-${event.activityType}-${Date.now()}`,
+      type: 'user_activity',
+      title: event.activityType?.replace('_', ' ') || 'User Activity',
+      description: event.description || 'User performed an action',
+      timestamp: event.timestamp,
+      level: event.level || 'info',
+      metadata: {
+        activityType: event.activityType,
+        ...event.metadata
+      }
+    };
+    
+    setActivities(prev => [newActivity, ...prev.slice(0, 49)]); // Keep last 50 activities
+  }, []);
+
+  // Handler for message activity events
+  const handleMessageActivity = useCallback((event: any) => {
+    console.log('💬 Adding message activity:', event);
+    
+    const roleEmoji = event.messageRole === 'user' ? '👤' : event.messageRole === 'assistant' ? '🤖' : '⚙️';
+    const newActivity: ActivityItem = {
+      id: `message-${event.messageId}-${Date.now()}`,
+      type: 'message',
+      title: `${roleEmoji} New ${event.messageRole} message`,
+      description: event.messageContent ? 
+        (event.messageContent.length > 100 ? event.messageContent.substring(0, 100) + '...' : event.messageContent) :
+        `${event.messageRole} sent a message`,
+      timestamp: event.timestamp,
+      level: 'info',
+      metadata: {
+        messageId: event.messageId,
+        conversationId: event.conversationId,
+        messageContent: event.messageContent,
+        messageRole: event.messageRole,
+        messageType: event.messageType,
+        relatedJobId: event.relatedJobId,
+        projectId: event.projectId
+      }
+    };
+    
+    setActivities(prev => [newActivity, ...prev.slice(0, 49)]);
+  }, []);
+
+  // Handler for conversation activity events
+  const handleConversationActivity = useCallback((event: any) => {
+    console.log('🗣️ Adding conversation activity:', event);
+    
+    const newActivity: ActivityItem = {
+      id: `conversation-${event.conversationId}-${Date.now()}`,
+      type: 'conversation',
+      title: '🗣️ New conversation started',
+      description: event.conversationTitle || 'Started a new conversation',
+      timestamp: event.timestamp,
+      level: 'success',
+      metadata: {
+        conversationId: event.conversationId,
+        projectId: event.projectId
+      }
+    };
+    
+    setActivities(prev => [newActivity, ...prev.slice(0, 49)]);
+  }, []);
+
+  // Handler for deployment activity events
+  const handleDeploymentActivity = useCallback((event: any) => {
+    console.log('🚀 Adding deployment activity:', event);
+    
+    const statusEmoji = event.status === 'COMPLETED' ? '✅' : event.status === 'FAILED' ? '❌' : '🔄';
+    const newActivity: ActivityItem = {
+      id: `deployment-${event.deploymentId}-${Date.now()}`,
+      type: 'deployment',
+      title: `${statusEmoji} Deployment ${event.status?.toLowerCase() || 'updated'}`,
+      description: `Deployment status changed to ${event.status || 'unknown'}`,
+      status: event.status,
+      timestamp: event.timestamp,
+      level: event.status === 'COMPLETED' ? 'success' : event.status === 'FAILED' ? 'error' : 'info',
+      metadata: {
+        deploymentId: event.deploymentId,
+        projectId: event.projectId,
+        deploymentUrl: event.url
+      }
+    };
+    
+    setActivities(prev => [newActivity, ...prev.slice(0, 49)]);
+  }, []);
+
+  // Handler for system notifications
+  const handleSystemNotification = useCallback((event: any) => {
+    console.log('🔔 Adding system notification:', event);
+    
+    const levelEmoji = {
+      'info': 'ℹ️',
+      'success': '✅',
+      'warning': '⚠️',
+      'error': '❌'
+    }[event.level || 'info'] || 'ℹ️';
+    
+    const newActivity: ActivityItem = {
+      id: `system-${Date.now()}`,
+      type: 'system',
+      title: `${levelEmoji} System ${event.level || 'notification'}`,
+      description: event.description || 'System notification',
+      timestamp: event.timestamp,
+      level: event.level || 'info',
+      metadata: event.metadata || {}
+    };
+    
+    setActivities(prev => [newActivity, ...prev.slice(0, 49)]);
   }, []);
 
   // Note: Real-time updates are now handled directly in the useSimpleWebSocket onMessage callback
@@ -319,28 +519,65 @@ export function ActivityFeed({ projectId, className = '' }: ActivityFeedProps) {
     switch (activity.type) {
       case 'conversation':
         return <MessageCircle className="w-4 h-4 text-blue-500" />;
+      case 'message':
+        return activity.metadata?.messageRole === 'user' 
+          ? <MessageCircle className="w-4 h-4 text-green-500" />
+          : <MessageCircle className="w-4 h-4 text-blue-500" />;
+      case 'user_activity':
+        return <Activity className="w-4 h-4 text-purple-500" />;
+      case 'deployment':
+        return activity.status === 'COMPLETED'
+          ? <CheckCircle className="w-4 h-4 text-green-500" />
+          : activity.status === 'FAILED'
+          ? <AlertCircle className="w-4 h-4 text-red-500" />
+          : <Rocket className="w-4 h-4 text-indigo-500" />;
       case 'file':
         return <FileText className="w-4 h-4 text-purple-500" />;
       case 'system':
-        return <GitCommit className="w-4 h-4 text-gray-500" />;
+        // Use level-based icons for system notifications
+        switch (activity.level) {
+          case 'error':
+            return <AlertCircle className="w-4 h-4 text-red-500" />;
+          case 'warning':
+            return <AlertCircle className="w-4 h-4 text-yellow-500" />;
+          case 'success':
+            return <CheckCircle className="w-4 h-4 text-green-500" />;
+          default:
+            return <GitCommit className="w-4 h-4 text-gray-500" />;
+        }
       default:
         return <Activity className="w-4 h-4 text-gray-500" />;
     }
   };
 
   const getStatusColor = (activity: ActivityItem) => {
-    if (activity.type !== 'job' || !activity.status) return 'text-gray-600';
-    
-    switch (activity.status) {
-      case 'PENDING': return 'text-yellow-600';
-      case 'RUNNING': return 'text-blue-600';
-      case 'COMPLETED': 
-        // If job is marked completed but has error metadata, show as failed
-        return activity.metadata?.error ? 'text-red-600' : 'text-green-600';
-      case 'FAILED': return 'text-red-600';
-      case 'CANCELLED': return 'text-gray-600';
-      default: return 'text-gray-600';
+    // For job activities, use status-based coloring
+    if (activity.type === 'job' && activity.status) {
+      switch (activity.status) {
+        case 'PENDING': return 'text-yellow-600';
+        case 'RUNNING': return 'text-blue-600';
+        case 'COMPLETED': 
+          // If job is marked completed but has error metadata, show as failed
+          return activity.metadata?.error ? 'text-red-600' : 'text-green-600';
+        case 'FAILED': return 'text-red-600';
+        case 'CANCELLED': return 'text-gray-600';
+        default: return 'text-gray-600';
+      }
     }
+    
+    // For other activities, use level-based coloring
+    if (activity.level) {
+      switch (activity.level) {
+        case 'error': return 'text-red-600';
+        case 'warning': return 'text-yellow-600';
+        case 'success': return 'text-green-600';
+        case 'info': return 'text-blue-600';
+        default: return 'text-gray-600';
+      }
+    }
+    
+    // Default for activities without status or level
+    return 'text-gray-600';
   };
 
   const getRelativeTime = (timestamp: string) => {
@@ -363,6 +600,30 @@ export function ActivityFeed({ projectId, className = '' }: ActivityFeedProps) {
       newExpanded.add(activityId);
     }
     setExpandedCards(newExpanded);
+  };
+
+  const getJobTitle = (type: string, status: string) => {
+    const typeMap: { [key: string]: string } = {
+      'SCAFFOLD': 'Project Setup',
+      'AI_ACTION': 'AI Code Generation', 
+      'EDIT': 'Code Modification',
+      'TEST': 'Test Execution',
+      'DEPLOY': 'Deployment',
+      'BUILD': 'Build Process'
+    };
+    
+    const statusMap: { [key: string]: string } = {
+      'PENDING': 'queued',
+      'RUNNING': 'in progress',
+      'COMPLETED': 'completed',
+      'FAILED': 'failed',
+      'CANCELLED': 'cancelled'
+    };
+    
+    const jobType = typeMap[type] || type;
+    const jobStatus = statusMap[status] || status.toLowerCase();
+    
+    return `${jobType} ${jobStatus}`;
   };
 
   const getJobTypeDescription = (jobType: string) => {
@@ -532,20 +793,29 @@ export function ActivityFeed({ projectId, className = '' }: ActivityFeedProps) {
                         
                         {/* Status badge and quick info */}
                         <div className="flex items-center justify-between">
-                          {activity.status && (
+                          {(activity.status || activity.level) && (
                             <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                              // Job status badges
                               activity.status === 'COMPLETED' && !activity.metadata?.error ? 'bg-green-100 text-green-800' :
                               activity.status === 'COMPLETED' && activity.metadata?.error ? 'bg-red-100 text-red-800' :
                               activity.status === 'RUNNING' ? 'bg-blue-100 text-blue-800' :
                               activity.status === 'FAILED' ? 'bg-red-100 text-red-800' :
                               activity.status === 'PENDING' ? 'bg-yellow-100 text-yellow-800' :
                               activity.status === 'CANCELLED' ? 'bg-gray-100 text-gray-800' :
+                              // Level-based badges for non-job activities
+                              activity.level === 'error' ? 'bg-red-100 text-red-800' :
+                              activity.level === 'warning' ? 'bg-yellow-100 text-yellow-800' :
+                              activity.level === 'success' ? 'bg-green-100 text-green-800' :
+                              activity.level === 'info' ? 'bg-blue-100 text-blue-800' :
                               'bg-gray-100 text-gray-800'
                             }`}>
-                              {activity.status === 'COMPLETED' && activity.metadata?.error 
-                                ? 'failed' 
-                                : activity.status.toLowerCase()
-                              }
+                              {activity.status ? (
+                                activity.status === 'COMPLETED' && activity.metadata?.error 
+                                  ? 'failed' 
+                                  : activity.status.toLowerCase()
+                              ) : (
+                                activity.level || 'info'
+                              )}
                             </span>
                           )}
                           

@@ -215,7 +215,9 @@ export function useSimpleWebSocket(options: UseSimpleWebSocketOptions): WebSocke
                 ws.send(JSON.stringify({ type: 'subscribe', channel: 'jobs' }));
                 ws.send(JSON.stringify({ type: 'subscribe', channel: 'projects' }));
                 ws.send(JSON.stringify({ type: 'subscribe', channel: 'conversations' }));
-                // Subscribed to real-time channels
+                ws.send(JSON.stringify({ type: 'subscribe', channel: 'deployments' }));
+                ws.send(JSON.stringify({ type: 'subscribe', channel: 'system_notifications' }));
+                // Subscribed to all real-time channels including activities
               } catch (subscribeError) {
                 const errorDetails = createError(
                   'connection',
