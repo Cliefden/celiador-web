@@ -1,5 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../lib/supabase';
+import { useSimpleWebSocket } from '../../hooks/useSimpleWebSocket';
 import { Message } from './MessageList';
 
 interface Conversation {
@@ -34,7 +36,19 @@ interface UseConversationReturn {
   clearConversation: () => void;
   approveFileOperations: (operations: any[]) => Promise<void>;
   rejectFileOperations: () => void;
+  shouldScrollToBottom: boolean; // Flag to trigger scrolling
 }
+
+// Helper function to get WebSocket URL
+const getWebSocketUrl = (): string => {
+  const baseUrl = process.env.NEXT_PUBLIC_ORCHESTRATOR_URL || 'http://localhost:4000';
+  
+  if (baseUrl.startsWith('https://')) {
+    return baseUrl.replace('https://', 'wss://').replace(/\/+$/, '');
+  } else {
+    return baseUrl.replace('http://', 'ws://').replace(/\/+$/, '');
+  }
+};
 
 export function useConversation(projectId?: string): UseConversationReturn {
   const [conversation, setConversation] = useState<Conversation | null>(null);
@@ -42,6 +56,127 @@ export function useConversation(projectId?: string): UseConversationReturn {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pendingFileOperations, setPendingFileOperations] = useState<FileOperationPreview | null>(null);
+  const [shouldScrollToBottom, setShouldScrollToBottom] = useState(false);
+  const { session } = useAuth();
+
+  // Real-time WebSocket integration for conversations and messages
+  const { isConnected, lastMessage } = useSimpleWebSocket({
+    url: getWebSocketUrl(),
+    token: session?.access_token || '',
+    enabled: !!session?.access_token,
+    maxReconnectAttempts: 3,
+    reconnectDelay: 2000,
+    onMessage: (data) => {
+      if (!projectId) return; // Only handle real-time events if we have a project context
+      
+      if (data.type === 'conversation_created') {
+        if (data.conversationData?.projectid === projectId || data.userId === 'system') {
+          console.log('📥 Real-time conversation creation:', data);
+          handleConversationCreated(data);
+        }
+      } else if (data.type === 'conversation_updated') {
+        if (data.conversationData?.projectid === projectId || data.userId === 'system') {
+          console.log('📥 Real-time conversation update:', data);
+          handleConversationUpdated(data);
+        }
+      } else if (data.type === 'message_created') {
+        if (data.conversationId === conversation?.id || data.userId === 'system') {
+          console.log('📥 Real-time message creation:', data);
+          handleMessageCreated(data);
+        }
+      } else if (data.type === 'message_deleted') {
+        if (data.conversationId === conversation?.id || data.userId === 'system') {
+          console.log('🗑️ Real-time message deletion:', data);
+          handleMessageDeleted(data);
+        }
+      }
+    },
+    onError: (error) => {
+      if (error.severity === 'high') {
+        console.warn(`⚠️ Conversation WebSocket: ${error.userMessage}`);
+      }
+    }
+  });
+
+  // Real-time event handlers
+  const handleConversationCreated = useCallback((event: any) => {
+    console.log('🆕 Handling conversation creation:', event.conversationData);
+    
+    // If this is a conversation for our current project and we don't have one yet
+    if (event.conversationData?.projectid === projectId && !conversation) {
+      const transformedConversation = {
+        id: event.conversationData.id,
+        title: event.conversationData.title,
+        status: event.conversationData.status,
+        createdAt: event.conversationData.createdat,
+        updatedAt: event.conversationData.updatedat,
+        projectId: event.conversationData.projectid,
+        userId: event.conversationData.userid
+      };
+      setConversation(transformedConversation);
+      setMessages([]); // Start with empty messages
+    }
+  }, [projectId, conversation]);
+
+  const handleConversationUpdated = useCallback((event: any) => {
+    console.log('🔄 Handling conversation update:', event.conversationData);
+    
+    // Update conversation if it's the current one
+    if (event.conversationData?.id === conversation?.id) {
+      const transformedConversation = {
+        id: event.conversationData.id,
+        title: event.conversationData.title,
+        status: event.conversationData.status,
+        createdAt: event.conversationData.createdat,
+        updatedAt: event.conversationData.updatedat,
+        projectId: event.conversationData.projectid,
+        userId: event.conversationData.userid
+      };
+      setConversation(transformedConversation);
+    }
+  }, [conversation?.id]);
+
+  const handleMessageCreated = useCallback((event: any) => {
+    console.log('📝 Handling message creation:', event.messageData);
+    
+    // Add new message to current conversation
+    if (event.conversationId === conversation?.id && event.messageData) {
+      const newMessage: Message = {
+        id: event.messageData.id,
+        content: event.messageData.content,
+        role: event.messageData.role,
+        messageType: event.messageData.messagetype,
+        createdAt: event.messageData.createdat,
+        metadata: event.messageData.metadata,
+        relatedJobId: event.messageData.relatedjobid
+      };
+      
+      setMessages(prev => {
+        // Check if message already exists to avoid duplicates
+        const exists = prev.some(msg => msg.id === newMessage.id);
+        if (exists) {
+          console.log('📝 Message already exists, skipping:', newMessage.id);
+          return prev;
+        }
+        
+        console.log('📝 Adding new message to conversation:', newMessage.id);
+        return [...prev, newMessage];
+      });
+    }
+  }, [conversation?.id]);
+
+  const handleMessageDeleted = useCallback((event: any) => {
+    console.log('🗑️ Handling message deletion:', event.messageId);
+    
+    // Remove message from current conversation
+    if (event.conversationId === conversation?.id) {
+      setMessages(prev => {
+        const filtered = prev.filter(msg => msg.id !== event.messageId);
+        console.log(`🗑️ Removed message ${event.messageId} from conversation (${prev.length} -> ${filtered.length} messages)`);
+        return filtered;
+      });
+    }
+  }, [conversation?.id]);
 
   // Load existing conversation for project
   const loadProjectConversation = useCallback(async () => {
@@ -166,6 +301,14 @@ export function useConversation(projectId?: string): UseConversationReturn {
 
       console.log('[useConversation] Setting', formattedMessages.length, 'messages');
       setMessages(formattedMessages);
+      
+      // Trigger scroll to bottom after messages are loaded
+      if (formattedMessages.length > 0) {
+        console.log('[useConversation] Messages loaded, setting scroll trigger');
+        setShouldScrollToBottom(true);
+        // Reset the trigger after a short delay
+        setTimeout(() => setShouldScrollToBottom(false), 500);
+      }
     } catch (err) {
       console.error('[useConversation] Error loading messages:', err);
       setError(err instanceof Error ? err.message : 'Failed to load messages');
@@ -512,6 +655,18 @@ export function useConversation(projectId?: string): UseConversationReturn {
     setError(null);
   };
 
+  // Approve file operations
+  const approveFileOperations = async (operations: any[]) => {
+    // TODO: Implement file operations approval
+    console.log('Approving file operations:', operations);
+    setPendingFileOperations(null);
+  };
+
+  // Reject file operations
+  const rejectFileOperations = () => {
+    setPendingFileOperations(null);
+  };
+
   // Load project conversation when projectId changes
   useEffect(() => {
     if (projectId) {
@@ -529,9 +684,13 @@ export function useConversation(projectId?: string): UseConversationReturn {
     messages,
     loading,
     error,
+    pendingFileOperations,
     sendMessage,
     createConversation,
     loadConversation,
-    clearConversation
+    clearConversation,
+    approveFileOperations,
+    rejectFileOperations,
+    shouldScrollToBottom
   };
 }

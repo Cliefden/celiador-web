@@ -43,7 +43,8 @@ export function ConversationPanel({
     messages,
     sendMessage,
     createConversation,
-    loading: conversationLoading
+    loading: conversationLoading,
+    shouldScrollToBottom
   } = conversationHook || defaultConversationHook;
 
   // Debug logging
@@ -104,6 +105,11 @@ export function ConversationPanel({
       await sendMessage(messageText, 'text', currentConversation);
       console.log('[ConversationPanel] Message sent successfully');
       
+      // Focus input after message is sent for better UX
+      setTimeout(() => {
+        inputRef.current?.focus();
+      }, 100);
+      
       // Trigger file refresh after sending message (in case AI actions were executed)
       setTimeout(() => {
         onFileOperation?.();
@@ -138,6 +144,7 @@ export function ConversationPanel({
           <MessageList
             messages={messages}
             loading={conversationLoading}
+            shouldScrollToBottom={shouldScrollToBottom}
             className="flex-1 overflow-y-auto"
           />
           
@@ -195,6 +202,7 @@ export function ConversationPanel({
         <MessageList
           messages={messages}
           loading={conversationLoading}
+          shouldScrollToBottom={shouldScrollToBottom}
           className="flex-1"
         />
         
