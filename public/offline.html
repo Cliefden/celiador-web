@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Celiador - Offline</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+        }
+        .container {
+            text-align: center;
+            max-width: 400px;
+            padding: 2rem;
+        }
+        .icon {
+            font-size: 4rem;
+            margin-bottom: 1rem;
+        }
+        h1 {
+            margin: 0 0 1rem 0;
+            font-size: 2rem;
+            font-weight: 600;
+        }
+        p {
+            margin: 0 0 2rem 0;
+            opacity: 0.9;
+            line-height: 1.6;
+        }
+        .retry-btn {
+            background: rgba(255, 255, 255, 0.2);
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            color: white;
+            padding: 0.75rem 1.5rem;
+            border-radius: 0.5rem;
+            cursor: pointer;
+            font-size: 1rem;
+            transition: all 0.3s ease;
+        }
+        .retry-btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+            border-color: rgba(255, 255, 255, 0.5);
+        }
+        .status {
+            margin-top: 1rem;
+            padding: 1rem;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 0.5rem;
+            font-size: 0.9rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="icon">📡</div>
+        <h1>You're Offline</h1>
+        <p>
+            Don't worry! Celiador works offline too. Your actions are being saved locally 
+            and will sync automatically when you're back online.
+        </p>
+        <button class="retry-btn" onclick="tryReconnect()">
+            Try to Reconnect
+        </button>
+        <div class="status" id="status">
+            Checking connection...
+        </div>
+    </div>
+
+    <script>
+        function updateStatus(message) {
+            document.getElementById('status').textContent = message;
+        }
+
+        function tryReconnect() {
+            updateStatus('Checking connection...');
+            
+            // Try to fetch the main page
+            fetch('/', { method: 'HEAD', cache: 'no-store' })
+                .then(response => {
+                    if (response.ok) {
+                        updateStatus('✅ Connection restored! Redirecting...');
+                        setTimeout(() => {
+                            window.location.href = '/';
+                        }, 1000);
+                    } else {
+                        updateStatus('❌ Still offline. Please try again.');
+                    }
+                })
+                .catch(() => {
+                    updateStatus('❌ Still offline. Please try again.');
+                });
+        }
+
+        // Check connection status on load
+        function checkInitialConnection() {
+            if (navigator.onLine) {
+                tryReconnect();
+            } else {
+                updateStatus('❌ No internet connection detected.');
+            }
+        }
+
+        // Listen for online events
+        window.addEventListener('online', () => {
+            updateStatus('🌐 Connection detected! Checking...');
+            setTimeout(tryReconnect, 500);
+        });
+
+        window.addEventListener('offline', () => {
+            updateStatus('📡 Connection lost.');
+        });
+
+        // Check connection when page loads
+        setTimeout(checkInitialConnection, 500);
+    </script>
+</body>
+</html>

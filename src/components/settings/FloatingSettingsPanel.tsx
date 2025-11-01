@@ -187,8 +187,47 @@ export function FloatingSettingsPanel({ className = '' }: FloatingSettingsPanelP
       setLoading(true);
       setError(null);
 
+      // Load user settings from backend API
+      try {
+        const settingsResponse = await fetch(`${process.env.NEXT_PUBLIC_ORCHESTRATOR_URL || 'http://localhost:4000'}/api/settings`, {
+          headers: {
+            'Authorization': `Bearer ${session.access_token}`,
+          },
+        });
+
+        if (settingsResponse.ok) {
+          const settingsData = await settingsResponse.json();
+          console.log('[Settings] Loaded settings from API:', settingsData);
+          
+          // Use settings from API if available
+          if (settingsData.settings) {
+            setSettings({
+              theme: settingsData.settings.theme || 'dark',
+              language: settingsData.settings.language || 'en',
+              timezone: settingsData.settings.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone,
+              defaultTemplate: settingsData.settings.default_template || 'next-tailwind',
+              autoSave: settingsData.settings.auto_save ?? true,
+              autoSaveInterval: settingsData.settings.auto_save_interval || 30,
+              fontSize: settingsData.settings.font_size || 14,
+              tabSize: settingsData.settings.tab_size || 2,
+              defaultDevice: settingsData.settings.default_device || 'desktop',
+              autoRefresh: settingsData.settings.auto_refresh ?? true,
+              notifications: settingsData.settings.notifications || {
+                deployments: true,
+                scaffolding: true,
+                errors: true,
+                weekly_summary: false
+              }
+            });
+          }
+        } else {
+          console.warn('[Settings] Failed to load settings from API, using defaults');
+        }
+      } catch (error) {
+        console.warn('[Settings] Settings API not available, using defaults:', error);
+      }
+
       // Generate mock trial data for demonstration
-      // TODO: Replace with real API call when backend endpoint is ready
       const trialStartDate = new Date();
       trialStartDate.setDate(trialStartDate.getDate() - Math.floor(Math.random() * 10)); // Started 0-10 days ago
       

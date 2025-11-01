@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { supabase } from '../../lib/supabase';
 import { CreateProjectModal } from '../project/CreateProjectModal';
 import { useConversation } from '../conversation/useConversation';
+import { useOfflineConversation } from '../conversation/useOfflineConversation';
 import { usePreview } from '../../hooks/usePreview';
 import { PreviewOverlay } from '../inspection/PreviewOverlay';
 import { FloatingWindowController } from './FloatingWindowController';
@@ -31,6 +32,7 @@ import {
 } from 'lucide-react';
 import { SettingsMenuItem } from '../settings/SettingsPanel';
 import { CeliadorLogo } from '../ui/celiador-logo';
+import { OfflineStatusBanner } from '../ui/OfflineStatusIndicator';
 
 interface User {
   id: string;
@@ -85,7 +87,6 @@ interface UIElement {
 }
 
 export function SimpleDashboard({ initialUser, onLogout }: SimpleDashboardProps) {
-  console.log('🔄 SimpleDashboard rendering with persistence enabled');
   
   const [user] = useState<User>(initialUser);
   const [projects, setProjects] = useState<Project[]>([]);
@@ -122,6 +123,7 @@ export function SimpleDashboard({ initialUser, onLogout }: SimpleDashboardProps)
   const userMenuRef = useRef<HTMLDivElement>(null);
   const projectDropdownRef = useRef<HTMLDivElement>(null);
   const previewIframeRef = useRef<HTMLIFrameElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
   
   // Handle responsive layout
   useEffect(() => {
@@ -138,18 +140,12 @@ export function SimpleDashboard({ initialUser, onLogout }: SimpleDashboardProps)
   // Listen for messages from same-origin preview iframe
   useEffect(() => {
     const handlePreviewMessage = (event: MessageEvent) => {
-      console.log('📨 Received message from:', event.origin, 'Type:', event.data?.type);
-
       if (event.data.type === 'ELEMENTS_MAPPED') {
-        console.log('📥 Received elements from preview iframe:', event.data.elements?.length || 0);
         setUIElements(event.data.elements || []);
       } else if (event.data.type === 'ELEMENT_SELECTED') {
-        console.log('🎯 Element selected in preview iframe:', event.data.element);
         setSelectedElement(event.data.element);
       }
     };
-
-    console.log('🎧 Setting up preview message listener');
     window.addEventListener('message', handlePreviewMessage);
     return () => window.removeEventListener('message', handlePreviewMessage);
   }, []);
@@ -170,9 +166,58 @@ export function SimpleDashboard({ initialUser, onLogout }: SimpleDashboardProps)
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Use conversation hook for the selected project
-  const conversationHook = useConversation(selectedProject?.id);
-  const { conversation, messages, sendMessage, isLoading: conversationLoading } = conversationHook || {};
+  // Use conversation hook for the selected project (with offline support)
+  const USE_OFFLINE_CONVERSATION = true; // Feature flag
+  
+  const conversationHook = USE_OFFLINE_CONVERSATION 
+    ? useOfflineConversation(selectedProject?.id)
+    : useConversation(selectedProject?.id);
+  const { 
+    conversation, 
+    messages, 
+    sendMessage, 
+    loading: conversationLoading,
+    isOnline: conversationOnline,
+    hasPendingMessages,
+    shouldScrollToBottom
+  } = conversationHook || {};
+
+  // Auto-scroll implementation
+  useEffect(() => {
+    const scrollToBottom = () => {
+      if (messagesContainerRef.current) {
+        messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight;
+      }
+    };
+
+    if (messages && messages.length > 0 && messagesContainerRef.current) {
+      scrollToBottom();
+      const timeouts = [
+        setTimeout(scrollToBottom, 50),
+        setTimeout(scrollToBottom, 200),
+        setTimeout(scrollToBottom, 500),
+      ];
+      return () => timeouts.forEach(clearTimeout);
+    }
+  }, [messages?.length]);
+
+  useEffect(() => {
+    if (shouldScrollToBottom && messagesContainerRef.current && messages?.length > 0) {
+      messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight;
+    }
+  }, [shouldScrollToBottom]);
+
+  useEffect(() => {
+    if (conversation && messages && messages.length > 0 && messagesContainerRef.current) {
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          if (messagesContainerRef.current) {
+            messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight;
+          }
+        });
+      });
+    }
+  }, [conversation?.id, messages?.length > 0]);
   
   // Use preview hook for the selected project
   const { preview, loading: previewLoading, error: previewError, loadingMessage, startPreview, restartPreview } = usePreview(selectedProject?.id || null);
@@ -230,7 +275,6 @@ export function SimpleDashboard({ initialUser, onLogout }: SimpleDashboardProps)
 
   // Reset iframe loaded state and preview URL when preview or project changes
   useEffect(() => {
-    console.log('🔄 Project or preview changed - clearing iframe state and preview URL');
     setIframeLoaded(false);
     setCurrentPreviewUrl(null); // Clear stale preview URL when switching projects
   }, [selectedProject?.id]); // Only depend on project ID, not preview URL to avoid loops
@@ -238,28 +282,20 @@ export function SimpleDashboard({ initialUser, onLogout }: SimpleDashboardProps)
   // Set preview URL when preview or inspection mode changes
   useEffect(() => {
     const updatePreviewUrl = async () => {
-      console.log('🔄 updatePreviewUrl called - preview status:', preview?.status, 'preview ID:', preview?.id, 'manuallySettingUrl:', manuallySettingUrl);
-      
       // Skip if we're manually setting the URL to avoid race conditions
       if (manuallySettingUrl) {
-        console.log('🔄 Skipping automatic URL update - manual setting in progress');
         return;
       }
       
       // Skip if inspection mode is true to prevent overriding inspection URL
       if (inspectionMode) {
-        console.log('🔄 Skipping automatic URL update - inspection mode is active');
         return;
       }
       
       if (preview?.status === 'running') {
-        console.log('🔄 Preview is running, getting preview URL...');
         const url = await getPreviewUrl();
-        console.log('🔄 Got URL from getPreviewUrl:', url, '(type:', typeof url, ')');
         setCurrentPreviewUrl(url);
-        console.log('🔄 Set currentPreviewUrl to:', url);
       } else {
-        console.log('🔄 Preview not running (status:', preview?.status, '), setting currentPreviewUrl to null');
         setCurrentPreviewUrl(null);
       }
     };
@@ -272,14 +308,10 @@ export function SimpleDashboard({ initialUser, onLogout }: SimpleDashboardProps)
     if (!preview || preview.status !== 'starting' && preview.status !== 'syncing') {
       return; // No need for fallback timer
     }
-
-    console.log('🕐 Setting up fallback timer for preview that might be stuck in', preview.status, 'state');
     
     // If preview is still starting/syncing after 30 seconds, force refresh the status
     const fallbackTimer = setTimeout(async () => {
-      console.log('🕐 Fallback: Preview may be stuck, attempting manual status check');
-      // Force a manual refresh by calling the hook's refreshPreview function
-      // This should trigger the loadPreview function which will check current status
+      console.log('Preview fallback: Reloading due to stuck status');
       window.location.reload(); // Simple but effective fallback
     }, 30000); // 30 seconds
 
@@ -292,12 +324,9 @@ export function SimpleDashboard({ initialUser, onLogout }: SimpleDashboardProps)
   // Listen for messages from inspection preview iframe
   useEffect(() => {
     const handleIframeMessage = (event: MessageEvent) => {
-      console.log('📨 Received message from iframe:', event.origin, event.data);
-
       // Handle inspection element clicks from the preview server's InspectionOverlay
       if (event.data.type === 'INSPECTION_ELEMENT_CLICKED') {
         const inspectableElement = event.data.element;
-        console.log('🎯 Inspection element clicked:', inspectableElement);
         
         // Convert from InspectableElement to UIElement format
         const uiElement: UIElement = {
@@ -319,8 +348,6 @@ export function SimpleDashboard({ initialUser, onLogout }: SimpleDashboardProps)
       // Handle navigation updates from preview iframe
       if (event.data.type === 'PREVIEW_NAVIGATION') {
         const newPath = event.data.path || '/';
-        console.log('🧭 Preview navigation detected:', newPath);
-        console.log('🧭 Full navigation event data:', event.data);
         setCurrentPreviewPath(newPath);
       }
     };
@@ -340,7 +367,6 @@ export function SimpleDashboard({ initialUser, onLogout }: SimpleDashboardProps)
       // Handle navigation tracking messages
       if (event.data.type === 'PREVIEW_NAVIGATION') {
         const newPath = event.data.path || '/';
-        console.log('🧭 Navigation detected in preview iframe:', newPath);
         setCurrentPreviewPath(newPath);
       }
     };
@@ -393,7 +419,9 @@ export function SimpleDashboard({ initialUser, onLogout }: SimpleDashboardProps)
   }, [isResizing]);
 
   const handleSendMessage = async () => {
-    if (!currentMessage.trim() || !selectedProject || conversationLoading || !sendMessage) return;
+    if (!currentMessage.trim() || !selectedProject || conversationLoading || !sendMessage) {
+      return;
+    }
     
     setIsBuilding(true);
     
@@ -418,10 +446,17 @@ The user has visually selected this specific UI element and wants to modify it. 
       enhancedMessage += elementContext;
     }
     
-    await sendMessage(enhancedMessage);
-    setCurrentMessage('');
-    setSelectedElement(null); // Clear selection after sending
-    setIsBuilding(false);
+    try {
+      await sendMessage(enhancedMessage);
+      setCurrentMessage('');
+      setSelectedElement(null); // Clear selection after sending
+    } catch (error) {
+      console.error('Error in sendMessage:', error);
+      // Show error to user
+      alert('Failed to send message: ' + (error instanceof Error ? error.message : 'Unknown error'));
+    } finally {
+      setIsBuilding(false);
+    }
   };
 
   const handleProjectCreated = (newProject: Project) => {
@@ -471,38 +506,21 @@ The user has visually selected this specific UI element and wants to modify it. 
 
   const toggleInspectionMode = async () => {
     const newMode = !inspectionMode;
-    console.log('🔍 Toggling inspection mode:', { current: inspectionMode, new: newMode });
-    console.log('🔍 Current iframe src before toggle:', previewIframeRef.current?.src);
     
     // When enabling inspection mode, try to get current path from tracking or iframe URL
     if (newMode) {
-      console.log('🔍 Getting current path for inspection mode');
-      console.log('🔍 currentPreviewPath from tracking:', currentPreviewPath);
-      console.log('🔍 iframe ref:', previewIframeRef.current);
-      console.log('🔍 iframe src:', previewIframeRef.current?.src);
-      
       // First, try using the tracked path if we have navigation tracking
       if (currentPreviewPath && currentPreviewPath !== '/') {
-        console.log('🔍 Using tracked navigation path:', currentPreviewPath);
         // Keep the tracked path
       } else {
-        console.log('🔍 No tracked path, asking iframe for current path...');
-        console.log('🔍 Debug iframe state:', {
-          hasIframe: !!previewIframeRef.current,
-          iframeSrc: previewIframeRef.current?.src,
-          srcLength: previewIframeRef.current?.src?.length
-        });
         
         // Try to get the current path from the iframe using postMessage
         if (previewIframeRef.current?.contentWindow) {
-          console.log('🔍 Requesting current path from iframe...');
-          
           try {
             // Create a promise that resolves when we get the path response
             const pathResponse = await new Promise<string>((resolve) => {
               const handlePathResponse = (event: MessageEvent) => {
                 if (event.data?.type === 'CURRENT_PATH_RESPONSE') {
-                  console.log('🔍 Received current path from iframe:', event.data.path);
                   window.removeEventListener('message', handlePathResponse);
                   resolve(event.data.path || '/');
                 }
@@ -517,20 +535,17 @@ The user has visually selected this specific UI element and wants to modify it. 
               
               // Fallback timeout in case iframe doesn't respond
               setTimeout(() => {
-                console.warn('🔍 Iframe path request timed out, using fallback');
                 window.removeEventListener('message', handlePathResponse);
                 resolve('/');
               }, 1000);
             });
             
-            console.log('🔍 Setting path from iframe response:', pathResponse);
             setCurrentPreviewPath(pathResponse);
           } catch (error) {
-            console.warn('🔍 Error getting path from iframe:', error);
+            console.warn('Error getting path from iframe:', error);
             setCurrentPreviewPath('/');
           }
         } else {
-          console.warn('🔍 No iframe contentWindow available, using fallback path');
           setCurrentPreviewPath('/'); // Fallback to root
         }
       }
@@ -538,19 +553,9 @@ The user has visually selected this specific UI element and wants to modify it. 
     
     setInspectionMode(newMode);
     setSelectedElement(null);
-    
-    console.log('🔍 Inspection mode state updated to:', newMode);
-    console.log('🔍 This should trigger preview URL update...');
-    
-    // Force update the preview URL after state change
-    setTimeout(() => {
-      console.log('🔍 [TIMEOUT] Current inspection mode after state update:', inspectionMode);
-    }, 100);
   };
 
   const resetPreview = async () => {
-    console.log('🔄 Resetting preview...');
-    
     try {
       // Reset iframe state immediately
       setIframeLoaded(false);
@@ -564,19 +569,16 @@ The user has visually selected this specific UI element and wants to modify it. 
       
       // If preview is stuck in syncing/starting state, try to stop and restart it
       if (preview && selectedProject && (preview.status === 'syncing' || preview.status === 'starting')) {
-        console.log(`🛑 Preview stuck in ${preview.status} state - attempting force restart`);
-        
         try {
           // Stop the current preview
           await stopPreview();
           
           // Wait a moment, then start a new preview
           setTimeout(async () => {
-            console.log('🚀 Starting fresh preview after reset...');
             await startPreview();
           }, 1000);
         } catch (error) {
-          console.error('❌ Error force restarting preview:', error);
+          console.error('Error force restarting preview:', error);
           // Fall back to just refreshing the URL
           setTimeout(async () => {
             if (preview?.status === 'running') {
@@ -594,10 +596,8 @@ The user has visually selected this specific UI element and wants to modify it. 
           }
         }, 100);
       }
-      
-      console.log('✅ Preview reset successfully');
     } catch (error) {
-      console.error('❌ Error resetting preview:', error);
+      console.error('Error resetting preview:', error);
     }
   };
 
@@ -607,18 +607,14 @@ The user has visually selected this specific UI element and wants to modify it. 
     // Create an automatic conversation message when an element is clicked in inspection mode
     if (selectedProject && sendMessage && inspectionMode) {
       const elementDescription = element.componentName || element.type;
-      const elementText = element.componentName || 'this element';
       
       // Create a descriptive message about the clicked element
       const inspectionMessage = `I clicked on ${elementDescription}${element.selector ? ` (${element.selector})` : ''} in the preview. I want to modify or interact with this element.`;
       
-      console.log('🎯 [Inspection] Auto-creating conversation message:', inspectionMessage);
-      
       try {
         await sendMessage(inspectionMessage);
-        console.log('✅ [Inspection] Conversation message created successfully');
       } catch (error) {
-        console.error('❌ [Inspection] Failed to create conversation message:', error);
+        console.error('Failed to create conversation message:', error);
         // Fallback: still update the input field if auto-message fails
         setCurrentMessage(`Modify ${elementDescription}: `);
       }
@@ -636,32 +632,21 @@ The user has visually selected this specific UI element and wants to modify it. 
   };
 
   const getPreviewUrl = async () => {
-    console.log('🔄 getPreviewUrl called - preview status:', preview?.status, 'inspectionMode:', inspectionMode);
-    
     if (!preview || preview.status !== 'running' || !selectedProject) {
-      console.log('❌ Preview not running or no project selected, returning null');
       return null;
     }
     
     const baseUrl = preview.url;
     
     // If inspection mode is enabled, use the server-side inspection route
-    console.log('🔍 Debug inspection check:', { inspectionMode, previewId: preview.id, selectedProjectId: selectedProject?.id });
-    console.log('🔍 Inspection source path:', inspectionSourcePath);
-    
     if (inspectionMode && preview.id) {
-      console.log('🔍 Inspection mode enabled and preview.id exists, getting auth token...');
-      console.log('🔍 Will inspect path:', inspectionSourcePath);
       try {
         // Get auth token for inspection route
-        console.log('🔍 About to call supabase.auth.getSession()...');
         const { data: { session } } = await supabase.auth.getSession();
-        console.log('🔍 getSession() completed successfully');
-        console.log('🔍 Got session:', { hasSession: !!session, hasToken: !!session?.access_token });
         const authToken = session?.access_token;
         
         if (!authToken) {
-          console.error('🔍 No auth token available for inspection mode');
+          console.error('No auth token available for inspection mode');
           return baseUrl; // Fall back to normal preview
         }
         
@@ -685,25 +670,20 @@ The user has visually selected this specific UI element and wants to modify it. 
         
         // Pass the captured path to the inspection endpoint
         const inspectionUrl = `${apiUrl}/projects/${selectedProject.id}/preview/${preview.id}/inspection?token=${authToken}&path=${encodeURIComponent(inspectionSourcePath)}`;
-        console.log('🔍 Using server-side inspection URL with captured path:', inspectionSourcePath);
-        console.log('🔍 Full inspection URL:', inspectionUrl);
         return inspectionUrl;
       } catch (error) {
-        console.error('🔍 Error getting auth token for inspection:', error);
+        console.error('Error getting auth token for inspection:', error);
         return baseUrl; // Fall back to normal preview
       }
     }
     
     // Normal mode: add authentication to proxy URL and preserve current path
     try {
-      console.log('🔍 [NORMAL MODE] currentPreviewPath:', currentPreviewPath);
-      console.log('🔍 [NORMAL MODE] baseUrl:', baseUrl);
-      
       const { data: { session } } = await supabase.auth.getSession();
       const authToken = session?.access_token;
       
       if (!authToken) {
-        console.error('🔍 No auth token available for normal preview');
+        console.error('No auth token available for normal preview');
         return null;
       }
       
@@ -716,35 +696,20 @@ The user has visually selected this specific UI element and wants to modify it. 
         const lastPathResponse = await fetch(`${apiUrl}/projects/${selectedProject.id}/preview/${preview.id}/last-path`);
         if (lastPathResponse.ok) {
           const { path } = await lastPathResponse.json();
-          console.log('🔍 [NORMAL MODE] Got current path from backend:', path);
           
           if (path && path !== '/') {
             // baseUrl already ends with /proxy, so just append the path
             targetUrl = `${baseUrl}${path}`;
-            console.log('🔍 [NORMAL MODE] Using current path:', path);
-            console.log('🔍 [NORMAL MODE] Target URL with path:', targetUrl);
-          } else {
-            console.log('🔍 [NORMAL MODE] Using root path');
           }
-        } else {
-          console.log('🔍 [NORMAL MODE] Could not get current path, using base URL');
         }
       } catch (error) {
-        console.log('🔍 [NORMAL MODE] Error getting current path:', error);
-        console.log('🔍 [NORMAL MODE] Falling back to base URL');
+        // Fallback to base URL if path request fails
       }
       
       const urlWithAuth = `${targetUrl}?token=${encodeURIComponent(authToken)}`;
-      console.log('📺 Using authenticated preview URL:', urlWithAuth);
-      console.log('🔑 Session details:', {
-        userId: session.user?.id,
-        tokenLength: authToken.length,
-        tokenPreview: authToken.substring(0, 20) + '...',
-        expires: session.expires_at
-      });
       return urlWithAuth;
     } catch (error) {
-      console.error('🔍 Error getting auth token for normal preview:', error);
+      console.error('Error getting auth token for normal preview:', error);
       return null;
     }
   };
@@ -840,6 +805,9 @@ The user has visually selected this specific UI element and wants to modify it. 
 
       {/* Main Content */}
       <div className="p-6 flex flex-col h-[calc(100vh-4rem)]">
+        {/* Offline Status Banner */}
+        <OfflineStatusBanner className="mb-4" />
+        
         {/* Project Selector */}
         {projects.length > 0 && (
           <div className="mb-4 flex items-center justify-between flex-shrink-0">
@@ -958,19 +926,41 @@ The user has visually selected this specific UI element and wants to modify it. 
             >
               {/* Chat Header */}
               <div className="bg-gradient-to-r from-teal-600 to-cyan-600 text-white p-4">
-                <div className="flex items-center space-x-3">
-                  <div className="w-8 h-8 bg-white/20 rounded-lg flex items-center justify-center">
-                    <CeliadorLogo size="sm" variant="icon" />
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-3">
+                    <div className="w-8 h-8 bg-white/20 rounded-lg flex items-center justify-center">
+                      <CeliadorLogo size="sm" variant="icon" />
+                    </div>
+                    <div>
+                      <h2 className="font-semibold text-lg">AI Assistant</h2>
+                      <p className="text-teal-100 text-sm">Building {selectedProject.name}</p>
+                    </div>
                   </div>
-                  <div>
-                    <h2 className="font-semibold text-lg">AI Assistant</h2>
-                    <p className="text-teal-100 text-sm">Building {selectedProject.name}</p>
-                  </div>
+                  {USE_OFFLINE_CONVERSATION && (
+                    <div className="flex items-center space-x-2">
+                      {conversationOnline ? (
+                        <div className="flex items-center space-x-1">
+                          <div className="w-2 h-2 bg-green-300 rounded-full"></div>
+                          <span className="text-xs text-teal-100">Online</span>
+                        </div>
+                      ) : (
+                        <div className="flex items-center space-x-1">
+                          <div className="w-2 h-2 bg-orange-300 rounded-full"></div>
+                          <span className="text-xs text-teal-100">Offline</span>
+                        </div>
+                      )}
+                      {hasPendingMessages && (
+                        <div className="bg-orange-200/20 text-orange-100 px-2 py-1 rounded-full text-xs">
+                          Syncing...
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
 
               {/* Messages */}
-              <div className="flex-1 overflow-y-auto p-4 space-y-4 dark-scrollbar">
+              <div ref={messagesContainerRef} className="flex-1 overflow-y-auto p-4 space-y-4 dark-scrollbar">
                 {!messages || messages.length === 0 ? (
                   <div className="text-center py-12">
                     <div className="w-16 h-16 bg-gradient-to-br from-teal-500/20 to-cyan-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -988,13 +978,25 @@ The user has visually selected this specific UI element and wants to modify it. 
                       className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
                     >
                       <div
-                        className={`max-w-[80%] p-4 rounded-2xl break-words overflow-wrap-anywhere whitespace-pre-wrap ${
+                        className={`max-w-[80%] p-4 rounded-2xl break-words overflow-wrap-anywhere whitespace-pre-wrap relative ${
                           message.role === 'user'
-                            ? 'bg-gradient-to-r from-teal-600 to-cyan-600 text-white'
+                            ? message.metadata?.optimistic
+                              ? 'bg-gradient-to-r from-purple-600 to-purple-500 text-white opacity-80'
+                              : 'bg-gradient-to-r from-teal-600 to-cyan-600 text-white'
                             : 'bg-gray-800/50 text-gray-100 border border-gray-700/50'
                         }`}
                       >
                         {message.content}
+                        {message.metadata?.optimistic && (
+                          <div className="absolute -bottom-2 -right-2 w-4 h-4 bg-purple-500 rounded-full flex items-center justify-center">
+                            <span className="text-xs text-white">⚡</span>
+                          </div>
+                        )}
+                        {message.metadata?.failed && (
+                          <div className="absolute -bottom-2 -right-2 w-4 h-4 bg-red-500 rounded-full flex items-center justify-center">
+                            <span className="text-xs text-white">⚠</span>
+                          </div>
+                        )}
                       </div>
                     </div>
                   ))
@@ -1128,22 +1130,12 @@ The user has visually selected this specific UI element and wants to modify it. 
                     <button 
                       onClick={async (e) => {
                         e.preventDefault();
-                        console.log('🚨 BUTTON CLICKED! Current inspection mode:', inspectionMode);
                         
                         // Prevent race conditions during the operation
                         setManuallySettingUrl(true);
                         
                         if (!inspectionMode) {
                           // ENTERING inspection mode - Let backend determine current path
-                          console.log('🔍 ENTERING inspection mode - letting backend determine current path...');
-                          
-                          // Don't try to extract path from iframe src since SPA navigation
-                          // doesn't change the iframe src. Instead, let the backend use its
-                          // path tracking which correctly tracks navigation within the preview.
-                          let currentPath = null; // Use null to signal backend to use its tracking
-                          
-                          console.log('🔍 Using backend path tracking instead of iframe src extraction');
-                          console.log('🔍 Setting inspection source path to null (use backend tracking)');
                           setInspectionSourcePath('');
                           
                           // Set inspection mode
@@ -1159,19 +1151,14 @@ The user has visually selected this specific UI element and wants to modify it. 
                                 let apiUrl = process.env.NEXT_PUBLIC_ORCHESTRATOR_URL || 'http://localhost:4000';
                                 // Don't pass path parameter - let backend use its tracking
                                 const inspectionUrl = `${apiUrl}/projects/${selectedProject.id}/preview/${preview.id}/inspection?token=${authToken}`;
-                                console.log('🔍 Generated inspection URL without path (using backend tracking)');
-                                console.log('🔍 Full inspection URL:', inspectionUrl);
                                 setCurrentPreviewUrl(inspectionUrl);
-                                console.log('🔍 Set currentPreviewUrl to inspection URL');
                               }
                             } catch (error) {
-                              console.error('🔍 Error getting auth token:', error);
+                              console.error('Error getting auth token:', error);
                             }
                           }
                         } else {
                           // EXITING inspection mode
-                          console.log('🔍 EXITING inspection mode - will use stored path:', inspectionSourcePath);
-                          
                           setInspectionMode(false);
                           setSelectedElement(null);
                           
@@ -1179,7 +1166,6 @@ The user has visually selected this specific UI element and wants to modify it. 
                           const url = await getPreviewUrl();
                           if (url) {
                             setCurrentPreviewUrl(url);
-                            console.log('🔍 Set normal preview URL:', url);
                           }
                         }
                         
@@ -1187,8 +1173,6 @@ The user has visually selected this specific UI element and wants to modify it. 
                         setTimeout(() => {
                           setManuallySettingUrl(false);
                         }, 100);
-                        
-                        console.log('🚨 Operation complete');
                       }}
                       className={`flex items-center space-x-2 px-3 py-2 rounded-lg transition-all text-sm font-medium ${
                         inspectionMode 
@@ -1263,17 +1247,7 @@ The user has visually selected this specific UI element and wants to modify it. 
                       className={`w-full border-0 ${previewDevice === 'desktop' ? 'h-[calc(100%-2.5rem)]' : 'h-full'}`}
                       title="App Preview"
                       onLoad={() => {
-                        console.log('🎬 Preview iframe loaded with URL:', currentPreviewUrl);
-                        
-                        // Check if this is the new server-side inspection preview
-                        const isInspectionPreview = currentPreviewUrl?.includes('/inspection?');
-                        
-                        if (isInspectionPreview && inspectionMode) {
-                          console.log('🔍 Loaded server-side inspection preview - no postMessage needed');
-                        }
-                        
                         setTimeout(() => {
-                          console.log('✅ Preview content should be ready');
                           setIframeLoaded(true);
                         }, 500);
                       }}

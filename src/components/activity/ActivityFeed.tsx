@@ -20,11 +20,17 @@ import {
   ChevronDown,
   ChevronRight,
   Wifi,
-  WifiOff
+  WifiOff,
+  Database,
+  Cloud,
+  CloudOff
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
-import { useSimpleWebSocket } from '../../hooks/useSimpleWebSocket';
+import { useActivitiesChannel } from '../../lib/websocket';
+import { offlineActivityManager, useOfflineStatus, initializeOfflineSystem } from '../../lib/offline';
+import { OfflineStatusIndicator, ConnectionStatus } from '../ui/OfflineStatusIndicator';
+import { ConflictResolutionModal } from '../ui/ConflictResolutionModal';
 // import { useWebSocketContext } from '../../contexts/WebSocketContext';
 
 interface ActivityItem {
@@ -64,116 +70,53 @@ interface ActivityFeedProps {
 export function ActivityFeed({ projectId, className = '' }: ActivityFeedProps) {
   const { session } = useAuth();
   
-  // WebSocket URL logic: production uses same origin with wss, development uses separate port
-  const getWebSocketUrl = () => {
-    if (typeof window === 'undefined') return '';
-    
-    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-      // Development mode - use separate WebSocket port
-      return 'ws://localhost:8081';
-    } else {
-      // Production mode - use same origin with WebSocket protocol
-      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      return `${protocol}//${window.location.host}`;
-    }
-  };
-
-  // WebSocket integration with enhanced error handling
-  const { 
-    isConnected, 
-    connectionStatus, 
-    lastMessage, 
-    error: wsError,
-    reconnectAttempts,
-    maxReconnectAttempts,
-    hasError,
-    canRetry,
-    isRetrying,
-    getUserFriendlyStatus
-  } = useSimpleWebSocket({
-    url: getWebSocketUrl(),
-    token: session?.access_token || '',
-    enabled: !!session?.access_token,
-    maxReconnectAttempts: 3, // Reduce retries for better UX
-    reconnectDelay: 2000, // 2 second initial delay
-    onMessage: (data) => {
-      // Handle real-time messages here
-      if (data.type === 'activity_update') {
-        // New unified activity format
-        console.log('📥 Real-time activity update:', data);
-        handleActivityUpdate(data);
-      } else if (data.type === 'job_status_change') {
-        // Legacy format - still handle for backwards compatibility
-        if (data.projectId === projectId || data.userId === 'system') {
-          console.log('📥 Real-time job update (legacy):', data);
-          handleJobStatusUpdate(data);
-        }
-      } else if (data.type === 'job_deleted') {
-        // Handle job deletion - filter by project
-        if (data.projectId === projectId || data.userId === 'system') {
-          console.log('🗑️ Real-time job deletion:', data);
-          handleJobDeletion(data);
-        }
-      } else if (data.type === 'user_activity') {
-        // Handle user activity events
-        if (data.projectId === projectId || data.userId === session?.user?.id) {
-          console.log('👤 Real-time user activity:', data);
-          handleUserActivity(data);
-        }
-      } else if (data.type === 'message_created') {
-        // Handle message creation events
-        if (data.projectId === projectId || data.conversationId) {
-          console.log('💬 Real-time message creation:', data);
-          handleMessageActivity(data);
-        }
-      } else if (data.type === 'conversation_created') {
-        // Handle conversation creation events
-        if (data.projectId === projectId) {
-          console.log('🗣️ Real-time conversation creation:', data);
-          handleConversationActivity(data);
-        }
-      } else if (data.type === 'deployment_status_change') {
-        // Handle deployment events
-        if (data.projectId === projectId) {
-          console.log('🚀 Real-time deployment update:', data);
-          handleDeploymentActivity(data);
-        }
-      } else if (data.type === 'system_notification') {
-        // Handle system notifications
-        console.log('🔔 Real-time system notification:', data);
-        handleSystemNotification(data);
-      }
-    },
-    onError: (error) => {
-      // Enhanced error handling with user-friendly messages
-      // The hook already handles most logging appropriately based on error severity
-      if (error.severity === 'high') {
-        // Only show user-facing notification for high-severity errors
-        console.warn(`⚠️ Activity feed: ${error.userMessage}`);
-        if (error.suggestedAction) {
-          console.info(`💡 Suggestion: ${error.suggestedAction}`);
-        }
-      }
-      // Low and medium severity errors are already handled appropriately by the hook
-    }
-  });
+  // Offline system integration
+  const { isOnline, stats: offlineStats } = useOfflineStatus();
+  const [offlineSystemReady, setOfflineSystemReady] = useState(false);
+  const [showConflicts, setShowConflicts] = useState(false);
+  const [conflicts, setConflicts] = useState<any[]>([]);
   
-  const [activities, setActivities] = useState<ActivityItem[]>([]);
+  // New WebSocket channel system integration
+  const {
+    activities: realtimeActivities,
+    lastActivity,
+    connectionState,
+    isConnected,
+    getUserFriendlyStatus
+  } = useActivitiesChannel(projectId, !!session);
+
+  // Extract additional connection info for compatibility
+  const connectionStatus = connectionState.connectionStatus;
+  const wsError = connectionState.error;
+  const reconnectAttempts = connectionState.reconnectAttempts;
+  const maxReconnectAttempts = connectionState.maxReconnectAttempts;
+  const hasError = connectionState.hasError;
+  const canRetry = connectionState.canRetry;
+  const isRetrying = connectionState.isRetrying;
+  
+  const [localActivities, setLocalActivities] = useState<ActivityItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [expandedCards, setExpandedCards] = useState<Set<string>>(new Set());
   const [isPollingFallback, setIsPollingFallback] = useState(false);
 
+  // Merge real-time and local activities
+  const activities = [...realtimeActivities, ...localActivities]
+    .filter((activity, index, arr) => 
+      arr.findIndex(a => a.id === activity.id) === index // Remove duplicates
+    )
+    .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
 
-  const loadActivities = async (silent = false) => {
+
+  const loadActivities = async (silent = false, forceRefresh = false) => {
     if (!projectId) {
-      setActivities([]);
+      setLocalActivities([]);
       setLoading(false);
       return;
     }
 
     if (!session) {
-      setActivities([]);
+      setLocalActivities([]);
       setLoading(false);
       return;
     }
@@ -181,6 +124,18 @@ export function ActivityFeed({ projectId, className = '' }: ActivityFeedProps) {
     try {
       if (!silent) setLoading(true);
       
+      // Use offline system if available, fallback to direct API
+      if (offlineSystemReady) {
+        try {
+          const activities = await offlineActivityManager.getActivities(projectId, forceRefresh);
+          setLocalActivities(activities);
+          return;
+        } catch (error) {
+          console.warn('[ActivityFeed] Offline system failed, falling back to direct API:', error);
+        }
+      }
+      
+      // Fallback to direct API call
       const response = await fetch(`${process.env.NEXT_PUBLIC_ORCHESTRATOR_URL || 'http://localhost:4000'}/projects/${projectId}/activity?showAll=false&_t=${Date.now()}&_debug=true`, {
         headers: {
           'Authorization': `Bearer ${session.access_token}`
@@ -189,27 +144,65 @@ export function ActivityFeed({ projectId, className = '' }: ActivityFeedProps) {
 
       if (!response.ok) {
         console.error('[ActivityFeed] Failed to load activities:', response.status);
-        setActivities([]);
+        setLocalActivities([]);
         return;
       }
 
       const data = await response.json();
       const activities = data.activities || data || [];
-      setActivities(activities);
+      setLocalActivities(activities);
     } catch (error) {
       console.error('[ActivityFeed] Error loading activities:', error);
-      setActivities([]);
+      setLocalActivities([]);
     } finally {
       if (!silent) setLoading(false);
       setIsRefreshing(false);
     }
   };
 
+  // Initialize offline system when session is available
+  useEffect(() => {
+    if (session && !offlineSystemReady) {
+      initializeOfflineSystem().then((success) => {
+        if (success) {
+          setOfflineSystemReady(true);
+          console.log('✅ Offline system ready for ActivityFeed');
+          
+          // Load initial conflicts
+          loadConflicts();
+        } else {
+          console.warn('⚠️ Offline system failed to initialize, using fallback mode');
+        }
+      });
+    }
+  }, [session, offlineSystemReady]);
+
+  // Load conflicts from offline manager
+  const loadConflicts = async () => {
+    try {
+      const currentConflicts = offlineActivityManager.getConflicts();
+      setConflicts(currentConflicts);
+    } catch (error) {
+      console.error('Failed to load conflicts:', error);
+    }
+  };
+
+  // Periodically check for conflicts
+  useEffect(() => {
+    if (!offlineSystemReady) return;
+
+    const conflictCheckInterval = setInterval(() => {
+      loadConflicts();
+    }, 5000); // Check every 5 seconds
+
+    return () => clearInterval(conflictCheckInterval);
+  }, [offlineSystemReady]);
+
   useEffect(() => {
     if (session) {
       loadActivities();
     }
-  }, [projectId, session]);
+  }, [projectId, session, offlineSystemReady]);
 
   // Fallback polling when WebSocket is persistently failing
   useEffect(() => {
@@ -234,6 +227,8 @@ export function ActivityFeed({ projectId, className = '' }: ActivityFeedProps) {
     }
   }, [hasError, canRetry, reconnectAttempts, maxReconnectAttempts, session, projectId, isPollingFallback]);
 
+  // Old handlers - no longer needed with new channel system
+  /*
   // Handler for unified activity updates (new format from backend)
   const handleActivityUpdate = useCallback((event: any) => {
     console.log('📥 Unified activity update received:', event);
@@ -245,7 +240,7 @@ export function ActivityFeed({ projectId, className = '' }: ActivityFeedProps) {
     
     const activity = event.activity;
     
-    setActivities(prev => {
+    setLocalActivities(prev => {
       // Find existing activity by ID
       const existingIndex = prev.findIndex(existing => existing.id === activity.id);
       
@@ -271,7 +266,7 @@ export function ActivityFeed({ projectId, className = '' }: ActivityFeedProps) {
     console.log('🔄 Legacy job update received:', event.jobId, 'status:', event.status);
     console.log('🔍 Job event data:', event);
     
-    setActivities(prev => {
+    setLocalActivities(prev => {
       // Find existing activity for this job
       const existingIndex = prev.findIndex(activity => 
         activity.metadata?.jobId === event.jobId
@@ -325,7 +320,7 @@ export function ActivityFeed({ projectId, className = '' }: ActivityFeedProps) {
   const handleJobDeletion = useCallback((event: any) => {
     console.log('🗑️ Removing activity for deleted job:', event.jobId);
     
-    setActivities(prev => {
+    setLocalActivities(prev => {
       // Remove activity for deleted job
       const filtered = prev.filter(activity => 
         activity.metadata?.jobId !== event.jobId
@@ -353,7 +348,7 @@ export function ActivityFeed({ projectId, className = '' }: ActivityFeedProps) {
       }
     };
     
-    setActivities(prev => [newActivity, ...prev.slice(0, 49)]); // Keep last 50 activities
+    setLocalActivities(prev => [newActivity, ...prev.slice(0, 49)]); // Keep last 50 activities
   }, []);
 
   // Handler for message activity events
@@ -381,7 +376,7 @@ export function ActivityFeed({ projectId, className = '' }: ActivityFeedProps) {
       }
     };
     
-    setActivities(prev => [newActivity, ...prev.slice(0, 49)]);
+    setLocalActivities(prev => [newActivity, ...prev.slice(0, 49)]);
   }, []);
 
   // Handler for conversation activity events
@@ -401,7 +396,7 @@ export function ActivityFeed({ projectId, className = '' }: ActivityFeedProps) {
       }
     };
     
-    setActivities(prev => [newActivity, ...prev.slice(0, 49)]);
+    setLocalActivities(prev => [newActivity, ...prev.slice(0, 49)]);
   }, []);
 
   // Handler for deployment activity events
@@ -424,7 +419,7 @@ export function ActivityFeed({ projectId, className = '' }: ActivityFeedProps) {
       }
     };
     
-    setActivities(prev => [newActivity, ...prev.slice(0, 49)]);
+    setLocalActivities(prev => [newActivity, ...prev.slice(0, 49)]);
   }, []);
 
   // Handler for system notifications
@@ -448,17 +443,23 @@ export function ActivityFeed({ projectId, className = '' }: ActivityFeedProps) {
       metadata: event.metadata || {}
     };
     
-    setActivities(prev => [newActivity, ...prev.slice(0, 49)]);
+    setLocalActivities(prev => [newActivity, ...prev.slice(0, 49)]);
   }, []);
 
-  // Note: Real-time updates are now handled directly in the useSimpleWebSocket onMessage callback
+  */
+  // Note: Real-time updates are now handled directly by the new WebSocket channel system
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
-    await loadActivities(true);
+    await loadActivities(true, true); // Force refresh from server
   };
 
   const getActivityIcon = (activity: ActivityItem) => {
+    // Show optimistic indicator for optimistic updates
+    if (activity.metadata?.optimistic) {
+      return <Loader2 className="w-4 h-4 text-purple-500 animate-spin" />;
+    }
+    
     if (activity.type === 'job') {
       // Status takes priority over job type - show status-based icons first
       switch (activity.status) {
@@ -672,43 +673,38 @@ export function ActivityFeed({ projectId, className = '' }: ActivityFeedProps) {
         <div className="flex items-center space-x-2">
           <Activity className="w-4 h-4 text-gray-400" />
           <h3 className="font-medium text-white">Activity</h3>
+          
+          {/* Offline system status indicator */}
+          {offlineSystemReady && (
+            <OfflineStatusIndicator showStats={true} />
+          )}
+          
+          {/* Conflicts indicator */}
+          {conflicts.length > 0 && (
+            <button
+              onClick={() => setShowConflicts(true)}
+              className="flex items-center space-x-1 bg-red-600 text-white px-2 py-1 rounded-full text-xs hover:bg-red-700 transition-colors"
+              title={`${conflicts.length} sync conflict${conflicts.length !== 1 ? 's' : ''} need attention`}
+            >
+              <AlertCircle className="w-3 h-3" />
+              <span>{conflicts.length}</span>
+            </button>
+          )}
+          
           {isPollingFallback && (
             <span className="text-xs text-yellow-400" title="Using polling fallback - updates every 10s">
               (polling)
             </span>
           )}
+          
           {/* Enhanced WebSocket connection indicator */}
-          {isConnected ? (
-            <Wifi 
-              className="w-3 h-3 text-green-400" 
-              title={`Real-time: ${getUserFriendlyStatus()}`} 
-            />
-          ) : isRetrying ? (
-            <Loader2 
-              className="w-3 h-3 text-blue-400 animate-spin" 
-              title={getUserFriendlyStatus()} 
-            />
-          ) : wsError?.type === 'authentication' && wsError.isTokenExpired ? (
-            <RefreshCw 
-              className="w-3 h-3 text-yellow-400 animate-spin" 
-              title={getUserFriendlyStatus()} 
-            />
-          ) : hasError && wsError?.severity === 'high' ? (
-            <AlertCircle 
-              className="w-3 h-3 text-red-400" 
-              title={getUserFriendlyStatus()} 
-            />
-          ) : hasError && wsError?.severity === 'medium' ? (
-            <AlertCircle 
-              className="w-3 h-3 text-yellow-400" 
-              title={getUserFriendlyStatus()} 
-            />
-          ) : (
-            <WifiOff 
-              className="w-3 h-3 text-gray-500" 
-              title={getUserFriendlyStatus()} 
-            />
-          )}
+          <ConnectionStatus 
+            isConnected={isConnected}
+            isRetrying={isRetrying}
+            hasError={hasError}
+            errorSeverity={wsError?.severity}
+            getUserFriendlyStatus={getUserFriendlyStatus}
+          />
         </div>
         <button
           onClick={handleRefresh}
@@ -741,6 +737,7 @@ export function ActivityFeed({ projectId, className = '' }: ActivityFeedProps) {
                 >
                   {/* Status indicator bar */}
                   <div className={`absolute left-0 top-0 bottom-0 w-1 ${
+                    activity.metadata?.optimistic ? 'bg-purple-400' : // Optimistic activities get purple bar
                     activity.status === 'COMPLETED' && !activity.metadata?.error ? 'bg-green-400' :
                     activity.status === 'COMPLETED' && activity.metadata?.error ? 'bg-red-400' :
                     activity.status === 'RUNNING' ? 'bg-blue-400' :
@@ -762,8 +759,13 @@ export function ActivityFeed({ projectId, className = '' }: ActivityFeedProps) {
                       <div className="flex-1 min-w-0">
                         <div className="flex items-start justify-between mb-1">
                           <div className="flex items-center space-x-2">
-                            <h4 className="text-sm font-semibold text-white">
+                            <h4 className={`text-sm font-semibold ${activity.metadata?.optimistic ? 'text-purple-300' : 'text-white'}`}>
                               {activity.title}
+                              {activity.metadata?.optimistic && (
+                                <span className="ml-1 text-xs text-purple-400" title="Optimistic update - will sync when online">
+                                  ⚡
+                                </span>
+                              )}
                             </h4>
                             {hasDetails && (
                               <button className="text-gray-400 hover:text-gray-300">
@@ -793,8 +795,10 @@ export function ActivityFeed({ projectId, className = '' }: ActivityFeedProps) {
                         
                         {/* Status badge and quick info */}
                         <div className="flex items-center justify-between">
-                          {(activity.status || activity.level) && (
+                          {(activity.status || activity.level || activity.metadata?.optimistic) && (
                             <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                              // Optimistic status override
+                              activity.metadata?.optimistic ? 'bg-purple-100 text-purple-800' :
                               // Job status badges
                               activity.status === 'COMPLETED' && !activity.metadata?.error ? 'bg-green-100 text-green-800' :
                               activity.status === 'COMPLETED' && activity.metadata?.error ? 'bg-red-100 text-red-800' :
@@ -809,7 +813,9 @@ export function ActivityFeed({ projectId, className = '' }: ActivityFeedProps) {
                               activity.level === 'info' ? 'bg-blue-100 text-blue-800' :
                               'bg-gray-100 text-gray-800'
                             }`}>
-                              {activity.status ? (
+                              {activity.metadata?.optimistic ? (
+                                'syncing...'
+                              ) : activity.status ? (
                                 activity.status === 'COMPLETED' && activity.metadata?.error 
                                   ? 'failed' 
                                   : activity.status.toLowerCase()
@@ -870,6 +876,22 @@ export function ActivityFeed({ projectId, className = '' }: ActivityFeedProps) {
           </div>
         )}
       </div>
+
+      {/* Conflict Resolution Modal */}
+      <ConflictResolutionModal
+        isOpen={showConflicts}
+        onClose={() => setShowConflicts(false)}
+        conflicts={conflicts}
+        onConflictResolved={async (conflictId, resolution) => {
+          try {
+            await offlineActivityManager.resolveConflict(conflictId, resolution);
+            await loadConflicts(); // Refresh conflicts list
+          } catch (error) {
+            console.error('Failed to resolve conflict:', error);
+            throw error;
+          }
+        }}
+      />
     </div>
   );
 }

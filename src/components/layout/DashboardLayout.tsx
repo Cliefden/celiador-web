@@ -46,8 +46,6 @@ interface DashboardLayoutProps {
 }
 
 export function DashboardLayout({ initialUser, onLogout }: DashboardLayoutProps) {
-  console.log('🔄 DashboardLayout rendering with persistence enabled');
-  
   const [user] = useState<User>(initialUser);
   const [projects, setProjects] = useState<Project[]>([]);
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);

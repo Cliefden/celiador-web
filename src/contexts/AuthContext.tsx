@@ -115,7 +115,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           sessionId,
           platform: 'web',
           status: 'active',
-          startedAt: result.session.startedAt,
+          startedAt: result.session?.startedAt || new Date().toISOString(),
           duration: 0
         });
         

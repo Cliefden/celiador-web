@@ -1,12 +1,16 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { X, Files, MessageSquare, Settings, Activity, Code2, Github, Triangle } from 'lucide-react';
 import { ProjectFileExplorer } from '../file-tree/ProjectFileExplorer';
 import { ActivityFeed } from '../activity/ActivityFeed';
 import { GitHubIntegrationPanel } from '../integrations/GitHubIntegrationPanel';
 import { VercelIntegrationPanel } from '../integrations/VercelIntegrationPanel';
 import { FloatingSettingsPanel } from '../settings/FloatingSettingsPanel';
+import { useOfflineConversation } from '../conversation/useOfflineConversation';
+import { MessageList } from '../conversation/MessageList';
+import { Button } from '../ui/button';
+import { Input } from '../ui/input';
 
 export type FloatingWindowContent = 'files' | 'chat' | 'activity' | 'settings' | 'code' | 'integrations';
 
@@ -91,12 +95,7 @@ export function FloatingWindow({
       
       case 'chat':
         return (
-          <div className="p-4 h-full flex items-center justify-center text-gray-300">
-            <div className="text-center">
-              <MessageSquare className="w-12 h-12 mx-auto mb-4 text-gray-300" />
-              <p>AI Chat coming soon...</p>
-            </div>
-          </div>
+          <ConversationFloatingPanel projectId={projectId} />
         );
       
       case 'activity':
@@ -239,6 +238,132 @@ function IntegrationsTabPanel({ projectId }: IntegrationsTabPanelProps) {
             projectId={projectId}
             className="h-full overflow-y-auto"
           />
+        )}
+      </div>
+    </div>
+  );
+}
+
+// Conversation Floating Panel Component
+interface ConversationFloatingPanelProps {
+  projectId?: string;
+}
+
+function ConversationFloatingPanel({ projectId }: ConversationFloatingPanelProps) {
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
+  const [message, setMessage] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+  
+  const { 
+    conversation, 
+    messages, 
+    sendMessage, 
+    loading: conversationLoading,
+    isOnline: conversationOnline,
+    hasPendingMessages,
+    shouldScrollToBottom
+  } = useOfflineConversation(projectId);
+
+  // Auto-scroll messages to bottom when shouldScrollToBottom is true
+  useEffect(() => {
+    if (shouldScrollToBottom && messagesContainerRef.current) {
+      console.log('🔽 FloatingPanel: Auto-scrolling to bottom (shouldScrollToBottom trigger)');
+      messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight;
+    }
+  }, [shouldScrollToBottom, messages]);
+
+  // Auto-scroll to bottom when messages are first loaded (on refresh/page load)
+  useEffect(() => {
+    if (messages && messages.length > 0 && messagesContainerRef.current) {
+      console.log('🔽 FloatingPanel: Auto-scrolling on load:', messages.length, 'messages');
+      setTimeout(() => {
+        if (messagesContainerRef.current) {
+          messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight;
+        }
+      }, 200);
+    }
+  }, [messages?.length]);
+
+  // Handle message submission
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!message.trim() || isLoading) return;
+
+    const messageText = message.trim();
+    setMessage('');
+    setIsLoading(true);
+
+    try {
+      await sendMessage(messageText, 'text');
+      // Focus input after message is sent
+      setTimeout(() => {
+        inputRef.current?.focus();
+      }, 100);
+    } catch (error) {
+      console.error('[ConversationFloatingPanel] Failed to send message:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  if (!projectId) {
+    return (
+      <div className="flex items-center justify-center h-64 text-gray-300">
+        <p>No project selected</p>
+      </div>
+    );
+  }
+
+  if (!conversation) {
+    return (
+      <div className="flex items-center justify-center h-64 text-gray-300">
+        <div className="text-center">
+          <MessageSquare className="w-12 h-12 mx-auto mb-4 text-gray-300" />
+          <p>Loading conversation...</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="h-full flex flex-col">
+      {/* Messages Container */}
+      <div 
+        ref={messagesContainerRef}
+        className="flex-1 overflow-y-auto p-4 space-y-4"
+      >
+        <MessageList 
+          messages={messages || []}
+          isStreaming={false}
+          className="space-y-4"
+        />
+      </div>
+      
+      {/* Message Input */}
+      <div className="border-t border-gray-700 p-4">
+        <form onSubmit={handleSubmit} className="flex gap-2">
+          <Input
+            ref={inputRef}
+            value={message}
+            onChange={(e) => setMessage(e.target.value)}
+            placeholder="Ask about your project..."
+            disabled={isLoading || conversationLoading}
+            className="flex-1 bg-gray-800 border-gray-600 text-white"
+          />
+          <Button 
+            type="submit" 
+            disabled={!message.trim() || isLoading || conversationLoading}
+            size="icon"
+            className="bg-teal-600 hover:bg-teal-700"
+          >
+            {isLoading ? '⏳' : '→'}
+          </Button>
+        </form>
+        {hasPendingMessages && (
+          <div className="text-xs text-orange-400 mt-2">
+            📤 {conversationOnline ? 'Syncing...' : 'Messages queued for sync'}
+          </div>
         )}
       </div>
     </div>

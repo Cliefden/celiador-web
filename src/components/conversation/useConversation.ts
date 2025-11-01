@@ -63,7 +63,7 @@ export function useConversation(projectId?: string): UseConversationReturn {
   const { isConnected, lastMessage } = useSimpleWebSocket({
     url: getWebSocketUrl(),
     token: session?.access_token || '',
-    enabled: !!session?.access_token,
+    enabled: false, // Temporarily disabled to reduce WebSocket conflicts
     maxReconnectAttempts: 3,
     reconnectDelay: 2000,
     onMessage: (data) => {

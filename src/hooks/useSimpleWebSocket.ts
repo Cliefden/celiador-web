@@ -62,6 +62,7 @@ export function useSimpleWebSocket(options: UseSimpleWebSocketOptions): WebSocke
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const isReconnectingRef = useRef(false);
+  const isCleaningUpRef = useRef(false);
 
   // Helper function to create error objects
   const createError = (
@@ -148,23 +149,52 @@ export function useSimpleWebSocket(options: UseSimpleWebSocketOptions): WebSocke
     
     // Connection attempt will be logged when successful
 
-    // Cleanup function
+    // Cleanup function - handle React Strict Mode double effects
     const cleanup = () => {
+      // Prevent multiple cleanup calls
+      if (isCleaningUpRef.current) {
+        return;
+      }
+      isCleaningUpRef.current = true;
+
       if (reconnectTimeoutRef.current) {
         clearTimeout(reconnectTimeoutRef.current);
         reconnectTimeoutRef.current = null;
       }
+      
       if (wsRef.current) {
-        wsRef.current.close();
-        wsRef.current = null;
+        const ws = wsRef.current;
+        wsRef.current = null; // Clear ref first to prevent race conditions
+        
+        // Only attempt to close if WebSocket is in a closeable state
+        if (ws.readyState === WebSocket.CONNECTING || ws.readyState === WebSocket.OPEN) {
+          try {
+            ws.close(1000, 'Component cleanup'); // Normal closure
+          } catch (error) {
+            // Silently ignore cleanup errors - WebSocket may already be closed
+          }
+        }
       }
+      
       setIsConnected(false);
       setConnectionStatus('Disconnected');
+      isReconnectingRef.current = false;
+      
+      // Reset cleanup flag after a short delay to allow for re-initialization
+      setTimeout(() => {
+        isCleaningUpRef.current = false;
+      }, 100);
     };
 
     // Connect function
     const connect = () => {
       try {
+        // Prevent connection if already connecting, connected, or cleaning up
+        if (wsRef.current || isCleaningUpRef.current) {
+          console.debug('WebSocket already exists or cleaning up, skipping connection');
+          return;
+        }
+        
         setConnectionStatus('Connecting...');
         
         const ws = new WebSocket(url);

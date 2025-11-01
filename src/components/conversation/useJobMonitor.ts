@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '../../lib/supabase';
 import { triggerFileRefresh } from '../file-tree/useFileRefresh';
+import { useWebSocketEntity } from '../../lib/websocket';
 
 export type JobStatus = 'PENDING' | 'RUNNING' | 'COMPLETED' | 'FAILED' | 'CANCELLED';
 
@@ -44,39 +45,30 @@ export function useJobMonitor(): UseJobMonitorReturn {
     failed: {}
   });
 
-  // Fetch job status from backend
+  // Use WebSocket entity client for job fetching
+  const { fetchJob, isReady, isConnected } = useWebSocketEntity();
+
+  // Fetch job status from backend via WebSocket
   const fetchJobStatus = useCallback(async (jobId: string): Promise<Job | null> => {
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.access_token) {
-        console.warn('[JobMonitor] No auth token available');
-        return null;
-      }
-
-      const apiUrl = process.env.NEXT_PUBLIC_ORCHESTRATOR_URL || 'http://localhost:4000';
-      const response = await fetch(`${apiUrl}/jobs/${jobId}`, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${session.access_token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      if (!response.ok) {
-        console.error(`[JobMonitor] Failed to fetch job ${jobId}: ${response.status}`);
-        return null;
-      }
-
-      return await response.json();
-    } catch (error) {
-      console.error(`[JobMonitor] Error fetching job ${jobId}:`, error);
+    if (!isReady || !isConnected) {
+      console.warn('[JobMonitor] WebSocket not ready for job fetching');
       return null;
     }
-  }, []);
+
+    try {
+      console.log(`[JobMonitor] Fetching job ${jobId} via WebSocket`);
+      const job = await fetchJob(jobId);
+      console.log(`[JobMonitor] WebSocket job fetch result:`, job);
+      return job || null;
+    } catch (error) {
+      console.error(`[JobMonitor] WebSocket error fetching job ${jobId}:`, error);
+      return null;
+    }
+  }, [fetchJob, isReady, isConnected]);
 
   // Poll monitored jobs
   const pollJobs = useCallback(async () => {
-    if (monitoredJobs.size === 0) return;
+    if (monitoredJobs.size === 0 || !isReady || !isConnected) return;
 
     console.log(`[JobMonitor] Polling ${monitoredJobs.size} jobs`);
     
@@ -126,15 +118,15 @@ export function useJobMonitor(): UseJobMonitorReturn {
     if (Object.keys(updates).length > 0) {
       setJobs(prev => ({ ...prev, ...updates }));
     }
-  }, [monitoredJobs, jobs, fetchJobStatus]);
+  }, [monitoredJobs, jobs, fetchJobStatus, isReady, isConnected]);
 
-  // Start polling when we have jobs to monitor
+  // Start polling when we have jobs to monitor and WebSocket is ready
   useEffect(() => {
-    if (monitoredJobs.size > 0 && !intervalRef.current) {
-      console.log('[JobMonitor] Starting job polling');
+    if (monitoredJobs.size > 0 && !intervalRef.current && isReady && isConnected) {
+      console.log('[JobMonitor] Starting WebSocket job polling');
       setIsMonitoring(true);
       intervalRef.current = setInterval(pollJobs, 2000); // Poll every 2 seconds
-    } else if (monitoredJobs.size === 0 && intervalRef.current) {
+    } else if ((monitoredJobs.size === 0 || !isReady || !isConnected) && intervalRef.current) {
       console.log('[JobMonitor] Stopping job polling');
       clearInterval(intervalRef.current);
       intervalRef.current = null;
