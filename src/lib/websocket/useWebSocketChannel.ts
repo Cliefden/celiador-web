@@ -4,6 +4,242 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { WebSocketChannelManager, ChannelSubscription, WebSocketConnectionState, WebSocketMessage } from './WebSocketChannelManager';
 import { useAuth } from '../../contexts/AuthContext';
 
+// Local interfaces for activity formatting
+interface ActivityItem {
+  id: string;
+  type: string;
+  title: string;
+  description: string;
+  status?: string;
+  timestamp: string;
+  level?: 'info' | 'warning' | 'error' | 'success';
+  metadata?: any;
+}
+
+type EntityAction = 'created' | 'updated' | 'deleted';
+
+// Shared formatting utilities (copied from backend)
+function getJobTitle(type: string, status: string): string {
+  const typeMap: { [key: string]: string } = {
+    'SCAFFOLD': 'Project Setup',
+    'AI_ACTION': 'AI Code Generation', 
+    'EDIT': 'Code Modification',
+    'TEST': 'Test Execution',
+    'DEPLOY': 'Deployment',
+    'BUILD': 'Build Process'
+  };
+  
+  const statusMap: { [key: string]: string } = {
+    'PENDING': 'queued',
+    'RUNNING': 'in progress',
+    'COMPLETED': 'completed',
+    'FAILED': 'failed',
+    'CANCELLED': 'cancelled'
+  };
+  
+  const jobType = typeMap[type] || (type || 'Unknown');
+  const jobStatus = statusMap[status] || (status ? status.toLowerCase() : 'unknown');
+  
+  return `${jobType} ${jobStatus}`;
+}
+
+function getJobTypeDescription(jobType: string): string {
+  const descriptions: { [key: string]: string } = {
+    'SCAFFOLD': 'Setting up project structure and dependencies',
+    'AI_ACTION': 'AI-powered code generation and modification',
+    'EDIT': 'Manual code editing and file modifications',
+    'TEST': 'Running tests and validation checks',
+    'BUILD': 'Compiling and building the project',
+    'DEPLOY': 'Deploying to production environment'
+  };
+  return descriptions[jobType] || jobType;
+}
+
+function getEntityActivityLevel(entityType: string, action: EntityAction, status?: string): 'info' | 'warning' | 'error' | 'success' {
+  if (entityType === 'jobs' && status) {
+    if (status === 'COMPLETED') return 'success';
+    if (status === 'FAILED') return 'error';
+    if (status === 'RUNNING') return 'info';
+  }
+  
+  switch (action) {
+    case 'created':
+      return 'success';
+    case 'deleted':
+      return 'warning';
+    case 'updated':
+    default:
+      return 'info';
+  }
+}
+
+function formatJobAsActivity(job: any, action: EntityAction, userId?: string): ActivityItem {
+  const level = getEntityActivityLevel('jobs', action, job.status);
+  
+  // Special handling for deleted jobs
+  const title = action === 'deleted' 
+    ? `Job deleted` 
+    : getJobTitle(job.type, job.status);
+    
+  const description = action === 'deleted'
+    ? `Job was deleted`
+    : (job.prompt || getJobTypeDescription(job.type));
+  
+  return {
+    id: job.id,
+    type: 'job',
+    title,
+    description,
+    timestamp: job.updatedat || job.createdat,
+    status: job.status,
+    level,
+    metadata: {
+      jobId: job.id,
+      jobType: job.type,
+      output: job.output,
+      error: job.error,
+      jobMetadata: job.metadata,
+      userId: userId,
+      entityType: 'jobs',
+      entityId: job.id,
+      action
+    }
+  };
+}
+
+function formatConversationAsActivity(conversation: any, action: EntityAction): ActivityItem {
+  const level = getEntityActivityLevel('conversations', action);
+  const actionWord = action === 'created' ? 'started' : action === 'deleted' ? 'deleted' : 'updated';
+  
+  return {
+    id: `conv_${conversation.id}`,
+    type: 'conversation',
+    title: `Conversation ${actionWord}`,
+    description: conversation.title || 'Untitled conversation',
+    timestamp: conversation.updatedat || conversation.createdat,
+    level,
+    metadata: {
+      conversationId: conversation.id,
+      projectId: conversation.projectid || conversation.projectId,
+      entityType: 'conversations',
+      entityId: conversation.id,
+      action
+    }
+  };
+}
+
+function formatMessageAsActivity(message: any, action: EntityAction): ActivityItem {
+  const roleEmoji = message.role === 'user' ? '👤' : message.role === 'assistant' ? '🤖' : '⚙️';
+  const level = getEntityActivityLevel('messages', action);
+  const actionWord = action === 'created' ? 'New' : action === 'deleted' ? 'Deleted' : 'Updated';
+  
+  return {
+    id: `message_${message.id}`,
+    type: 'message',
+    title: `${roleEmoji} ${actionWord} ${message.role} message`,
+    description: message.content ? 
+      (message.content.length > 100 ? message.content.substring(0, 100) + '...' : message.content) :
+      `${message.role} sent a message`,
+    timestamp: message.updatedat || message.createdat,
+    level,
+    metadata: {
+      messageId: message.id,
+      conversationId: message.conversationid || message.conversationId,
+      messageContent: message.content,
+      messageRole: message.role,
+      messageType: message.messagetype || message.messageType,
+      relatedJobId: message.relatedjobid || message.relatedJobId,
+      projectId: message.projectid || message.projectId,
+      entityType: 'messages',
+      entityId: message.id,
+      action
+    }
+  };
+}
+
+function formatProjectAsActivity(project: any, action: EntityAction): ActivityItem {
+  const level = getEntityActivityLevel('projects', action);
+  const actionWord = action === 'created' ? 'created' : action === 'deleted' ? 'deleted' : 'updated';
+  
+  return {
+    id: `project_${project.id}`,
+    type: 'project',
+    title: `Project ${actionWord}`,
+    description: `Project "${project.name || 'Untitled'}" was ${actionWord}`,
+    timestamp: project.updatedat || project.createdat,
+    level,
+    metadata: {
+      projectId: project.id,
+      projectName: project.name,
+      templateKey: project.templatekey || project.templateKey,
+      entityType: 'projects',
+      entityId: project.id,
+      action
+    }
+  };
+}
+
+function formatDeploymentAsActivity(deployment: any, action: EntityAction): ActivityItem {
+  const statusEmoji = deployment.status === 'COMPLETED' ? '✅' : deployment.status === 'FAILED' ? '❌' : '🔄';
+  const level = deployment.status === 'COMPLETED' ? 'success' : deployment.status === 'FAILED' ? 'error' : 'info';
+  
+  return {
+    id: `deployment_${deployment.deploymentId || deployment.id}`,
+    type: 'deployment',
+    title: `${statusEmoji} Deployment ${deployment.status?.toLowerCase() || action}`,
+    description: `Deployment status changed to ${deployment.status || 'unknown'}`,
+    status: deployment.status,
+    timestamp: deployment.timestamp || deployment.updatedat || deployment.createdat,
+    level,
+    metadata: {
+      deploymentId: deployment.deploymentId || deployment.id,
+      projectId: deployment.projectId || deployment.projectid,
+      deploymentUrl: deployment.url || deployment.deploymentUrl,
+      entityType: 'deployments',
+      entityId: deployment.deploymentId || deployment.id,
+      action
+    }
+  };
+}
+
+// Generic entity formatter using the mapping
+function formatEntityAsActivity(
+  entityType: string, 
+  entityData: any, 
+  action: EntityAction = 'created',
+  userId?: string
+): ActivityItem | null {
+  switch (entityType) {
+    case 'jobs':
+      return formatJobAsActivity(entityData, action, userId);
+    case 'conversations':
+      return formatConversationAsActivity(entityData, action);
+    case 'messages':
+      return formatMessageAsActivity(entityData, action);
+    case 'projects':
+      return formatProjectAsActivity(entityData, action);
+    case 'deployments':
+      return formatDeploymentAsActivity(entityData, action);
+    default:
+      console.warn(`No formatter found for entity type: ${entityType}`);
+      // Return a generic fallback
+      return {
+        id: `${entityType}_${entityData.id || Date.now()}`,
+        type: entityType,
+        title: `${entityType} ${action}`,
+        description: `${entityType} was ${action}`,
+        timestamp: entityData.updatedat || entityData.createdat || new Date().toISOString(),
+        level: getEntityActivityLevel(entityType, action),
+        metadata: {
+          entityType,
+          entityId: entityData.id,
+          action,
+          ...entityData
+        }
+      };
+  }
+}
+
 // Global manager instance (singleton)
 let globalManager: WebSocketChannelManager | null = null;
 
@@ -137,144 +373,31 @@ export function useActivitiesChannel(projectId: string, enabled = true) {
   const [activities, setActivities] = useState<any[]>([]);
   const [lastActivity, setLastActivity] = useState<any>(null);
 
-  // Helper function to convert generic entity events to activity format (stabilized)
-  const convertEntityToActivity = useCallback((message: any, eventType: string): any | null => {
-    const { entityType, entityData, entityId } = message;
+  // Helper function to convert generic entity events to activity format using shared formatters
+  const convertEntityToActivity = useCallback((message: any, eventType: string): ActivityItem | null => {
+    const { entityType, entityData, entityId, userId } = message;
     
-    const actionWord = eventType === 'entity_created' ? 'created' :
-                      eventType === 'entity_updated' ? 'updated' : 'deleted';
+    const action: EntityAction = eventType === 'entity_created' ? 'created' :
+                                 eventType === 'entity_updated' ? 'updated' : 'deleted';
     
-    switch (entityType) {
-      case 'jobs':
-        // Use the same formatting logic as the API endpoint
-        const getJobTitle = (type: string, status: string): string => {
-          const typeMap: { [key: string]: string } = {
-            'SCAFFOLD': 'Project Setup',
-            'AI_ACTION': 'AI Code Generation', 
-            'EDIT': 'Code Modification',
-            'TEST': 'Test Execution',
-            'DEPLOY': 'Deployment',
-            'BUILD': 'Build Process'
-          };
-          
-          const statusMap: { [key: string]: string } = {
-            'PENDING': 'queued',
-            'RUNNING': 'in progress',
-            'COMPLETED': 'completed',
-            'FAILED': 'failed',
-            'CANCELLED': 'cancelled'
-          };
-          
-          const jobType = typeMap[type] || type;
-          const jobStatus = statusMap[status] || status.toLowerCase();
-          
-          return `${jobType} ${jobStatus}`;
-        };
-
-        const getJobTypeDescription = (jobType: string): string => {
-          const descriptions: { [key: string]: string } = {
-            'SCAFFOLD': 'Setting up project structure and dependencies',
-            'AI_ACTION': 'AI-powered code generation and modification',
-            'EDIT': 'Manual code editing and file modifications',
-            'TEST': 'Running tests and validation',
-            'DEPLOY': 'Deploying application to hosting platform',
-            'BUILD': 'Building and compiling project'
-          };
-          return descriptions[jobType] || jobType;
-        };
-
-        return {
-          id: entityData.id || `${entityType}-${actionWord}-${entityId}-${Date.now()}`,
-          type: 'job',
-          title: getJobTitle(entityData.type || 'Job', entityData.status || 'UNKNOWN'),
-          description: entityData.prompt || getJobTypeDescription(entityData.type || 'Job'),
-          timestamp: entityData.updatedat || entityData.createdat || message.timestamp || new Date().toISOString(),
-          status: entityData.status,
-          level: entityData.status === 'COMPLETED' ? 'success' : 
-                 entityData.status === 'FAILED' ? 'error' : 
-                 entityData.status === 'RUNNING' ? 'info' : 
-                 eventType === 'entity_deleted' ? 'warning' : 'info',
-          metadata: {
-            jobId: entityData.id,
-            jobType: entityData.type,
-            output: entityData.output,
-            error: entityData.error,
-            jobMetadata: entityData.metadata,
-            entityType,
-            entityId,
-            action: actionWord,
-            ...entityData
-          }
-        };
-
-      case 'messages':
-        return {
-          id: `${entityType}-${actionWord}-${entityId}-${Date.now()}`,
-          type: 'message',
-          title: `Message ${actionWord}`,
-          description: entityData.content ? 
-            (entityData.content.length > 100 ? `${entityData.content.substring(0, 100)}...` : entityData.content) :
-            `Message ${actionWord}`,
-          timestamp: message.timestamp || new Date().toISOString(),
-          level: 'info',
-          metadata: {
-            entityType,
-            entityId,
-            action: actionWord,
-            ...entityData
-          }
-        };
-
-      case 'conversations':
-        return {
-          id: `${entityType}-${actionWord}-${entityId}-${Date.now()}`,
-          type: 'conversation',
-          title: `Conversation ${actionWord}`,
-          description: `Conversation ${actionWord}`,
-          timestamp: message.timestamp || new Date().toISOString(),
-          level: 'info',
-          metadata: {
-            entityType,
-            entityId,
-            action: actionWord,
-            ...entityData
-          }
-        };
-
-      case 'projects':
-        return {
-          id: `${entityType}-${actionWord}-${entityId}-${Date.now()}`,
-          type: 'project',
-          title: `Project ${actionWord}`,
-          description: `Project ${entityData.name || entityId} ${actionWord}`,
-          timestamp: message.timestamp || new Date().toISOString(),
-          level: eventType === 'entity_created' ? 'success' : 
-                 eventType === 'entity_deleted' ? 'warning' : 'info',
-          metadata: {
-            entityType,
-            entityId,
-            action: actionWord,
-            ...entityData
-          }
-        };
-
-      default:
-        // Generic fallback for unknown entity types
-        return {
-          id: `${entityType}-${actionWord}-${entityId}-${Date.now()}`,
-          type: entityType,
-          title: `${entityType} ${actionWord}`,
-          description: `${entityType} ${actionWord}`,
-          timestamp: message.timestamp || new Date().toISOString(),
-          level: eventType === 'entity_created' ? 'success' : 
-                 eventType === 'entity_deleted' ? 'warning' : 'info',
-          metadata: {
-            entityType,
-            entityId,
-            action: actionWord,
-            ...entityData
-          }
-        };
+    try {
+      // Use the shared formatter with proper fallback ID generation
+      const activity = formatEntityAsActivity(entityType, entityData, action, userId);
+      
+      if (activity && !activity.id.includes(entityId)) {
+        // Ensure we have a unique ID that includes the entity ID
+        activity.id = `${entityType}-${action}-${entityId}-${Date.now()}`;
+      }
+      
+      // Ensure timestamp is set from message if not in entity data
+      if (activity && !activity.timestamp) {
+        activity.timestamp = message.timestamp || new Date().toISOString();
+      }
+      
+      return activity;
+    } catch (error) {
+      console.error(`Error formatting ${entityType} entity as activity:`, error);
+      return null;
     }
   }, []); // Removed dependencies to prevent recreation
 
@@ -291,9 +414,15 @@ export function useActivitiesChannel(projectId: string, enabled = true) {
     });
     
     // Only process events for the current project
-    if (eventProjectId && eventProjectId !== projectId) {
+    // Special case: DELETE events may not have projectId, so we allow them through
+    if (eventProjectId && eventProjectId !== projectId && type !== 'entity_deleted') {
       console.log('❌ Skipping - wrong project:', eventProjectId, 'vs', projectId);
       return null;
+    }
+    
+    // For DELETE events without projectId, we'll process them but note the limitation
+    if (type === 'entity_deleted' && !eventProjectId) {
+      console.log('⚠️ Processing DELETE event without projectId - may show deletion from other projects');
     }
 
     switch (type) {
