@@ -1,5 +1,39 @@
-// Service Worker for Background Sync and Offline Support
-// Handles background synchronization when the app is closed
+// Service Worker DISABLED - was caching message API responses
+// This was causing stale message data (18 messages instead of 26)
+
+// Unregister this service worker immediately
+self.addEventListener('install', event => {
+  console.log('🚫 Service Worker disabled - unregistering...');
+  self.skipWaiting();
+});
+
+self.addEventListener('activate', event => {
+  console.log('🗑️ Service Worker clearing caches and unregistering...');
+  
+  event.waitUntil(
+    caches.keys().then(cacheNames => {
+      return Promise.all(
+        cacheNames.map(cacheName => {
+          console.log('🗑️ Deleting cache:', cacheName);
+          return caches.delete(cacheName);
+        })
+      );
+    }).then(() => {
+      // Unregister this service worker
+      return self.registration.unregister();
+    })
+  );
+  
+  return self.clients.claim();
+});
+
+// Disable all fetch interception
+self.addEventListener('fetch', event => {
+  // Let all requests go through to network without caching
+  return;
+});
+
+console.log('🚫 Service Worker disabled to fix message caching issue');
 
 const CACHE_NAME = 'activity-cache-v1';
 const API_BASE = self.location.origin.includes('localhost') 

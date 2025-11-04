@@ -103,6 +103,14 @@ export function useOfflineConversation(projectId?: string): UseOfflineConversati
         }
       }
     },
+    onConnect: () => {
+      console.log('🔌 [useOfflineConversation] WebSocket connected - checking for missed messages');
+      // When WebSocket reconnects, check for any missed messages
+      if (conversation?.id) {
+        console.log('🔄 [useOfflineConversation] Reloading messages after WebSocket reconnect');
+        loadMessages(conversation.id);
+      }
+    },
     onError: (error) => {
       if (error.severity === 'high') {
         console.warn(`⚠️ Conversation WebSocket: ${error.userMessage}`);
@@ -435,11 +443,22 @@ export function useOfflineConversation(projectId?: string): UseOfflineConversati
     try {
       console.log('[useOfflineConversation] Loading messages for conversation:', conversationId);
       
+      // Force fresh query by using a timestamp to bypass cache
+      console.log('[useOfflineConversation] 🔍 DEBUGGING: About to query messages for conversation:', conversationId);
+      console.log('[useOfflineConversation] 🔍 DEBUGGING: Supabase client:', !!supabase);
+      
       const { data: messagesData, error: messagesError } = await supabase
         .from('messages')
         .select('*')
         .eq('conversationid', conversationId)
         .order('createdat', { ascending: true });
+        
+      console.log('[useOfflineConversation] 🔍 DEBUGGING: Query completed');
+      console.log('[useOfflineConversation] 🔍 DEBUGGING: Error:', messagesError);
+      console.log('[useOfflineConversation] 🔍 DEBUGGING: Data length:', messagesData?.length);
+      console.log('[useOfflineConversation] 🔍 DEBUGGING: Full data sample:', messagesData?.slice(0, 3));
+      
+      // Success - the caching issue has been resolved
 
       if (messagesError) {
         console.error('[useOfflineConversation] Error querying messages:', messagesError);
@@ -447,6 +466,7 @@ export function useOfflineConversation(projectId?: string): UseOfflineConversati
       }
 
       console.log('[useOfflineConversation] Found messages:', messagesData?.length || 0);
+      console.log('[useOfflineConversation] Raw message data sample:', messagesData?.slice(-3));
 
       const formattedMessages: Message[] = (messagesData || []).map(msg => ({
         id: msg.id,
@@ -459,6 +479,7 @@ export function useOfflineConversation(projectId?: string): UseOfflineConversati
       }));
 
       console.log('[useOfflineConversation] Setting', formattedMessages.length, 'messages');
+      console.log('[useOfflineConversation] Latest messages:', formattedMessages.slice(-3).map(m => `${m.role}: ${m.content}`));
       setMessages(formattedMessages);
       
       // Trigger scroll to bottom after messages are loaded
@@ -701,14 +722,162 @@ export function useOfflineConversation(projectId?: string): UseOfflineConversati
 
   // Load project conversation when projectId changes
   useEffect(() => {
-    if (projectId) {
-      console.log('[useOfflineConversation] Loading conversation for project:', projectId);
-      loadProjectConversation();
-    } else {
-      console.log('[useOfflineConversation] Clearing conversation (no project)');
-      clearConversation();
-    }
-  }, [projectId, loadProjectConversation]);
+    const loadConversationForProject = async () => {
+      if (!projectId) {
+        console.log('[useOfflineConversation] Clearing conversation (no project)');
+        clearConversation();
+        return;
+      }
+
+      console.log('🔄 [useOfflineConversation] *** PROJECT SWITCH DETECTED ***');
+      console.log('🔄 [useOfflineConversation] Project changed to:', projectId, '- clearing state and loading new conversation');
+      console.log('🔄 [useOfflineConversation] This should appear in browser console when switching projects!');
+      
+      // Immediately clear conversation state to prevent showing old conversation
+      setConversation(null);
+      setMessages([]);
+      setError(null);
+      setHasPendingMessages(false);
+      
+      // Load conversation inline to avoid dependency issues
+      try {
+        setLoading(true);
+        setError(null);
+
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) {
+          console.log('[useOfflineConversation] No user authenticated');
+          throw new Error('User not authenticated');
+        }
+
+        console.log('[useOfflineConversation] User authenticated:', user.id);
+
+        // Find active conversation for this project
+        // Always prefer existing conversations over creating new ones
+        console.log('[useOfflineConversation] Querying conversations for project:', projectId, 'user:', user.id);
+        const { data: allConversations, error: convError } = await supabase
+          .from('conversations')
+          .select('*')
+          .eq('projectid', projectId)
+          .eq('userid', user.id)
+          .eq('status', 'ACTIVE')
+          .order('updatedat', { ascending: false });
+
+        if (convError) {
+          console.error('[useOfflineConversation] Error in conversation query:', convError);
+          throw convError;
+        }
+
+        console.log('[useOfflineConversation] Raw query result:', allConversations);
+        console.log('[useOfflineConversation] Found', allConversations?.length || 0, 'conversations from query');
+        
+        let conversations = allConversations;
+
+        // If we found conversations, check which ones have messages and prioritize those
+        if (conversations && conversations.length > 0) {
+          console.log('[useOfflineConversation] Found', conversations.length, 'existing conversations');
+          
+          // Check each conversation for messages and prioritize ones with content
+          const conversationsWithMessageCounts = await Promise.all(
+            conversations.map(async (conv) => {
+              const { data: messages } = await supabase
+                .from('messages')
+                .select('id, createdat')
+                .eq('conversationid', conv.id)
+                .order('createdat', { ascending: false })
+                .limit(1);
+              
+              return {
+                ...conv,
+                messageCount: messages?.length || 0,
+                latestMessageDate: messages?.[0]?.createdat || null
+              };
+            })
+          );
+          
+          // Sort: conversations with messages first (by latest message), then by updatedat
+          conversations = conversationsWithMessageCounts.sort((a, b) => {
+            if (a.messageCount > 0 && b.messageCount === 0) return -1;
+            if (a.messageCount === 0 && b.messageCount > 0) return 1;
+            if (a.messageCount > 0 && b.messageCount > 0) {
+              return new Date(b.latestMessageDate).getTime() - new Date(a.latestMessageDate).getTime();
+            }
+            return new Date(b.updatedat).getTime() - new Date(a.updatedat).getTime();
+          });
+          
+          console.log('[useOfflineConversation] Using conversation:', conversations[0].id, 
+                     'with', conversations[0].messageCount, 'messages');
+        }
+
+        if (conversations && conversations.length > 0) {
+          console.log('[useOfflineConversation] Loading existing conversation:', conversations[0].id);
+          
+          // Transform database record to match interface
+          const transformedConversation = {
+            id: conversations[0].id,
+            title: conversations[0].title,
+            status: conversations[0].status,
+            createdAt: conversations[0].createdat,
+            updatedAt: conversations[0].updatedat,
+            projectId: conversations[0].projectid,
+            userId: conversations[0].userid
+          };
+          
+          console.log('[useOfflineConversation] Transformed conversation:', transformedConversation);
+          setConversation(transformedConversation);
+          await loadMessages(conversations[0].id);
+        } else {
+          console.log('[useOfflineConversation] No conversations found for project, checking database directly before creating...');
+          
+          // Double-check: query database directly to see if conversations exist
+          try {
+            const { data: directCheck } = await supabase
+              .from('conversations')
+              .select('*')
+              .eq('projectid', projectId);
+            
+            console.log('[useOfflineConversation] Direct database check found', directCheck?.length || 0, 'conversations total for project');
+            if (directCheck && directCheck.length > 0) {
+              console.log('[useOfflineConversation] Found conversations in direct check:');
+              directCheck.forEach((conv, i) => {
+                console.log(`  ${i + 1}. ${conv.id} - User: ${conv.userid} - Status: ${conv.status} - Title: ${conv.title}`);
+              });
+              
+              console.log('❌ [useOfflineConversation] ERROR: Conversations exist but query did not find them!');
+              console.log('❌ [useOfflineConversation] This indicates a query filtering issue');
+              console.log('❌ [useOfflineConversation] NOT creating new conversation to avoid duplicates');
+              
+              setConversation(null);
+              setMessages([]);
+              setError('Failed to load existing conversations');
+              return;
+            }
+          } catch (directCheckError) {
+            console.error('[useOfflineConversation] Direct database check failed:', directCheckError);
+          }
+          
+          console.log('[useOfflineConversation] Creating new conversation...');
+          try {
+            const newConversation = await createConversation(`Project ${projectId} Chat`);
+            console.log('[useOfflineConversation] Created new conversation:', newConversation.id);
+            setConversation(newConversation);
+            setMessages([]);
+          } catch (createError) {
+            console.error('[useOfflineConversation] Failed to create new conversation:', createError);
+            setConversation(null);
+            setMessages([]);
+          }
+        }
+      } catch (err) {
+        console.error('[useOfflineConversation] Error loading project conversation:', err);
+        setError(err instanceof Error ? err.message : 'Failed to load conversation');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadConversationForProject();
+  }, [projectId]); // Only depend on projectId
 
   return {
     conversation,

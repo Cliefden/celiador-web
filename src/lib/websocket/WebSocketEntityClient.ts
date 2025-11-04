@@ -201,6 +201,67 @@ export class WebSocketEntityClient {
     return this.deleteEntity('projects', projectId);
   }
 
+  async fetchIntegration(integrationId: string) {
+    return this.fetchEntity('integrations', integrationId);
+  }
+
+  async fetchIntegrations(service?: string) {
+    const filters = service ? { service } : undefined;
+    return this.fetchEntities('integrations', filters);
+  }
+
+  async createIntegration(integrationData: any) {
+    return this.createEntity('integrations', integrationData);
+  }
+
+  async updateIntegration(integrationId: string, updates: any) {
+    return this.updateEntity('integrations', integrationId, updates);
+  }
+
+  async deleteIntegration(integrationId: string) {
+    return this.deleteEntity('integrations', integrationId);
+  }
+
+  async fetchTemplate(templateId: string) {
+    return this.fetchEntity('templates', templateId);
+  }
+
+  async fetchTemplates(filters?: { difficulty?: string; framework?: string }) {
+    return this.fetchEntities('templates', filters);
+  }
+
+  async createTemplate(templateData: any) {
+    return this.createEntity('templates', templateData);
+  }
+
+  async updateTemplate(templateId: string, updates: any) {
+    return this.updateEntity('templates', templateId, updates);
+  }
+
+  async deleteTemplate(templateId: string) {
+    return this.deleteEntity('templates', templateId);
+  }
+
+  async fetchDeployment(deploymentId: string) {
+    return this.fetchEntity('deployments', deploymentId);
+  }
+
+  async fetchDeployments(filters?: { projectId?: string; status?: string; platform?: string }) {
+    return this.fetchEntities('deployments', filters);
+  }
+
+  async createDeployment(deploymentData: any) {
+    return this.createEntity('deployments', deploymentData);
+  }
+
+  async updateDeployment(deploymentId: string, updates: any) {
+    return this.updateEntity('deployments', deploymentId, updates);
+  }
+
+  async deleteDeployment(deploymentId: string) {
+    return this.deleteEntity('deployments', deploymentId);
+  }
+
   // Cleanup method
   destroy() {
     // Clear all pending requests

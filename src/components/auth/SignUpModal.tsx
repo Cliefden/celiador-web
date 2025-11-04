@@ -86,7 +86,7 @@ export default function SignUpModal({ isOpen, onClose, onSwitchToSignIn }: SignU
           </div>
           <h2 className="text-2xl font-bold text-gray-900 mb-2">Welcome to Celiador!</h2>
           <p className="text-gray-600 mb-6">
-            Please check your email to confirm your account before signing in and start building truly lovable apps.
+            Your account has been created successfully! You can now start building truly lovable apps.
           </p>
           <Button
             onClick={onClose}

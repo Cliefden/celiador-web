@@ -109,6 +109,31 @@ export function useWebSocketEntity() {
     return fetchEntities('conversations', { projectId });
   }, [fetchEntities]);
 
+  const fetchIntegration = useCallback(async (integrationId: string) => {
+    return fetchEntity('integrations', integrationId);
+  }, [fetchEntity]);
+
+  const fetchIntegrations = useCallback(async (service?: string) => {
+    const filters = service ? { service } : undefined;
+    return fetchEntities('integrations', filters);
+  }, [fetchEntities]);
+
+  const fetchTemplate = useCallback(async (templateId: string) => {
+    return fetchEntity('templates', templateId);
+  }, [fetchEntity]);
+
+  const fetchTemplates = useCallback(async (filters?: { difficulty?: string; framework?: string }) => {
+    return fetchEntities('templates', filters);
+  }, [fetchEntities]);
+
+  const fetchDeployment = useCallback(async (deploymentId: string) => {
+    return fetchEntity('deployments', deploymentId);
+  }, [fetchEntity]);
+
+  const fetchDeployments = useCallback(async (filters?: { projectId?: string; status?: string; platform?: string }) => {
+    return fetchEntities('deployments', filters);
+  }, [fetchEntities]);
+
   return {
     // Connection state
     connectionState,
@@ -128,6 +153,12 @@ export function useWebSocketEntity() {
     fetchProject,
     fetchProjects,
     fetchConversations,
+    fetchIntegration,
+    fetchIntegrations,
+    fetchTemplate,
+    fetchTemplates,
+    fetchDeployment,
+    fetchDeployments,
 
     // Client reference for advanced usage
     client: clientRef.current
@@ -212,4 +243,29 @@ export function useProjectsFetch() {
 
 export function useConversationsFetch(projectId: string) {
   return useEntityFetch('conversations', undefined, { projectId });
+}
+
+export function useIntegrationFetch(integrationId: string) {
+  return useEntityFetch('integrations', integrationId);
+}
+
+export function useIntegrationsFetch(service?: string) {
+  const filters = service ? { service } : undefined;
+  return useEntityFetch('integrations', undefined, filters);
+}
+
+export function useTemplateFetch(templateId: string) {
+  return useEntityFetch('templates', templateId);
+}
+
+export function useTemplatesFetch(filters?: { difficulty?: string; framework?: string }) {
+  return useEntityFetch('templates', undefined, filters);
+}
+
+export function useDeploymentFetch(deploymentId: string) {
+  return useEntityFetch('deployments', deploymentId);
+}
+
+export function useDeploymentsFetch(filters?: { projectId?: string; status?: string; platform?: string }) {
+  return useEntityFetch('deployments', undefined, filters);
 }

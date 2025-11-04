@@ -167,7 +167,7 @@ export function SimpleDashboard({ initialUser, onLogout }: SimpleDashboardProps)
   }, []);
 
   // Use conversation hook for the selected project (with offline support)
-  const USE_OFFLINE_CONVERSATION = true; // Feature flag
+  const USE_OFFLINE_CONVERSATION = false; // Feature flag - DISABLED: Offline system interfering with message loading
   
   const conversationHook = USE_OFFLINE_CONVERSATION 
     ? useOfflineConversation(selectedProject?.id)
@@ -279,6 +279,26 @@ export function SimpleDashboard({ initialUser, onLogout }: SimpleDashboardProps)
     setCurrentPreviewUrl(null); // Clear stale preview URL when switching projects
   }, [selectedProject?.id]); // Only depend on project ID, not preview URL to avoid loops
 
+  // Force refresh conversation and related state when project changes
+  useEffect(() => {
+    if (selectedProject?.id) {
+      console.log('🚀 [SimpleDashboard] *** PROJECT CHANGED IN SIMPLEDASHBOARD ***');
+      console.log('🚀 [SimpleDashboard] Project changed to:', selectedProject.id, 'forcing refresh');
+      console.log('🚀 [SimpleDashboard] This should trigger conversation hook with project:', selectedProject.id);
+      
+      // Clear conversation-related state immediately
+      setCurrentMessage('');
+      setSelectedElement(null);
+      setSelectedFile(null);
+      
+      // Reset inspection and UI state
+      setInspectionMode(false);
+      setUIElements([]);
+      
+      // The conversation hook will automatically reload based on projectId dependency
+    }
+  }, [selectedProject?.id]);
+
   // Set preview URL when preview or inspection mode changes
   useEffect(() => {
     const updatePreviewUrl = async () => {
@@ -375,14 +395,8 @@ export function SimpleDashboard({ initialUser, onLogout }: SimpleDashboardProps)
     return () => window.removeEventListener('message', handleNavigationMessage);
   }, []);
 
-  // Reset inspection mode when project changes
-  useEffect(() => {
-    if (selectedProject) {
-      setInspectionMode(false);
-      setSelectedElement(null);
-      setUIElements([]);
-    }
-  }, [selectedProject?.id]);
+  // Reset inspection mode when project changes (already handled in the combined effect above)
+  // This effect is now redundant and merged into the main project change effect
 
   // Handle panel resize
   const handleMouseDown = (e: React.MouseEvent) => {

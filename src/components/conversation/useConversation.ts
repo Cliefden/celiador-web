@@ -91,6 +91,14 @@ export function useConversation(projectId?: string): UseConversationReturn {
         }
       }
     },
+    onConnect: () => {
+      console.log('🔌 [useConversation] WebSocket connected - checking for missed messages');
+      // When WebSocket reconnects, check for any missed messages
+      if (conversation?.id) {
+        console.log('🔄 [useConversation] Reloading messages after WebSocket reconnect');
+        loadMessages(conversation.id);
+      }
+    },
     onError: (error) => {
       if (error.severity === 'high') {
         console.warn(`⚠️ Conversation WebSocket: ${error.userMessage}`);
@@ -669,15 +677,126 @@ export function useConversation(projectId?: string): UseConversationReturn {
 
   // Load project conversation when projectId changes
   useEffect(() => {
-    if (projectId) {
-      console.log('[useConversation] Loading conversation for project:', projectId);
-      loadProjectConversation();
-    } else {
-      // Clear conversation if no project selected
-      console.log('[useConversation] Clearing conversation (no project)');
-      clearConversation();
-    }
-  }, [projectId, loadProjectConversation]);
+    const loadConversationForProject = async () => {
+      if (!projectId) {
+        console.log('[useConversation] Clearing conversation (no project)');
+        clearConversation();
+        return;
+      }
+
+      console.log('[useConversation] Project changed to:', projectId, '- clearing state and loading new conversation');
+      
+      // Immediately clear conversation state to prevent showing old conversation
+      setConversation(null);
+      setMessages([]);
+      setError(null);
+      
+      // Load conversation inline to avoid dependency issues
+      try {
+        setLoading(true);
+        setError(null);
+
+        // Get current user
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) {
+          console.log('[useConversation] No user authenticated');
+          throw new Error('User not authenticated');
+        }
+
+        console.log('[useConversation] User authenticated:', user.id);
+
+        // Find active conversation for this project
+        // Always prefer existing conversations over creating new ones
+        const { data: allConversations, error: convError } = await supabase
+          .from('conversations')
+          .select('*')
+          .eq('projectid', projectId)
+          .eq('userid', user.id)
+          .eq('status', 'ACTIVE')
+          .order('updatedat', { ascending: false });
+
+        if (convError) {
+          throw convError;
+        }
+
+        let conversations = allConversations;
+
+        // If we found conversations, check which ones have messages and prioritize those
+        if (conversations && conversations.length > 0) {
+          console.log('[useConversation] Found', conversations.length, 'existing conversations');
+          
+          // Check each conversation for messages and prioritize ones with content
+          const conversationsWithMessageCounts = await Promise.all(
+            conversations.map(async (conv) => {
+              const { data: messages } = await supabase
+                .from('messages')
+                .select('id, createdat')
+                .eq('conversationid', conv.id)
+                .order('createdat', { ascending: false })
+                .limit(1);
+              
+              return {
+                ...conv,
+                messageCount: messages?.length || 0,
+                latestMessageDate: messages?.[0]?.createdat || null
+              };
+            })
+          );
+          
+          // Sort: conversations with messages first (by latest message), then by updatedat
+          conversations = conversationsWithMessageCounts.sort((a, b) => {
+            if (a.messageCount > 0 && b.messageCount === 0) return -1;
+            if (a.messageCount === 0 && b.messageCount > 0) return 1;
+            if (a.messageCount > 0 && b.messageCount > 0) {
+              return new Date(b.latestMessageDate).getTime() - new Date(a.latestMessageDate).getTime();
+            }
+            return new Date(b.updatedat).getTime() - new Date(a.updatedat).getTime();
+          });
+          
+          console.log('[useConversation] Using conversation:', conversations[0].id, 
+                     'with', conversations[0].messageCount, 'messages');
+        }
+
+        console.log('[useConversation] Found conversations:', conversations?.length || 0);
+
+        if (conversations && conversations.length > 0) {
+          console.log('[useConversation] Setting conversation:', conversations[0].id);
+          // Transform database record to match interface
+          const transformedConversation = {
+            id: conversations[0].id,
+            title: conversations[0].title,
+            status: conversations[0].status,
+            createdAt: conversations[0].createdat,
+            updatedAt: conversations[0].updatedat,
+            projectId: conversations[0].projectid,
+            userId: conversations[0].userid
+          };
+          console.log('[useConversation] Transformed conversation:', transformedConversation);
+          setConversation(transformedConversation);
+          await loadMessages(conversations[0].id);
+        } else {
+          console.log('[useConversation] No conversations found for project, creating new one...');
+          try {
+            const newConversation = await createConversation(`Project ${projectId} Chat`);
+            console.log('[useConversation] Created new conversation:', newConversation.id);
+            setConversation(newConversation);
+            setMessages([]);
+          } catch (createError) {
+            console.error('[useConversation] Failed to create new conversation:', createError);
+            setConversation(null);
+            setMessages([]);
+          }
+        }
+      } catch (err) {
+        console.error('[useConversation] Error loading project conversation:', err);
+        setError(err instanceof Error ? err.message : 'Failed to load conversation');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadConversationForProject();
+  }, [projectId]); // Only depend on projectId
 
   return {
     conversation,

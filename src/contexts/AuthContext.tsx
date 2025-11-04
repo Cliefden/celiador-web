@@ -504,6 +504,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Sign up function with profile creation
   const signUp = async (email: string, password: string, profileData: Partial<Profile>) => {
     try {
+      console.log('[SIGNUP] Starting signup process for:', email);
+      
       // Include profile data in user metadata so the trigger can create the profile
       const { data, error } = await supabase.auth.signUp({
         email,
@@ -519,15 +521,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
       });
 
+      console.log('[SIGNUP] Supabase auth.signUp response:', { 
+        success: !error, 
+        userId: data?.user?.id,
+        error: error?.message 
+      });
+
       if (error) {
+        console.error('[SIGNUP] Supabase signup error:', error);
+        // Provide more user-friendly error messages
+        if (error.message.includes('Database error')) {
+          return { error: { message: 'There was a problem setting up your account. Please try again or contact support.' } };
+        }
         return { error };
       }
 
       // The trigger will automatically create the profile
       // But let's also try to create it manually as a fallback using our API route
       if (data.user) {
+        console.log('[SIGNUP] User created successfully, attempting profile creation fallback');
+        
         try {
-          const response = await fetch('/api/auth/create-profile', {
+          const response = await fetch(`${process.env.NEXT_PUBLIC_ORCHESTRATOR_URL || 'http://localhost:4000'}/api/auth/create-profile`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
@@ -544,19 +559,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             })
           });
 
+          const responseData = await response.json();
+
           if (response.ok) {
-            console.log('Profile created successfully via API fallback');
+            console.log('[SIGNUP] Profile created successfully via API fallback:', responseData);
           } else {
-            console.log('Profile creation API fallback failed (trigger should handle it)');
+            console.warn('[SIGNUP] Profile creation API fallback failed:', responseData);
+            console.log('[SIGNUP] This is OK if the database trigger worked');
           }
         } catch (fallbackError) {
-          console.log('Profile creation API fallback error (trigger should handle it):', fallbackError);
+          console.warn('[SIGNUP] Profile creation API fallback error:', fallbackError);
+          console.log('[SIGNUP] This is OK if the database trigger worked');
         }
       }
 
+      console.log('[SIGNUP] Signup process completed successfully');
       return { error: null };
     } catch (error) {
-      return { error };
+      console.error('[SIGNUP] Unexpected signup error:', error);
+      return { error: { message: 'An unexpected error occurred. Please try again.' } };
     }
   };
 

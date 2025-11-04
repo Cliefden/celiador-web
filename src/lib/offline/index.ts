@@ -46,11 +46,36 @@ export async function initializeOfflineSystem(): Promise<boolean> {
   try {
     console.log('🚀 Initializing offline activity system...');
 
+    // DISABLED: Service Worker was caching message API responses causing stale data
     // Initialize Service Worker first
-    const swSupported = await serviceWorkerManager.init();
-    if (swSupported) {
-      console.log('✅ Service Worker initialized');
+    console.log('🚫 Service Worker initialization DISABLED - was causing message caching issues');
+    
+    // Unregister any existing service workers and clear caches
+    if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
+      try {
+        const registrations = await navigator.serviceWorker.getRegistrations();
+        for (const registration of registrations) {
+          console.log('🗑️ Unregistering existing Service Worker...');
+          await registration.unregister();
+        }
+        
+        // Clear all caches
+        const cacheNames = await caches.keys();
+        for (const cacheName of cacheNames) {
+          console.log('🗑️ Clearing cache:', cacheName);
+          await caches.delete(cacheName);
+        }
+        
+        console.log('✅ All Service Workers unregistered and caches cleared');
+      } catch (error) {
+        console.error('❌ Failed to unregister Service Workers:', error);
+      }
     }
+    
+    // const swSupported = await serviceWorkerManager.init();
+    // if (swSupported) {
+    //   console.log('✅ Service Worker initialized');
+    // }
 
     // Initialize the main offline manager (this initializes all subsystems)
     await offlineActivityManager.init();
