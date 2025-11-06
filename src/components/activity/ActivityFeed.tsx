@@ -29,6 +29,7 @@ import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import { useActivitiesChannel } from '../../lib/websocket';
 import { offlineActivityManager, useOfflineStatus, initializeOfflineSystem } from '../../lib/offline';
+import { useAuthenticatedFetch } from '../../hooks/useAuthenticatedFetch';
 import { OfflineStatusIndicator, ConnectionStatus } from '../ui/OfflineStatusIndicator';
 import { ConflictResolutionModal } from '../ui/ConflictResolutionModal';
 // import { useWebSocketContext } from '../../contexts/WebSocketContext';
@@ -69,6 +70,7 @@ interface ActivityFeedProps {
 
 export function ActivityFeed({ projectId, className = '' }: ActivityFeedProps) {
   const { session } = useAuth();
+  const authenticatedFetch = useAuthenticatedFetch();
   
   // Offline system integration
   const { isOnline, stats: offlineStats } = useOfflineStatus();
@@ -135,15 +137,14 @@ export function ActivityFeed({ projectId, className = '' }: ActivityFeedProps) {
         }
       }
       
-      // Fallback to direct API call
-      const response = await fetch(`${process.env.NEXT_PUBLIC_ORCHESTRATOR_URL || 'http://localhost:4000'}/projects/${projectId}/activity?showAll=false&_t=${Date.now()}&_debug=true`, {
-        headers: {
-          'Authorization': `Bearer ${session.access_token}`
-        }
-      });
+      // Fallback to direct API call with automatic token refresh
+      const response = await authenticatedFetch(`${process.env.NEXT_PUBLIC_ORCHESTRATOR_URL || 'http://localhost:4000'}/projects/${projectId}/activity?showAll=false&_t=${Date.now()}&_debug=true`);
 
       if (!response.ok) {
         console.error('[ActivityFeed] Failed to load activities:', response.status);
+        if (response.status === 401) {
+          console.error('[ActivityFeed] Authentication failed even after token refresh - user may need to sign in again');
+        }
         setLocalActivities([]);
         return;
       }

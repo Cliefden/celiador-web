@@ -113,7 +113,16 @@ export function CreateProjectModal({ isOpen, onClose, onProjectCreated, userId }
       
       try {
         console.log('CreateProjectModal: Checking authentication...');
-        const { data: { session }, error } = await supabase.auth.getSession();
+        
+        // Use Promise.race to add timeout at the API level
+        const authResult = await Promise.race([
+          supabase.auth.getSession(),
+          new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('Auth API timeout')), 10000)
+          )
+        ]);
+        
+        const { data: { session }, error } = authResult as any;
         
         console.log('CreateProjectModal: Auth check result:', { 
           hasSession: !!session, 
@@ -123,37 +132,32 @@ export function CreateProjectModal({ isOpen, onClose, onProjectCreated, userId }
         
         if (error) {
           console.error('CreateProjectModal: Session error:', error);
-          setError('Authentication error. Please refresh the page and try again.');
-          setIsAuthChecking(false);
-          return;
+          // Don't show error immediately, allow templates to load anyway
+          console.warn('CreateProjectModal: Auth error but continuing with template loading');
         }
         
         if (!session || !session.user) {
-          console.log('CreateProjectModal: No session found');
-          setError('You must be signed in to create a project. Please sign in and try again.');
-          setIsAuthChecking(false);
-          return;
+          console.log('CreateProjectModal: No session found, but continuing');
+          // Don't block template loading, just log the issue
         }
         
-        console.log('CreateProjectModal: Authentication successful');
+        console.log('CreateProjectModal: Authentication check completed');
         setIsAuthChecking(false);
       } catch (error) {
         console.error('CreateProjectModal: Auth check failed:', error);
-        setError('Authentication check failed. Please refresh the page and try again.');
+        // Don't block template loading due to auth check issues
+        console.log('CreateProjectModal: Auth check failed but allowing template loading');
         setIsAuthChecking(false);
       }
     };
 
-    // Add timeout to prevent infinite checking
+    // Add timeout as fallback (increased to 15 seconds)
     const timeoutId = setTimeout(() => {
-      console.log('CreateProjectModal: Auth check timeout reached');
-      setError('Authentication check timed out. Please close the modal and try again.');
+      console.log('CreateProjectModal: Auth check timeout reached as fallback');
       setIsAuthChecking(false);
-    }, 5000);
+    }, 15000);
 
-    checkAuth().then(() => {
-      clearTimeout(timeoutId);
-    }).catch(() => {
+    checkAuth().finally(() => {
       clearTimeout(timeoutId);
     });
 
@@ -480,7 +484,7 @@ export function CreateProjectModal({ isOpen, onClose, onProjectCreated, userId }
               </Button>
               <Button
                 type="submit"
-                disabled={isSubmitting || !name || !templateKey || isAuthChecking || error.includes('sign')}
+                disabled={isSubmitting || !name || !templateKey || isAuthChecking}
                 className="min-w-[140px] bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
               >
                 {isSubmitting ? (

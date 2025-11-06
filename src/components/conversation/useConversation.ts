@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../lib/supabase';
 import { useSimpleWebSocket } from '../../hooks/useSimpleWebSocket';
+import { useAuthenticatedFetch } from '../../hooks/useAuthenticatedFetch';
 import { Message } from './MessageList';
 
 interface Conversation {
@@ -58,6 +59,7 @@ export function useConversation(projectId?: string): UseConversationReturn {
   const [pendingFileOperations, setPendingFileOperations] = useState<FileOperationPreview | null>(null);
   const [shouldScrollToBottom, setShouldScrollToBottom] = useState(false);
   const { session } = useAuth();
+  const authenticatedFetch = useAuthenticatedFetch();
 
   // Real-time WebSocket integration for conversations and messages
   const { isConnected, lastMessage } = useSimpleWebSocket({
@@ -467,21 +469,6 @@ export function useConversation(projectId?: string): UseConversationReturn {
 
       // Get AI response from orchestrator
       try {
-        // Call orchestrator AI endpoint
-        console.log('[useConversation] Getting auth session for AI API call...');
-        const sessionResult = await supabase.auth.getSession();
-        const authToken = sessionResult.data.session?.access_token;
-        
-        if (!authToken) {
-          console.error('[useConversation] No auth token available');
-          throw new Error('No auth token available - user may need to log in again');
-        }
-        
-        if (sessionResult.error) {
-          console.error('[useConversation] Session error:', sessionResult.error);
-          throw new Error(`Session error: ${sessionResult.error.message}`);
-        }
-
         // Include conversation history for context
         const conversationHistory = messages.map(msg => ({
           role: msg.role,
@@ -491,7 +478,6 @@ export function useConversation(projectId?: string): UseConversationReturn {
         const apiUrl = process.env.NEXT_PUBLIC_ORCHESTRATOR_URL || 'http://localhost:4000';
         console.log('[useConversation] Active conversation:', activeConversation);
         console.log('[useConversation] Making AI API call to:', `${apiUrl}/projects/${activeConversation.projectId}/chat`);
-        console.log('[useConversation] Auth token length:', authToken.length);
         console.log('[useConversation] Request body:', {
           message: content,
           conversationId: activeConversation.id,
@@ -499,11 +485,10 @@ export function useConversation(projectId?: string): UseConversationReturn {
           provider: 'openai'
         });
 
-        const aiResponse = await fetch(`${apiUrl}/projects/${activeConversation.projectId}/chat`, {
+        const aiResponse = await authenticatedFetch(`${apiUrl}/projects/${activeConversation.projectId}/chat`, {
           method: 'POST',
           headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${authToken}`
+            'Content-Type': 'application/json'
           },
           body: JSON.stringify({
             message: content,
