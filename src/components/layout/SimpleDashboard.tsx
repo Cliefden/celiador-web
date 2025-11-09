@@ -33,6 +33,7 @@ import {
 import { SettingsMenuItem } from '../settings/SettingsPanel';
 import { CeliadorLogo } from '../ui/celiador-logo';
 import { OfflineStatusBanner } from '../ui/OfflineStatusIndicator';
+import { AIStatusBar } from '../ecosystem/AIStatusBar';
 
 interface User {
   id: string;
@@ -817,6 +818,13 @@ The user has visually selected this specific UI element and wants to modify it. 
         </div>
       </header>
 
+      {/* AI Ecosystem Status Bar */}
+      <AIStatusBar 
+        projectId={selectedProject?.id} 
+        userId={user.id}
+        className="border-b border-gray-700/50"
+      />
+
       {/* Main Content */}
       <div className="p-6 flex flex-col h-[calc(100vh-4rem)]">
         {/* Offline Status Banner */}
@@ -1383,6 +1391,7 @@ The user has visually selected this specific UI element and wants to modify it. 
           deviceClasses={getDeviceClasses()}
         />
       )}
+      
       </div>
     </>
   );

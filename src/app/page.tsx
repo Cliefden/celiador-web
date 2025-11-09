@@ -38,6 +38,7 @@ export default function HomePage() {
           <CeliadorLogo size="lg" variant="icon" className="mx-auto mb-4 animate-pulse" />
           <p className="text-gray-300">Loading...</p>
           <p className="text-xs text-gray-500 mt-2">Checking authentication...</p>
+          <p className="text-xs text-red-400 mt-4">Debug: Auth timeout should trigger in 10s</p>
         </div>
       </div>
     );

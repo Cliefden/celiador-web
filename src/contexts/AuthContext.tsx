@@ -41,7 +41,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [session, setSession] = useState<Session | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false); // TEMPORARY: Set to false to unblock page loading
   
   // Session tracking state
   const [sessionData, setSessionData] = useState<any>(null);
@@ -464,7 +464,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (isMounted) {
         setIsLoading(false);
       }
-    }, 10000); // Increased to 10 seconds for debugging
+    }, 2000); // Reduced to 2 seconds to test timeout mechanism
 
     initializeAuth().then(() => {
       clearTimeout(timeoutId);

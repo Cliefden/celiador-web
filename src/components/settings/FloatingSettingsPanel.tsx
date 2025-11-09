@@ -170,18 +170,38 @@ export function FloatingSettingsPanel({ className = '' }: FloatingSettingsPanelP
   });
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
+
+  // Add debug logging
+  console.log('[Settings] Component state:', { session: !!session, user: !!user, userProfile: !!userProfile, loading });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showTokens, setShowTokens] = useState(false);
 
   useEffect(() => {
-    if (session) {
+    if (session && user) {
+      console.log('[Settings] Session and user available, loading real data');
       loadUserData();
+    } else {
+      console.log('[Settings] No session/user, setting loading to false');
+      setLoading(false);
     }
+
+    // Safety timeout - ensure loading doesn't persist forever
+    const timeout = setTimeout(() => {
+      if (loading) {
+        console.warn('[Settings] Loading timeout, forcing completion');
+        setLoading(false);
+      }
+    }, 5000);
+
+    return () => clearTimeout(timeout);
   }, [session]);
 
   const loadUserData = async () => {
-    if (!session) return;
+    if (!session || !user) {
+      setLoading(false);
+      return;
+    }
 
     try {
       setLoading(true);
@@ -249,22 +269,8 @@ export function FloatingSettingsPanel({ className = '' }: FloatingSettingsPanelP
       
       setTrial(mockTrialData);
 
-      // Try to load trial status from API (fallback to mock if it fails)
-      try {
-        const trialResponse = await fetch(`${process.env.NEXT_PUBLIC_ORCHESTRATOR_URL || 'http://localhost:4000'}/api/integrations/trial-status`, {
-          headers: {
-            'Authorization': `Bearer ${session.access_token}`,
-          },
-        });
-
-        if (trialResponse.ok) {
-          const trialData = await trialResponse.json();
-          setTrial(trialData); // Override mock with real data if available
-        }
-      } catch (error) {
-        console.log('[Settings] Using mock trial data - API endpoint not available');
-        // Keep mock data
-      }
+      // Note: Trial status API not implemented yet, using mock data for now
+      console.log('[Settings] Using mock trial data - API endpoint not yet implemented');
 
       // Load user settings from localStorage for now
       const savedSettings = localStorage.getItem('userSettings');
@@ -290,20 +296,29 @@ export function FloatingSettingsPanel({ className = '' }: FloatingSettingsPanelP
         }
       });
 
+      console.log('[Settings] About to load user profile - reached this point successfully');
+      
       // Load real user profile data from new API endpoint
       try {
+        console.log('[Settings] Attempting to load user profile from /api/user/profile');
+        console.log('[Settings] Using token:', session.access_token?.substring(0, 20) + '...');
+        
         const profileResponse = await fetch(`${process.env.NEXT_PUBLIC_ORCHESTRATOR_URL || 'http://localhost:4000'}/api/user/profile`, {
           headers: {
             'Authorization': `Bearer ${session.access_token}`,
           },
         });
 
+        console.log('[Settings] Profile response status:', profileResponse.status, profileResponse.statusText);
+
         if (profileResponse.ok) {
           const profileData = await profileResponse.json();
           setUserProfile(profileData);
-          console.log('[Settings] Successfully loaded real user profile data');
+          console.log('[Settings] Successfully loaded real user profile data:', profileData);
         } else {
-          console.log('[Settings] Failed to load user profile, using fallback');
+          console.error('[Settings] Failed to load user profile, status:', profileResponse.status, profileResponse.statusText);
+          const errorText = await profileResponse.text();
+          console.error('[Settings] Error response body:', errorText);
           // Fallback to mock data if API fails
           const accountAge = user?.created_at ? Math.floor((Date.now() - new Date(user.created_at).getTime()) / (1000 * 60 * 60 * 24)) : 0;
           const sessionStart = Date.now() - (Math.random() * 3600000);
@@ -365,6 +380,11 @@ export function FloatingSettingsPanel({ className = '' }: FloatingSettingsPanelP
         }
       } catch (error) {
         console.error('[Settings] Error loading user profile:', error);
+        console.error('[Settings] Error details:', {
+          message: error?.message,
+          stack: error?.stack,
+          name: error?.name
+        });
         setError('Failed to load user profile');
       }
 
@@ -441,31 +461,96 @@ export function FloatingSettingsPanel({ className = '' }: FloatingSettingsPanelP
                   </h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="bg-gray-800 border border-gray-700 rounded-lg p-4">
-                      <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center justify-between mb-3">
                         <span className="text-sm font-medium text-gray-300">Account Status</span>
                         <CheckCircle className="w-4 h-4 text-green-400" />
                       </div>
-                      <div className="space-y-1 text-sm text-gray-400">
+                      <div className="space-y-2 text-sm">
+                        {/* Display Name */}
+                        {userProfile.basicInfo.display_name && (
+                          <div className="flex flex-col">
+                            <span className="text-xs text-gray-500 mb-1">Name:</span>
+                            <span className="text-white font-medium">
+                              {userProfile.basicInfo.display_name}
+                            </span>
+                          </div>
+                        )}
+                        
+                        {/* Email */}
                         <div className="flex flex-col">
-                          <span className="text-xs text-gray-500">Email:</span>
-                          <span className="truncate max-w-full" title={userProfile.basicInfo.email}>
+                          <span className="text-xs text-gray-500 mb-1">Email:</span>
+                          <span className="text-gray-300 break-all text-xs" title={userProfile.basicInfo.email}>
                             {userProfile.basicInfo.email}
                           </span>
                         </div>
-                        <div>Verified: {userProfile.basicInfo.email_confirmed_at ? 'Yes' : 'No'}</div>
-                        <div>Member since: {formatDate(userProfile.basicInfo.created_at)}</div>
+                        
+                        <div className="text-gray-400">
+                          <span className="text-green-400">✓</span> Verified: {userProfile.basicInfo.email_confirmed_at ? 'Yes' : 'No'}
+                        </div>
+                        <div className="text-gray-400">Member since: {formatDate(userProfile.basicInfo.created_at)}</div>
                       </div>
                     </div>
 
                     <div className="bg-gray-800 border border-gray-700 rounded-lg p-4">
-                      <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center justify-between mb-3">
                         <span className="text-sm font-medium text-gray-300">Current Session</span>
                         <Wifi className="w-4 h-4 text-blue-400" />
                       </div>
-                      <div className="space-y-1 text-sm text-gray-400">
-                        <div>Duration: {userProfile.activity.currentSession.duration}m</div>
-                        <div className="truncate max-w-full" title={userProfile.activity.currentSession.device}>Device: {userProfile.activity.currentSession.device}</div>
-                        <div className="truncate max-w-full" title={userProfile.activity.currentSession.ip}>IP: {userProfile.activity.currentSession.ip}</div>
+                      <div className="space-y-2 text-sm">
+                        {/* Session Duration */}
+                        {userProfile.activity.currentSession.duration > 0 && (
+                          <div className="flex flex-col">
+                            <span className="text-xs text-gray-500 mb-1">Duration:</span>
+                            <span className="text-white font-medium">
+                              {userProfile.activity.currentSession.duration >= 60 
+                                ? `${Math.floor(userProfile.activity.currentSession.duration / 60)}h ${userProfile.activity.currentSession.duration % 60}m`
+                                : `${userProfile.activity.currentSession.duration}m`
+                              }
+                            </span>
+                          </div>
+                        )}
+                        
+                        {/* Browser */}
+                        {userProfile.activity.currentSession.browser && (
+                          <div className="flex flex-col">
+                            <span className="text-xs text-gray-500 mb-1">Browser:</span>
+                            <span className="text-gray-300">
+                              {userProfile.activity.currentSession.browser}
+                            </span>
+                          </div>
+                        )}
+                        
+                        {/* Operating System */}
+                        {userProfile.activity.currentSession.os && (
+                          <div className="flex flex-col">
+                            <span className="text-xs text-gray-500 mb-1">Operating System:</span>
+                            <span className="text-gray-300">
+                              {userProfile.activity.currentSession.os}
+                            </span>
+                          </div>
+                        )}
+                        
+                        {/* Device Type */}
+                        {userProfile.activity.currentSession.device && (
+                          <div className="flex flex-col">
+                            <span className="text-xs text-gray-500 mb-1">Device Type:</span>
+                            <span className="text-gray-300">
+                              {userProfile.activity.currentSession.device}
+                            </span>
+                          </div>
+                        )}
+                        
+                        {/* IP Address - only show if available and not placeholder */}
+                        {userProfile.activity.currentSession.ip && 
+                         !userProfile.activity.currentSession.ip.includes('xxx') && 
+                         !userProfile.activity.currentSession.ip.startsWith(':') && (
+                          <div className="flex flex-col">
+                            <span className="text-xs text-gray-500 mb-1">Location:</span>
+                            <span className="text-gray-300 font-mono text-xs">
+                              {userProfile.activity.currentSession.location || 'Unknown'}
+                            </span>
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>
