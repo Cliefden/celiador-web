@@ -12,6 +12,7 @@ import { MessageList } from '../conversation/MessageList';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { AgentActivityPanel } from '../ecosystem/AgentActivityPanel';
+import { LivingEcosystemAssistant } from '../ai-assistant/LivingEcosystemAssistant';
 import { useLivingEcosystem } from '../../hooks/useLivingEcosystem';
 
 export type FloatingWindowContent = 'files' | 'chat' | 'activity' | 'settings' | 'code' | 'integrations' | 'agents';
@@ -102,7 +103,7 @@ export function FloatingWindow({
       
       case 'chat':
         return (
-          <ConversationFloatingPanel projectId={projectId} />
+          <LivingEcosystemAssistant projectId={projectId} className="h-full" />
         );
       
       case 'activity':

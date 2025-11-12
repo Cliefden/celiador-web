@@ -11,6 +11,7 @@ import { FloatingWindowController } from './FloatingWindowController';
 import { OnboardingFlow } from '../onboarding/OnboardingFlow';
 import { WelcomeBanner } from '../onboarding/WelcomeBanner';
 import { useOnboarding } from '../../hooks/useOnboarding';
+import { useUserPreferences } from '../../hooks/useUserPreferences';
 import { 
   Plus, 
   Send, 
@@ -28,12 +29,17 @@ import {
   Trash2,
   Search,
   MousePointer,
-  RotateCcw
+  RotateCcw,
+  Brain,
+  Zap
 } from 'lucide-react';
 import { SettingsMenuItem } from '../settings/SettingsPanel';
 import { CeliadorLogo } from '../ui/celiador-logo';
 import { OfflineStatusBanner } from '../ui/OfflineStatusIndicator';
 import { AIStatusBar } from '../ecosystem/AIStatusBar';
+import { ModeToggleTooltip } from '../ui/ModeToggleTooltip';
+import { LivingEcosystemAssistant } from '../ai-assistant/LivingEcosystemAssistant';
+import { useLivingEcosystem } from '../../hooks/useLivingEcosystem';
 
 interface User {
   id: string;
@@ -112,15 +118,25 @@ export function SimpleDashboard({ initialUser, onLogout }: SimpleDashboardProps)
     completeOnboarding,
     markFirstProjectCreated,
   } = useOnboarding(user.id);
+
+  // User preferences for dashboard mode
+  const {
+    preferences,
+    isLoaded: preferencesLoaded,
+    setDashboardMode,
+    setAiAssistantWidth,
+  } = useUserPreferences();
+
   const [iframeLoaded, setIframeLoaded] = useState(false);
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
   const [currentPreviewUrl, setCurrentPreviewUrl] = useState<string | null>(null);
   const [currentPreviewPath, setCurrentPreviewPath] = useState<string>('/');
   const [inspectionSourcePath, setInspectionSourcePath] = useState<string>('/'); // Track the path when inspection was started
   const [manuallySettingUrl, setManuallySettingUrl] = useState(false); // Flag to prevent useEffect from overriding manual URL changes
-  const [chatPanelWidth, setChatPanelWidth] = useState(384); // Default 384px (w-96)
+  const [chatPanelWidth, setChatPanelWidth] = useState(preferences.aiAssistantWidth);
   const [isResizing, setIsResizing] = useState(false);
   const [isDesktop, setIsDesktop] = useState(false);
+  const [showModeToggleTooltip, setShowModeToggleTooltip] = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
   const projectDropdownRef = useRef<HTMLDivElement>(null);
   const previewIframeRef = useRef<HTMLIFrameElement>(null);
@@ -137,6 +153,44 @@ export function SimpleDashboard({ initialUser, onLogout }: SimpleDashboardProps)
     
     return () => window.removeEventListener('resize', checkIsDesktop);
   }, []);
+
+  // Sync preferences with local state
+  useEffect(() => {
+    if (preferencesLoaded) {
+      setChatPanelWidth(preferences.aiAssistantWidth);
+    }
+  }, [preferences.aiAssistantWidth, preferencesLoaded]);
+
+  // Save panel width changes to preferences
+  useEffect(() => {
+    if (preferencesLoaded && chatPanelWidth !== preferences.aiAssistantWidth) {
+      const timeoutId = setTimeout(() => {
+        setAiAssistantWidth(chatPanelWidth);
+      }, 300); // Debounce to avoid too many saves during resize
+
+      return () => clearTimeout(timeoutId);
+    }
+  }, [chatPanelWidth, preferences.aiAssistantWidth, preferencesLoaded, setAiAssistantWidth]);
+
+  // Show mode toggle tooltip for new users
+  useEffect(() => {
+    if (preferencesLoaded && preferences.dashboardMode === 'classic') {
+      const hasSeenTooltip = localStorage.getItem('celiador-mode-toggle-tooltip-seen');
+      if (!hasSeenTooltip) {
+        const timer = setTimeout(() => {
+          setShowModeToggleTooltip(true);
+        }, 3000); // Show after 3 seconds
+        return () => clearTimeout(timer);
+      }
+    }
+  }, [preferencesLoaded, preferences.dashboardMode]);
+
+  const handleTooltipDismiss = () => {
+    setShowModeToggleTooltip(false);
+    localStorage.setItem('celiador-mode-toggle-tooltip-seen', 'true');
+    // Auto-switch to AI-Enhanced mode when they dismiss the tooltip
+    setDashboardMode('ai-enhanced');
+  };
 
   // Listen for messages from same-origin preview iframe
   useEffect(() => {
@@ -182,6 +236,16 @@ export function SimpleDashboard({ initialUser, onLogout }: SimpleDashboardProps)
     hasPendingMessages,
     shouldScrollToBottom
   } = conversationHook || {};
+
+  // Living Ecosystem hook for AI Enhanced mode
+  const {
+    isEnabled: isLivingEcosystemEnabled,
+    isConnected: isLivingEcosystemConnected,
+    agents,
+    projectDNA,
+    activeIntent,
+    ecosystemStatus
+  } = useLivingEcosystem(preferences.dashboardMode === 'ai-enhanced' ? selectedProject?.id : undefined);
 
   // Auto-scroll implementation
   useEffect(() => {
@@ -770,9 +834,15 @@ The user has visually selected this specific UI element and wants to modify it. 
             
             {/* Navigation Links */}
             <nav className="hidden md:flex space-x-6">
-              <a href="/dashboard" className="text-teal-400 font-medium px-3 py-2 text-sm">
-                Dashboard
-              </a>
+              <div className="flex items-center space-x-2 text-teal-400 font-medium px-3 py-2 text-sm">
+                <span>Dashboard</span>
+                {preferences.dashboardMode === 'ai-enhanced' && (
+                  <div className="flex items-center space-x-1">
+                    <div className="w-1.5 h-1.5 bg-teal-400 rounded-full animate-pulse" />
+                    <span className="text-xs text-teal-300">AI Enhanced</span>
+                  </div>
+                )}
+              </div>
               <a href="/solutions" className="text-gray-300 hover:text-white px-3 py-2 text-sm font-medium transition-colors duration-200">
                 Solutions
               </a>
@@ -783,6 +853,68 @@ The user has visually selected this specific UI element and wants to modify it. 
                 Contact
               </a>
             </nav>
+          </div>
+
+          {/* Dashboard Mode Toggle */}
+          <div className="flex items-center space-x-4">
+            <div className="hidden md:flex items-center space-x-2 bg-gray-800/40 rounded-lg p-1 relative">
+              <button
+                onClick={() => setDashboardMode('classic')}
+                className={`flex items-center space-x-2 px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
+                  preferences.dashboardMode === 'classic'
+                    ? 'bg-gray-700 text-white shadow-sm'
+                    : 'text-gray-300 hover:text-white hover:bg-gray-700/50'
+                }`}
+                title="Classic Dashboard Mode"
+              >
+                <Monitor className="w-4 h-4" />
+                <span>Classic</span>
+              </button>
+              <button
+                onClick={() => setDashboardMode('ai-enhanced')}
+                className={`flex items-center space-x-2 px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
+                  preferences.dashboardMode === 'ai-enhanced'
+                    ? 'bg-gradient-to-r from-teal-600 to-cyan-600 text-white shadow-sm'
+                    : 'text-gray-300 hover:text-white hover:bg-gray-700/50'
+                }`}
+                title="AI-Enhanced Dashboard Mode"
+              >
+                <Brain className="w-4 h-4" />
+                <span>AI Enhanced</span>
+                <Zap className="w-3 h-3" />
+              </button>
+              
+              {/* New Feature Tooltip */}
+              <ModeToggleTooltip 
+                isVisible={showModeToggleTooltip}
+                onDismiss={handleTooltipDismiss}
+              />
+            </div>
+
+            {/* Mobile Mode Toggle */}
+            <div className="md:hidden">
+              <button
+                onClick={() => setDashboardMode(preferences.dashboardMode === 'classic' ? 'ai-enhanced' : 'classic')}
+                className={`flex items-center space-x-1 px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
+                  preferences.dashboardMode === 'ai-enhanced'
+                    ? 'bg-gradient-to-r from-teal-600 to-cyan-600 text-white'
+                    : 'bg-gray-800/60 text-gray-300'
+                }`}
+                title={`Switch to ${preferences.dashboardMode === 'classic' ? 'AI-Enhanced' : 'Classic'} Mode`}
+              >
+                {preferences.dashboardMode === 'classic' ? (
+                  <>
+                    <Monitor className="w-4 h-4" />
+                    <span>Classic</span>
+                  </>
+                ) : (
+                  <>
+                    <Brain className="w-4 h-4" />
+                    <Zap className="w-3 h-3" />
+                  </>
+                )}
+              </button>
+            </div>
           </div>
 
           {/* User Menu */}
@@ -826,7 +958,7 @@ The user has visually selected this specific UI element and wants to modify it. 
       />
 
       {/* Main Content */}
-      <div className="p-6 flex flex-col h-[calc(100vh-4rem)]">
+      <div className="p-6 flex flex-col h-[calc(100vh-8rem)]">
         {/* Offline Status Banner */}
         <OfflineStatusBanner className="mb-4" />
         
@@ -940,145 +1072,156 @@ The user has visually selected this specific UI element and wants to modify it. 
               />
             )}
             
-            <div className="flex-1 min-h-0 flex flex-col lg:flex-row">
-            {/* Chat Panel - Resizable sidebar */}
+            <div className="flex-1 min-h-0 max-h-full flex flex-col lg:flex-row">
+            {/* AI Assistant Panel - Conditional based on dashboard mode */}
             <div 
-              className="w-full flex-shrink-0 flex flex-col bg-gray-900/50 backdrop-blur-sm rounded-2xl shadow-xl border border-gray-700/50 overflow-hidden mr-2"
+              className="w-full flex-shrink-0 flex flex-col bg-gray-900/50 backdrop-blur-sm rounded-2xl shadow-xl border border-gray-700/50 overflow-hidden mr-2 h-full"
               style={{ width: isDesktop ? `${chatPanelWidth}px` : '100%' }}
             >
-              {/* Chat Header */}
-              <div className="bg-gradient-to-r from-teal-600 to-cyan-600 text-white p-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-3">
-                    <div className="w-8 h-8 bg-white/20 rounded-lg flex items-center justify-center">
-                      <CeliadorLogo size="sm" variant="icon" />
-                    </div>
-                    <div>
-                      <h2 className="font-semibold text-lg">AI Assistant</h2>
-                      <p className="text-teal-100 text-sm">Building {selectedProject.name}</p>
-                    </div>
-                  </div>
-                  {USE_OFFLINE_CONVERSATION && (
-                    <div className="flex items-center space-x-2">
-                      {conversationOnline ? (
-                        <div className="flex items-center space-x-1">
-                          <div className="w-2 h-2 bg-green-300 rounded-full"></div>
-                          <span className="text-xs text-teal-100">Online</span>
+              {preferences.dashboardMode === 'ai-enhanced' ? (
+                /* AI Enhanced Mode - Living Ecosystem Assistant */
+                <LivingEcosystemAssistant 
+                  projectId={selectedProject?.id} 
+                  className="h-full" 
+                />
+              ) : (
+                /* Classic Mode - Basic Chat Interface */
+                <>
+                  {/* Chat Header */}
+                  <div className="bg-gradient-to-r from-teal-600 to-cyan-600 text-white p-4">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-3">
+                        <div className="w-8 h-8 bg-white/20 rounded-lg flex items-center justify-center">
+                          <CeliadorLogo size="sm" variant="icon" />
                         </div>
-                      ) : (
-                        <div className="flex items-center space-x-1">
-                          <div className="w-2 h-2 bg-orange-300 rounded-full"></div>
-                          <span className="text-xs text-teal-100">Offline</span>
+                        <div>
+                          <h2 className="font-semibold text-lg">AI Assistant</h2>
+                          <p className="text-teal-100 text-sm">Building {selectedProject.name}</p>
                         </div>
-                      )}
-                      {hasPendingMessages && (
-                        <div className="bg-orange-200/20 text-orange-100 px-2 py-1 rounded-full text-xs">
-                          Syncing...
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Messages */}
-              <div ref={messagesContainerRef} className="flex-1 overflow-y-auto p-4 space-y-4 dark-scrollbar">
-                {!messages || messages.length === 0 ? (
-                  <div className="text-center py-12">
-                    <div className="w-16 h-16 bg-gradient-to-br from-teal-500/20 to-cyan-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
-                      <CeliadorLogo size="lg" variant="icon" />
-                    </div>
-                    <h3 className="font-semibold text-white mb-2">Let's build something amazing!</h3>
-                    <p className="text-gray-300 text-sm">
-                      Tell me what you want to add or change in your app.
-                    </p>
-                  </div>
-                ) : (
-                  (messages || []).map((message, index) => (
-                    <div
-                      key={index}
-                      className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
-                    >
-                      <div
-                        className={`max-w-[80%] p-4 rounded-2xl break-words overflow-wrap-anywhere whitespace-pre-wrap relative ${
-                          message.role === 'user'
-                            ? message.metadata?.optimistic
-                              ? 'bg-gradient-to-r from-purple-600 to-purple-500 text-white opacity-80'
-                              : 'bg-gradient-to-r from-teal-600 to-cyan-600 text-white'
-                            : 'bg-gray-800/50 text-gray-100 border border-gray-700/50'
-                        }`}
-                      >
-                        {message.content}
-                        {message.metadata?.optimistic && (
-                          <div className="absolute -bottom-2 -right-2 w-4 h-4 bg-purple-500 rounded-full flex items-center justify-center">
-                            <span className="text-xs text-white">⚡</span>
-                          </div>
-                        )}
-                        {message.metadata?.failed && (
-                          <div className="absolute -bottom-2 -right-2 w-4 h-4 bg-red-500 rounded-full flex items-center justify-center">
-                            <span className="text-xs text-white">⚠</span>
-                          </div>
-                        )}
                       </div>
-                    </div>
-                  ))
-                )}
-                {isBuilding && (
-                  <div className="flex justify-start">
-                    <div className="bg-gray-800/50 border border-gray-700/50 p-4 rounded-2xl flex items-center space-x-3">
-                      <Loader2 className="h-5 w-5 animate-spin text-teal-400" />
-                      <span className="text-gray-100">Building your changes...</span>
+                      {USE_OFFLINE_CONVERSATION && (
+                        <div className="flex items-center space-x-2">
+                          {conversationOnline ? (
+                            <div className="flex items-center space-x-1">
+                              <div className="w-2 h-2 bg-green-300 rounded-full"></div>
+                              <span className="text-xs text-teal-100">Online</span>
+                            </div>
+                          ) : (
+                            <div className="flex items-center space-x-1">
+                              <div className="w-2 h-2 bg-orange-300 rounded-full"></div>
+                              <span className="text-xs text-teal-100">Offline</span>
+                            </div>
+                          )}
+                          {hasPendingMessages && (
+                            <div className="bg-orange-200/20 text-orange-100 px-2 py-1 rounded-full text-xs">
+                              Syncing...
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
                   </div>
-                )}
-              </div>
 
-              {/* Message Input */}
-              <div className="p-4 border-t border-gray-700/50">
-                {/* Selected Element Indicator */}
-                {selectedElement && (
-                  <div className="mb-3 p-3 bg-teal-500/10 border border-teal-400/30 rounded-lg">
-                    <div className="flex items-center space-x-2 text-teal-300">
-                      <MousePointer className="h-4 w-4" />
-                      <span className="text-sm font-medium">Selected Element:</span>
-                      <code className="bg-teal-400/20 px-2 py-1 rounded text-xs">
-                        {selectedElement.componentName || selectedElement.type}
-                      </code>
-                      <button 
-                        onClick={() => setSelectedElement(null)}
-                        className="ml-auto text-teal-300 hover:text-teal-100"
+                  {/* Messages */}
+                  <div ref={messagesContainerRef} className="flex-1 overflow-y-auto p-4 space-y-4 dark-scrollbar">
+                    {!messages || messages.length === 0 ? (
+                      <div className="text-center py-12">
+                        <div className="w-16 h-16 bg-gradient-to-br from-teal-500/20 to-cyan-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                          <CeliadorLogo size="lg" variant="icon" />
+                        </div>
+                        <h3 className="font-semibold text-white mb-2">Let's build something amazing!</h3>
+                        <p className="text-gray-300 text-sm">
+                          Tell me what you want to add or change in your app.
+                        </p>
+                      </div>
+                    ) : (
+                      (messages || []).map((message, index) => (
+                        <div
+                          key={index}
+                          className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
+                        >
+                          <div
+                            className={`max-w-[80%] p-4 rounded-2xl break-words overflow-wrap-anywhere whitespace-pre-wrap relative ${
+                              message.role === 'user'
+                                ? message.metadata?.optimistic
+                                  ? 'bg-gradient-to-r from-purple-600 to-purple-500 text-white opacity-80'
+                                  : 'bg-gradient-to-r from-teal-600 to-cyan-600 text-white'
+                                : 'bg-gray-800/50 text-gray-100 border border-gray-700/50'
+                            }`}
+                          >
+                            {message.content}
+                            {message.metadata?.optimistic && (
+                              <div className="absolute -bottom-2 -right-2 w-4 h-4 bg-purple-500 rounded-full flex items-center justify-center">
+                                <span className="text-xs text-white">⚡</span>
+                              </div>
+                            )}
+                            {message.metadata?.failed && (
+                              <div className="absolute -bottom-2 -right-2 w-4 h-4 bg-red-500 rounded-full flex items-center justify-center">
+                                <span className="text-xs text-white">⚠</span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      ))
+                    )}
+                    {isBuilding && (
+                      <div className="flex justify-start">
+                        <div className="bg-gray-800/50 border border-gray-700/50 p-4 rounded-2xl flex items-center space-x-3">
+                          <Loader2 className="h-5 w-5 animate-spin text-teal-400" />
+                          <span className="text-gray-100">Building your changes...</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Message Input */}
+                  <div className="p-4 border-t border-gray-700/50">
+                    {/* Selected Element Indicator */}
+                    {selectedElement && (
+                      <div className="mb-3 p-3 bg-teal-500/10 border border-teal-400/30 rounded-lg">
+                        <div className="flex items-center space-x-2 text-teal-300">
+                          <MousePointer className="h-4 w-4" />
+                          <span className="text-sm font-medium">Selected Element:</span>
+                          <code className="bg-teal-400/20 px-2 py-1 rounded text-xs">
+                            {selectedElement.componentName || selectedElement.type}
+                          </code>
+                          <button 
+                            onClick={() => setSelectedElement(null)}
+                            className="ml-auto text-teal-300 hover:text-teal-100"
+                          >
+                            ×
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                    
+                    <div className="flex space-x-3">
+                      <input
+                        type="text"
+                        value={currentMessage}
+                        onChange={(e) => setCurrentMessage(e.target.value)}
+                        onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
+                        placeholder={
+                          selectedElement 
+                            ? `Modify ${selectedElement.componentName || selectedElement.type}...`
+                            : inspectionMode
+                            ? "Click an element in the preview to modify it..."
+                            : "Describe what you want to build or change..."
+                        }
+                        className="flex-1 p-3 border border-gray-600 bg-gray-800/50 text-white rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent placeholder-gray-400"
+                        disabled={conversationLoading || isBuilding}
+                      />
+                      <button
+                        onClick={handleSendMessage}
+                        disabled={!currentMessage.trim() || conversationLoading || isBuilding}
+                        className="bg-gradient-to-r from-teal-600 to-cyan-600 text-white p-3 rounded-xl hover:from-teal-700 hover:to-cyan-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg"
                       >
-                        ×
+                        <Send className="h-5 w-5" />
                       </button>
                     </div>
                   </div>
-                )}
-                
-                <div className="flex space-x-3">
-                  <input
-                    type="text"
-                    value={currentMessage}
-                    onChange={(e) => setCurrentMessage(e.target.value)}
-                    onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
-                    placeholder={
-                      selectedElement 
-                        ? `Modify ${selectedElement.componentName || selectedElement.type}...`
-                        : inspectionMode
-                        ? "Click an element in the preview to modify it..."
-                        : "Describe what you want to build or change..."
-                    }
-                    className="flex-1 p-3 border border-gray-600 bg-gray-800/50 text-white rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent placeholder-gray-400"
-                    disabled={conversationLoading || isBuilding}
-                  />
-                  <button
-                    onClick={handleSendMessage}
-                    disabled={!currentMessage.trim() || conversationLoading || isBuilding}
-                    className="bg-gradient-to-r from-teal-600 to-cyan-600 text-white p-3 rounded-xl hover:from-teal-700 hover:to-cyan-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg"
-                  >
-                    <Send className="h-5 w-5" />
-                  </button>
-                </div>
-              </div>
+                </>
+              )}
             </div>
 
             {/* Resize Handle */}
@@ -1097,7 +1240,7 @@ The user has visually selected this specific UI element and wants to modify it. 
             </div>
 
             {/* Preview Panel */}
-            <div className="flex-1 flex flex-col bg-gray-900/50 backdrop-blur-sm rounded-2xl shadow-xl border border-gray-700/50 overflow-hidden">
+            <div className="flex-1 flex flex-col bg-gray-900/50 backdrop-blur-sm rounded-2xl shadow-xl border border-gray-700/50 overflow-hidden h-full">
               {/* Preview Header */}
               <div className="bg-gray-800/50 border-b border-gray-700/50 p-3">
                 <div className="flex items-center justify-between min-h-[48px]">

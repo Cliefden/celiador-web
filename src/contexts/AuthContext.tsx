@@ -193,16 +193,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       });
 
       if (!response.ok) {
-        console.error('[SessionTracking] Heartbeat failed:', response.statusText);
         if (response.status === 404) {
-          // Session not found on server
+          // Session not found on server - this is expected
+          console.log('[SessionTracking] Session not found on server, stopping heartbeat');
           setIsSessionTracking(false);
           if (heartbeatIntervalRef.current) {
             clearInterval(heartbeatIntervalRef.current);
             heartbeatIntervalRef.current = null;
           }
         } else if (response.status === 401) {
-          // Unauthorized - token expired or invalid
+          // Unauthorized - token expired or invalid - this is expected behavior
           console.log('[SessionTracking] Token expired, stopping heartbeat');
           setIsSessionTracking(false);
           if (heartbeatIntervalRef.current) {
@@ -211,6 +211,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           }
           // Note: We don't trigger logout here since Supabase handles token refresh automatically
           // The session will restart when the user becomes active again with a fresh token
+        } else {
+          // Only log errors for unexpected failures
+          console.error('[SessionTracking] Heartbeat failed:', response.status, response.statusText);
         }
       }
     } catch (error) {
