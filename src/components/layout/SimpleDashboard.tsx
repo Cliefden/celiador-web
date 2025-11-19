@@ -1083,6 +1083,9 @@ The user has visually selected this specific UI element and wants to modify it. 
                 <LivingEcosystemAssistant 
                   projectId={selectedProject?.id} 
                   className="h-full" 
+                  selectedElement={selectedElement}
+                  inspectionMode={inspectionMode}
+                  onClearSelectedElement={() => setSelectedElement(null)}
                 />
               ) : (
                 /* Classic Mode - Basic Chat Interface */

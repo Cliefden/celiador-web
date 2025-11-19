@@ -95,148 +95,67 @@ export function useLivingEcosystem(projectId?: string) {
   });
   const intentTimeouts = useRef(new Map<string, NodeJS.Timeout>());
 
-  // Check if ecosystem is enabled via environment
+  // Check ecosystem status and fetch real data from backend
   useEffect(() => {
     const isEnabled = process.env.NEXT_PUBLIC_LIVING_ECOSYSTEM_ENABLED === 'true';
     
-    // All five agent types should always be present when ecosystem is enabled
-    const allAgents = isEnabled ? [
-      {
-        id: 'agent-architect-001',
-        type: 'architect' as const,
-        status: 'active' as const,
-        progress: 65,
-        currentTask: 'Analyzing component architecture patterns',
-        insights: [
-          'Component structure follows consistent patterns',
-          'Props interface design could be improved',
-          'Consider using composition over inheritance'
-        ],
-        suggestions: [
-          {
-            title: 'Improve Component Props',
-            description: 'Refactor props to use more specific TypeScript interfaces',
-            impact: 'medium' as const,
-            autoApplicable: true
-          },
-          {
-            title: 'Add Component Documentation',
-            description: 'Generate JSDoc comments for better maintainability',
-            impact: 'low' as const,
-            autoApplicable: false
-          }
-        ],
-        metadata: {
-          tokensUsed: 1240,
-          executionTime: 3200,
-          filesAnalyzed: 12
+    if (isEnabled) {
+      fetchEcosystemStatus();
+    } else {
+      setState(prev => ({ 
+        ...prev, 
+        isEnabled: false,
+        isConnected: false,
+        agents: [],
+        projectDNA: {
+          confidence: 0,
+          patterns: [],
+          lastInsight: 'No insights yet',
+          lastUpdated: new Date().toISOString()
         }
-      },
-      {
-        id: 'agent-performance-001',
-        type: 'performance' as const,
-        status: 'active' as const,
-        progress: 35,
-        currentTask: 'Bundle size analysis and optimization opportunities',
-        insights: [
-          'Bundle size is acceptable but can be optimized',
-          'Several unused dependencies detected'
-        ],
-        suggestions: [
-          {
-            title: 'Remove Unused Dependencies',
-            description: 'Clean up package.json to reduce bundle size',
-            impact: 'high' as const,
-            autoApplicable: true
-          }
-        ],
-        metadata: {
-          tokensUsed: 850,
-          executionTime: 2100,
-          filesAnalyzed: 8
-        }
-      },
-      {
-        id: 'agent-security-001',
-        type: 'security' as const,
-        status: 'completed' as const,
-        progress: 100,
-        currentTask: 'Security audit completed',
-        insights: [
-          'No critical vulnerabilities found',
-          'All dependencies are up to date',
-          'HTTPS properly configured'
-        ],
-        suggestions: [
-          {
-            title: 'Add Content Security Policy',
-            description: 'Implement CSP headers for enhanced security',
-            impact: 'medium' as const,
-            autoApplicable: false
-          }
-        ],
-        metadata: {
-          tokensUsed: 2100,
-          executionTime: 5800,
-          filesAnalyzed: 24
-        }
-      },
-      {
-        id: 'agent-ux-001',
-        type: 'ux' as const,
-        status: 'paused' as const,
-        progress: 15,
-        currentTask: 'User experience analysis paused',
-        insights: [
-          'Initial accessibility scan completed',
-          'Color contrast meets WCAG standards'
-        ],
-        suggestions: [
-          {
-            title: 'Improve Mobile Navigation',
-            description: 'Enhance mobile menu accessibility and usability',
-            impact: 'medium' as const,
-            autoApplicable: false
-          }
-        ],
-        metadata: {
-          tokensUsed: 450,
-          executionTime: 1200,
-          filesAnalyzed: 6
-        }
-      },
-      {
-        id: 'agent-integration-001',
-        type: 'integration' as const,
-        status: 'failed' as const,
-        progress: 0,
-        currentTask: 'API integration analysis failed',
-        insights: [],
-        suggestions: [],
-        metadata: {
-          tokensUsed: 0,
-          executionTime: 0,
-          filesAnalyzed: 0
-        }
-      }
-    ] : [];
+      }));
+    }
+  }, [wsConnected]);
 
-    setState(prev => ({ 
-      ...prev, 
-      isEnabled, 
-      isConnected: isEnabled && wsConnected,
-      agents: allAgents,
-      projectDNA: isEnabled ? {
-        confidence: 0.78,
-        patterns: [
-          { type: 'react-hooks', confidence: 0.95 },
-          { type: 'tailwind-styling', confidence: 0.89 },
-          { type: 'typescript-usage', confidence: 0.92 }
-        ],
-        lastInsight: 'Strong TypeScript adoption detected with consistent hook patterns',
-        lastUpdated: new Date().toISOString()
-      } : prev.projectDNA
-    }));
+  // Fetch ecosystem status and initialize connection
+  const fetchEcosystemStatus = useCallback(async () => {
+    try {
+      const backendUrl = process.env.NEXT_PUBLIC_ORCHESTRATOR_URL || 'http://localhost:4000';
+      const response = await fetch(`${backendUrl}/api/ecosystem/status`);
+      
+      if (response.ok) {
+        const status = await response.json();
+        console.log('[LivingEcosystem] Backend status:', status);
+        
+        setState(prev => ({ 
+          ...prev, 
+          isEnabled: status.available && status.featureFlags?.enabled,
+          isConnected: status.available && wsConnected,
+          agents: [], // Start with empty agents, will be populated when intents are processed
+          projectDNA: {
+            confidence: 0,
+            patterns: [],
+            lastInsight: 'Living Ecosystem connected - ready to analyze project',
+            lastUpdated: new Date().toISOString()
+          }
+        }));
+      } else {
+        console.warn('[LivingEcosystem] Backend not available, using fallback');
+        setState(prev => ({ 
+          ...prev, 
+          isEnabled: false,
+          isConnected: false
+        }));
+      }
+    } catch (error) {
+      console.error('[LivingEcosystem] Failed to connect to backend:', error);
+      setState(prev => ({ 
+        ...prev, 
+        isEnabled: false,
+        isConnected: false,
+        lastError: 'Failed to connect to Living Ecosystem backend'
+      }));
+    }
   }, [wsConnected]);
 
   // Handle WebSocket messages for ecosystem events
@@ -444,7 +363,8 @@ export function useLivingEcosystem(projectId?: string) {
     }
 
     try {
-      const response = await fetch('/api/ecosystem/intent', {
+      const backendUrl = process.env.NEXT_PUBLIC_ORCHESTRATOR_URL || 'http://localhost:4000';
+      const response = await fetch(`${backendUrl}/api/ecosystem/intent`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -459,6 +379,7 @@ export function useLivingEcosystem(projectId?: string) {
       });
 
       const result = await response.json();
+      console.log('[LivingEcosystem] Intent processing result:', result);
 
       if (result.success) {
         return {
@@ -470,6 +391,7 @@ export function useLivingEcosystem(projectId?: string) {
         throw new Error(result.error || 'Failed to process intent');
       }
     } catch (error) {
+      console.error('[LivingEcosystem] Intent processing error:', error);
       setState(prev => ({
         ...prev,
         lastError: error instanceof Error ? error.message : 'Unknown error'
@@ -486,7 +408,8 @@ export function useLivingEcosystem(projectId?: string) {
     if (!state.isEnabled) return null;
 
     try {
-      const response = await fetch(`/api/ecosystem/visual-context/${instanceId}`, {
+      const backendUrl = process.env.NEXT_PUBLIC_ORCHESTRATOR_URL || 'http://localhost:4000';
+      const response = await fetch(`${backendUrl}/api/ecosystem/visual-context/${instanceId}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -497,6 +420,7 @@ export function useLivingEcosystem(projectId?: string) {
       });
 
       const result = await response.json();
+      console.log('[LivingEcosystem] Visual context capture result:', result);
       
       if (result.success && result.visualContext) {
         setState(prev => ({
@@ -506,7 +430,7 @@ export function useLivingEcosystem(projectId?: string) {
         return result.visualContext;
       }
     } catch (error) {
-      console.error('Error capturing visual context:', error);
+      console.error('[LivingEcosystem] Error capturing visual context:', error);
     }
 
     return null;

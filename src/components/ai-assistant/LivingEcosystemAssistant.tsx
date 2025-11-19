@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { Bot, Sparkles, Brain, Zap, Shield, Palette, Link, Send, Lightbulb, Activity, Users } from 'lucide-react';
+import { Bot, Sparkles, Brain, Zap, Shield, Palette, Link, Send, Lightbulb, Activity, Users, MousePointer } from 'lucide-react';
 import { useLivingEcosystem } from '../../hooks/useLivingEcosystem';
 import { useOfflineConversation } from '../conversation/useOfflineConversation';
 import { MessageList } from '../conversation/MessageList';
@@ -9,9 +9,29 @@ import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { ProactiveAI } from './ProactiveAI';
 
+interface UIElement {
+  id: string;
+  type: string;
+  selector: string;
+  componentName?: string;
+  text?: string;
+  boundingBox?: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  };
+  attributes?: Record<string, any>;
+  styles?: Record<string, any>;
+  context?: any;
+}
+
 interface LivingEcosystemAssistantProps {
   projectId?: string;
   className?: string;
+  selectedElement?: UIElement | null;
+  inspectionMode?: boolean;
+  onClearSelectedElement?: () => void;
 }
 
 interface ProjectInsight {
@@ -31,7 +51,13 @@ interface IntentSuggestion {
   complexity: 'simple' | 'moderate' | 'complex';
 }
 
-export function LivingEcosystemAssistant({ projectId, className = '' }: LivingEcosystemAssistantProps) {
+export function LivingEcosystemAssistant({ 
+  projectId, 
+  className = '', 
+  selectedElement, 
+  inspectionMode = false, 
+  onClearSelectedElement 
+}: LivingEcosystemAssistantProps) {
   const [message, setMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [activeView, setActiveView] = useState<'chat' | 'agents' | 'insights'>('chat');
@@ -188,14 +214,35 @@ export function LivingEcosystemAssistant({ projectId, className = '' }: LivingEc
     e.preventDefault();
     if (!message.trim() || isLoading) return;
 
-    const messageText = message.trim();
+    let messageText = message.trim();
+    
+    // Enhanced message with element context if an element is selected
+    if (selectedElement) {
+      const elementContext = `
+
+SELECTED UI ELEMENT CONTEXT:
+- Element Type: ${selectedElement.type}
+- Component Name: ${selectedElement.componentName || 'Unknown'}
+- CSS Selector: ${selectedElement.selector}
+- Text Content: ${selectedElement.text || 'Not available'}
+${selectedElement.boundingBox ? `- Position: x=${selectedElement.boundingBox.x}, y=${selectedElement.boundingBox.y}` : '- Position: Not available'}
+${selectedElement.boundingBox ? `- Size: ${selectedElement.boundingBox.width}x${selectedElement.boundingBox.height}px` : '- Size: Not available'}
+${selectedElement.attributes ? `- HTML Attributes: ${JSON.stringify(selectedElement.attributes, null, 2)}` : ''}
+${selectedElement.styles ? `- Computed Styles: ${JSON.stringify(selectedElement.styles, null, 2)}` : ''}
+${selectedElement.context ? `- Parent Context: ${JSON.stringify(selectedElement.context, null, 2)}` : ''}
+
+The user has visually selected this specific UI element and wants to modify it. Please search through the provided project files to find this element and make the requested changes using the action format.`;
+      
+      messageText += elementContext;
+    }
+    
     setMessage('');
     setCurrentContext('');
     setSuggestedActions([]);
     setIsLoading(true);
 
     try {
-      if (isEnabled && isConnected && isComplexIntent(messageText) && projectId) {
+      if (isEnabled && isConnected && isComplexIntent(message.trim()) && projectId) {
         // Show AI coordination preview
         setCurrentContext('🧠 Coordinating AI agents for complex task...');
         
@@ -469,6 +516,25 @@ export function LivingEcosystemAssistant({ projectId, className = '' }: LivingEc
 
             {/* Message Input */}
             <div className="border-t border-gray-700 p-4 bg-gray-800/30 backdrop-blur-sm relative z-10">
+              {/* Selected Element Indicator */}
+              {selectedElement && (
+                <div className="mb-3 p-3 bg-teal-500/10 border border-teal-400/30 rounded-lg">
+                  <div className="flex items-center space-x-2 text-teal-300">
+                    <MousePointer className="h-4 w-4" />
+                    <span className="text-sm font-medium">Selected Element:</span>
+                    <code className="bg-teal-400/20 px-2 py-1 rounded text-xs">
+                      {selectedElement.componentName || selectedElement.type}
+                    </code>
+                    <button 
+                      onClick={onClearSelectedElement}
+                      className="ml-auto text-teal-300 hover:text-teal-100"
+                    >
+                      ×
+                    </button>
+                  </div>
+                </div>
+              )}
+              
               {/* Smart Input Suggestions */}
               {message.length > 0 && !isLoading && (
                 <div className="mb-3 text-xs text-gray-400">
@@ -483,7 +549,15 @@ export function LivingEcosystemAssistant({ projectId, className = '' }: LivingEc
                   ref={inputRef}
                   value={message}
                   onChange={(e) => setMessage(e.target.value)}
-                  placeholder={isEnabled ? "Describe what you want to improve or build..." : "Ask about your project..."}
+                  placeholder={
+                    selectedElement 
+                      ? `Modify ${selectedElement.componentName || selectedElement.type}...`
+                      : inspectionMode
+                      ? "Click an element in the preview to modify it..."
+                      : isEnabled 
+                      ? "Describe what you want to improve or build..." 
+                      : "Ask about your project..."
+                  }
                   disabled={isLoading || conversationLoading}
                   className="flex-1 bg-gray-800/80 border-gray-600 hover:border-teal-500/50 text-white placeholder-gray-400 transition-all duration-300 focus:border-teal-400 focus:shadow-teal-400/20 backdrop-blur-sm"
                 />
