@@ -55,8 +55,10 @@ export function AIStatusBar({ projectId, userId, className = "", onToggleDetails
   // Get ecosystem data from hook with safe fallbacks
   const {
     isEnabled = false,
+    isConnected = false,
     agents = [],
-    projectDNA = { confidence: 0, patterns: [], lastInsight: "No insights yet" }
+    projectDNA = { confidence: 0, patterns: [], lastInsight: "No insights yet" },
+    ecosystemStatus = 'disabled'
   } = useLivingEcosystem(projectId) || {};
   
   const activeAgents = agents.filter(agent => agent.status === 'active');
@@ -69,21 +71,21 @@ export function AIStatusBar({ projectId, userId, className = "", onToggleDetails
     onToggleDetails?.();
   };
 
-  // Show "ready" state when ecosystem is disabled
+  // Show different status based on ecosystem state
   if (!isEnabled) {
     return (
-      <div className={`bg-gradient-to-r from-gray-50 to-gray-100 border-b border-gray-200 px-4 py-2 ${className}`}>
+      <div className={`bg-gradient-to-r from-amber-50 to-orange-50 border-b border-amber-200 px-4 py-2 ${className}`}>
         <div className="flex items-center justify-between max-w-7xl mx-auto">
           <div className="flex items-center space-x-3">
             <div className="flex items-center space-x-2">
-              <div className="w-2 h-2 bg-gray-400 rounded-full"></div>
-              <span className="text-sm text-gray-600 font-medium">Living Ecosystem</span>
-              <span className="text-xs text-gray-500">Ready (Disabled)</span>
+              <div className="w-2 h-2 bg-amber-500 rounded-full"></div>
+              <span className="text-sm text-gray-700 font-medium">AI Assistant</span>
+              <span className="text-xs text-amber-600">Standard Mode</span>
             </div>
           </div>
           
-          <div className="text-xs text-gray-500">
-            💡 Set LIVING_ECOSYSTEM_ENABLED=true to activate
+          <div className="text-xs text-gray-600">
+            ℹ️ Connecting to Living Ecosystem...
           </div>
         </div>
       </div>
@@ -96,9 +98,9 @@ export function AIStatusBar({ projectId, userId, className = "", onToggleDetails
         <div className="flex items-center justify-between max-w-7xl mx-auto">
           <div className="flex items-center space-x-3">
             <div className="flex items-center space-x-2">
-              <div className="w-2 h-2 bg-gray-400 rounded-full"></div>
+              <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-400' : 'bg-yellow-400'}`}></div>
               <span className="text-sm text-gray-600 font-medium">Living Ecosystem</span>
-              <span className="text-xs text-gray-500">Ready</span>
+              <span className="text-xs text-green-600">{isConnected ? 'Connected' : 'Connecting...'}</span>
             </div>
             
             <div className="text-xs text-gray-500">

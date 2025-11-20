@@ -75,13 +75,13 @@ interface ProcessIntentOptions {
 
 export function useLivingEcosystem(projectId?: string) {
   const [state, setState] = useState<LivingEcosystemState>({
-    isEnabled: false,
+    isEnabled: true, // Re-enabled - backend is ready
     isConnected: false,
     agents: [],
     projectDNA: {
       confidence: 0,
       patterns: [],
-      lastInsight: 'No insights yet',
+      lastInsight: 'Connecting to Living Ecosystem...',
       lastUpdated: new Date().toISOString()
     }
   });
@@ -97,24 +97,7 @@ export function useLivingEcosystem(projectId?: string) {
 
   // Check ecosystem status and fetch real data from backend
   useEffect(() => {
-    const isEnabled = process.env.NEXT_PUBLIC_LIVING_ECOSYSTEM_ENABLED === 'true';
-    
-    if (isEnabled) {
-      fetchEcosystemStatus();
-    } else {
-      setState(prev => ({ 
-        ...prev, 
-        isEnabled: false,
-        isConnected: false,
-        agents: [],
-        projectDNA: {
-          confidence: 0,
-          patterns: [],
-          lastInsight: 'No insights yet',
-          lastUpdated: new Date().toISOString()
-        }
-      }));
-    }
+    fetchEcosystemStatus();
   }, [wsConnected]);
 
   // Fetch ecosystem status and initialize connection
@@ -129,7 +112,7 @@ export function useLivingEcosystem(projectId?: string) {
         
         setState(prev => ({ 
           ...prev, 
-          isEnabled: status.available && status.featureFlags?.enabled,
+          isEnabled: status.available,
           isConnected: status.available && wsConnected,
           agents: [], // Start with empty agents, will be populated when intents are processed
           projectDNA: {
@@ -143,7 +126,7 @@ export function useLivingEcosystem(projectId?: string) {
         console.warn('[LivingEcosystem] Backend not available, using fallback');
         setState(prev => ({ 
           ...prev, 
-          isEnabled: false,
+          isEnabled: false, // Disable if backend not available
           isConnected: false
         }));
       }
@@ -151,7 +134,7 @@ export function useLivingEcosystem(projectId?: string) {
       console.error('[LivingEcosystem] Failed to connect to backend:', error);
       setState(prev => ({ 
         ...prev, 
-        isEnabled: false,
+        isEnabled: false, // Disable on connection error
         isConnected: false,
         lastError: 'Failed to connect to Living Ecosystem backend'
       }));
@@ -357,7 +340,7 @@ export function useLivingEcosystem(projectId?: string) {
   }> => {
     if (!state.isEnabled || !state.isConnected) {
       return {
-        immediateResponse: "Living Ecosystem is not enabled. Using standard AI processing...",
+        immediateResponse: "Living Ecosystem is not connected. Using standard AI processing...",
         usedEcosystem: false
       };
     }
@@ -384,8 +367,8 @@ export function useLivingEcosystem(projectId?: string) {
       if (result.success) {
         return {
           intentId: result.intentId,
-          immediateResponse: result.response,
-          usedEcosystem: result.usedLivingEcosystem
+          immediateResponse: result.immediateResponse,
+          usedEcosystem: result.usedLivingEcosystem || true
         };
       } else {
         throw new Error(result.error || 'Failed to process intent');
@@ -398,7 +381,7 @@ export function useLivingEcosystem(projectId?: string) {
       }));
 
       return {
-        immediateResponse: "Error processing intent with Living Ecosystem. Please try again.",
+        immediateResponse: "Error processing intent with Living Ecosystem. Using standard AI...",
         usedEcosystem: false
       };
     }

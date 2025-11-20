@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { Bot, Sparkles, Brain, Zap, Shield, Palette, Link, Send, Lightbulb, Activity, Users, MousePointer } from 'lucide-react';
+import { Bot, Sparkles, Send, MousePointer, Users, Brain, Activity, Lightbulb } from 'lucide-react';
 import { useLivingEcosystem } from '../../hooks/useLivingEcosystem';
 import { useOfflineConversation } from '../conversation/useOfflineConversation';
 import { MessageList } from '../conversation/MessageList';
@@ -34,22 +34,7 @@ interface LivingEcosystemAssistantProps {
   onClearSelectedElement?: () => void;
 }
 
-interface ProjectInsight {
-  id: string;
-  type: 'pattern' | 'optimization' | 'security' | 'performance';
-  title: string;
-  description: string;
-  confidence: number;
-  actionable: boolean;
-}
-
-interface IntentSuggestion {
-  intent: string;
-  description: string;
-  agents: string[];
-  icon: string;
-  complexity: 'simple' | 'moderate' | 'complex';
-}
+// Removed unused interfaces since ecosystem features are not implemented
 
 export function LivingEcosystemAssistant({ 
   projectId, 
@@ -249,7 +234,7 @@ The user has visually selected this specific UI element and wants to modify it. 
         // Use Living Ecosystem for complex intents
         const result = await processUserIntent(messageText, {
           projectId,
-          userId: 'user',
+          userId: 'user', // TODO: Get real user ID from auth context
           projectContext: {
             name: 'Current Project',
             tech_stack: ['React', 'TypeScript', 'Next.js'],
@@ -282,47 +267,6 @@ The user has visually selected this specific UI element and wants to modify it. 
       setTimeout(() => setCurrentContext(''), 3000);
     } finally {
       setIsLoading(false);
-    }
-  };
-
-  const handleSuggestionClick = (suggestion: IntentSuggestion) => {
-    setMessage(suggestion.intent);
-    inputRef.current?.focus();
-  };
-
-  const getAgentIcon = (type: string) => {
-    switch (type) {
-      case 'architect': return <Brain className="w-4 h-4" />;
-      case 'performance': return <Zap className="w-4 h-4" />;
-      case 'security': return <Shield className="w-4 h-4" />;
-      case 'ux': return <Palette className="w-4 h-4" />;
-      case 'integration': return <Link className="w-4 h-4" />;
-      default: return <Bot className="w-4 h-4" />;
-    }
-  };
-
-  const getAgentColor = (type: string, status: string) => {
-    const colors = {
-      architect: 'text-blue-400',
-      performance: 'text-yellow-400', 
-      security: 'text-red-400',
-      ux: 'text-purple-400',
-      integration: 'text-green-400'
-    };
-    
-    if (status === 'failed') return 'text-red-500';
-    if (status === 'completed') return 'text-green-500';
-    if (status === 'paused') return 'text-gray-400';
-    
-    return colors[type as keyof typeof colors] || 'text-gray-400';
-  };
-
-  const getInsightIcon = (type: ProjectInsight['type']) => {
-    switch (type) {
-      case 'pattern': return <Brain className="w-4 h-4 text-blue-400" />;
-      case 'optimization': return <Zap className="w-4 h-4 text-yellow-400" />;
-      case 'security': return <Shield className="w-4 h-4 text-red-400" />;
-      case 'performance': return <Activity className="w-4 h-4 text-green-400" />;
     }
   };
 
@@ -441,7 +385,7 @@ The user has visually selected this specific UI element and wants to modify it. 
             >
               {/* Always show ProactiveAI at the top */}
               <div className="mb-4">
-                <ProactiveAI projectId={projectId} agents={agents} isEnabled={isEnabled} />
+                <ProactiveAI projectId={projectId} agents={agents || []} isEnabled={isEnabled} />
               </div>
               
               {conversation && messages && messages.length > 0 ? (
@@ -456,54 +400,78 @@ The user has visually selected this specific UI element and wants to modify it. 
                     <div className="mx-auto mb-4 w-16 h-16 flex items-center justify-center">
                       <Sparkles className="w-16 h-16 text-teal-400" />
                     </div>
-                    <h3 className="text-lg font-semibold mb-2">Welcome to Living Ecosystem AI</h3>
+                    <h3 className="text-lg font-semibold mb-2">
+                      {isEnabled ? 'Living Ecosystem AI' : 'AI Assistant'}
+                    </h3>
                     <p className="text-sm text-gray-400 mb-6">
-                      I'm your intelligent project coordinator. Ask me anything or choose from suggestions below.
+                      {isEnabled 
+                        ? "I'm your intelligent project coordinator. Ask me anything or choose from suggestions below."
+                        : "AI-powered coding assistance. Ask me about your code or project."
+                      }
                     </p>
                     
-                    {/* Intent Suggestions */}
+                    {/* Capabilities based on ecosystem status */}
                     <div className="space-y-4">
                       <div>
                         <p className="text-xs text-gray-500 uppercase tracking-wide mb-2">What can I help you with?</p>
                         <div className="text-sm text-gray-300 mb-4">
-                          <p>👋 I'm your AI ecosystem coordinator. I can:</p>
-                          <ul className="list-disc list-inside mt-2 space-y-1 text-xs text-gray-400">
-                            <li>Coordinate multiple AI agents for complex tasks</li>
-                            <li>Analyze your project and suggest improvements</li>
-                            <li>Provide real-time development assistance</li>
-                            <li>Adapt my approach based on your project's needs</li>
-                          </ul>
+                          {isEnabled ? (
+                            <>
+                              <p>👋 I'm your AI ecosystem coordinator. I can:</p>
+                              <ul className="list-disc list-inside mt-2 space-y-1 text-xs text-gray-400">
+                                <li>Coordinate multiple AI agents for complex tasks</li>
+                                <li>Analyze your project and suggest improvements</li>
+                                <li>Provide real-time development assistance</li>
+                                <li>Adapt my approach based on your project's needs</li>
+                              </ul>
+                              {!isConnected && (
+                                <p className="text-xs text-yellow-400 mt-3">
+                                  ⚠️ Connecting to ecosystem backend...
+                                </p>
+                              )}
+                            </>
+                          ) : (
+                            <>
+                              <p>👋 I can help you with:</p>
+                              <ul className="list-disc list-inside mt-2 space-y-1 text-xs text-gray-400">
+                                <li>Code explanations and reviews</li>
+                                <li>Bug fixes and debugging</li>
+                                <li>Feature implementation</li>
+                                <li>General development questions</li>
+                              </ul>
+                              <p className="text-xs text-amber-400 mt-3">
+                                ℹ️ Connecting to Living Ecosystem...
+                              </p>
+                            </>
+                          )}
                         </div>
                       </div>
                       
                       <div className="space-y-2">
-                        <p className="text-xs text-gray-500 uppercase tracking-wide">Quick Start Ideas</p>
-                        {getIntentSuggestions().map((suggestion, index) => (
+                        <p className="text-xs text-gray-500 uppercase tracking-wide">
+                          {isEnabled ? 'Quick Start Ideas' : 'Example Questions'}
+                        </p>
+                        {(isEnabled ? [
+                          { text: "Optimize this component for performance", icon: "⚡" },
+                          { text: "Make this component more accessible", icon: "♿" }, 
+                          { text: "Modernize this codebase with latest patterns", icon: "🚀" },
+                          { text: "Review and improve the security of this code", icon: "🔒" }
+                        ] : [
+                          { text: "Explain this component", icon: "📖" },
+                          { text: "Help me fix this bug", icon: "🐛" }, 
+                          { text: "Add a new feature", icon: "✨" },
+                          { text: "Review my code", icon: "👀" }
+                        ]).map((suggestion, index) => (
                           <button
                             key={index}
-                            onClick={() => handleSuggestionClick(suggestion)}
-                            className="w-full text-left p-3 bg-gray-800/80 hover:bg-gray-700/80 border border-gray-600 hover:border-teal-500/50 rounded-lg transition-all duration-300 group backdrop-blur-sm shadow-lg hover:shadow-teal-500/20 transform hover:scale-[1.02]"
+                            onClick={() => setMessage(suggestion.text)}
+                            className="w-full text-left p-3 bg-gray-800/80 hover:bg-gray-700/80 border border-gray-600 hover:border-teal-500/50 rounded-lg transition-all duration-300"
                           >
                             <div className="flex items-center space-x-3">
                               <span className="text-lg">{suggestion.icon}</span>
-                              <div className="flex-1">
-                                <p className="text-sm font-medium text-white group-hover:text-teal-300 transition-colors duration-300">
-                                  {suggestion.intent}
-                                </p>
-                                <p className="text-xs text-gray-400">{suggestion.description}</p>
-                                <div className="flex items-center space-x-2 mt-1">
-                                  <span className={`text-xs px-2 py-1 rounded ${
-                                    suggestion.complexity === 'simple' ? 'bg-green-900/50 text-green-300' :
-                                    suggestion.complexity === 'moderate' ? 'bg-yellow-900/50 text-yellow-300' :
-                                    'bg-red-900/50 text-red-300'
-                                  }`}>
-                                    {suggestion.complexity}
-                                  </span>
-                                  <span className="text-xs text-gray-500">
-                                    Will coordinate {suggestion.agents.length} agent{suggestion.agents.length > 1 ? 's' : ''}
-                                  </span>
-                                </div>
-                              </div>
+                              <p className="text-sm font-medium text-white">
+                                {suggestion.text}
+                              </p>
                             </div>
                           </button>
                         ))}
