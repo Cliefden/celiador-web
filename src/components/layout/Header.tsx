@@ -9,7 +9,11 @@ import { SettingsPanel } from '../settings/SettingsPanel';
 import SignInModal from '../auth/SignInModal';
 import SignUpModal from '../auth/SignUpModal';
 
-export default function Header() {
+interface HeaderProps {
+  onOpenSignUp?: () => void;
+}
+
+export default function Header({ onOpenSignUp }: HeaderProps) {
   const { user, profile, signOut } = useAuth();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isSignInModalOpen, setIsSignInModalOpen] = useState(false);
@@ -97,7 +101,7 @@ export default function Header() {
                   </Button>
                   <Button 
                     variant="celiador"
-                    onClick={() => setIsSignUpModalOpen(true)}
+                    onClick={() => onOpenSignUp ? onOpenSignUp() : setIsSignUpModalOpen(true)}
                   >
                     Get Started
                   </Button>
@@ -180,7 +184,7 @@ export default function Header() {
                       <Button 
                         variant="celiador"
                         className="w-full"
-                        onClick={() => setIsSignUpModalOpen(true)}
+                        onClick={() => onOpenSignUp ? onOpenSignUp() : setIsSignUpModalOpen(true)}
                       >
                         Get Started
                       </Button>

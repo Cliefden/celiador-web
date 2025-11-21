@@ -2,9 +2,11 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { supabase } from '../../lib/supabase';
+import { useAuth } from '../../contexts/AuthContext';
 import { CreateProjectModal } from '../project/CreateProjectModal';
 import { useConversation } from '../conversation/useConversation';
 import { useOfflineConversation } from '../conversation/useOfflineConversation';
+import { MessageList } from '../conversation/MessageList';
 import { usePreview } from '../../hooks/usePreview';
 import { PreviewOverlay } from '../inspection/PreviewOverlay';
 import { FloatingWindowController } from './FloatingWindowController';
@@ -96,6 +98,7 @@ interface UIElement {
 export function SimpleDashboard({ initialUser, onLogout }: SimpleDashboardProps) {
   
   const [user] = useState<User>(initialUser);
+  const { session } = useAuth();
   const [projects, setProjects] = useState<Project[]>([]);
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
   const [showCreateProject, setShowCreateProject] = useState(false);
@@ -292,10 +295,15 @@ export function SimpleDashboard({ initialUser, onLogout }: SimpleDashboardProps)
     const loadProjects = async () => {
       try {
         setLoading(true);
-        const { data: { session } } = await supabase.auth.getSession();
-        if (!session) return;
+        // Use session from AuthContext instead of calling Supabase directly
+        if (!session?.access_token) {
+          console.log('[SimpleDashboard] No session available, skipping project load');
+          setLoading(false);
+          return;
+        }
 
         const apiUrl = process.env.NEXT_PUBLIC_ORCHESTRATOR_URL || 'http://localhost:4000';
+        console.log('[SimpleDashboard] Loading projects with session token:', !!session.access_token);
         const response = await fetch(`${apiUrl}/projects`, {
           headers: { 'Authorization': `Bearer ${session.access_token}` }
         });
@@ -336,7 +344,7 @@ export function SimpleDashboard({ initialUser, onLogout }: SimpleDashboardProps)
     };
 
     loadProjects();
-  }, []);
+  }, [session?.access_token]);
 
   // Reset iframe loaded state and preview URL when preview or project changes
   useEffect(() => {
@@ -553,8 +561,7 @@ The user has visually selected this specific UI element and wants to modify it. 
     }
 
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) return;
+      if (!session?.access_token) return;
 
       const apiUrl = process.env.NEXT_PUBLIC_ORCHESTRATOR_URL || 'http://localhost:4000';
       const response = await fetch(`${apiUrl}/projects/${project.id}`, {
@@ -721,7 +728,6 @@ The user has visually selected this specific UI element and wants to modify it. 
     if (inspectionMode && preview.id) {
       try {
         // Get auth token for inspection route
-        const { data: { session } } = await supabase.auth.getSession();
         const authToken = session?.access_token;
         
         if (!authToken) {
@@ -758,7 +764,6 @@ The user has visually selected this specific UI element and wants to modify it. 
     
     // Normal mode: add authentication to proxy URL and preserve current path
     try {
-      const { data: { session } } = await supabase.auth.getSession();
       const authToken = session?.access_token;
       
       if (!authToken) {
@@ -1125,60 +1130,18 @@ The user has visually selected this specific UI element and wants to modify it. 
                     </div>
                   </div>
 
-                  {/* Messages */}
-                  <div ref={messagesContainerRef} className="flex-1 overflow-y-auto p-4 space-y-4 dark-scrollbar">
-                    {!messages || messages.length === 0 ? (
-                      <div className="text-center py-12">
-                        <div className="w-16 h-16 bg-gradient-to-br from-teal-500/20 to-cyan-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
-                          <CeliadorLogo size="lg" variant="icon" />
-                        </div>
-                        <h3 className="font-semibold text-white mb-2">Let's build something amazing!</h3>
-                        <p className="text-gray-300 text-sm">
-                          Tell me what you want to add or change in your app.
-                        </p>
-                      </div>
-                    ) : (
-                      (messages || []).map((message, index) => (
-                        <div
-                          key={index}
-                          className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
-                        >
-                          <div
-                            className={`max-w-[80%] p-4 rounded-2xl break-words overflow-wrap-anywhere whitespace-pre-wrap relative ${
-                              message.role === 'user'
-                                ? message.metadata?.optimistic
-                                  ? 'bg-gradient-to-r from-purple-600 to-purple-500 text-white opacity-80'
-                                  : 'bg-gradient-to-r from-teal-600 to-cyan-600 text-white'
-                                : 'bg-gray-800/50 text-gray-100 border border-gray-700/50'
-                            }`}
-                          >
-                            {message.content}
-                            {message.metadata?.optimistic && (
-                              <div className="absolute -bottom-2 -right-2 w-4 h-4 bg-purple-500 rounded-full flex items-center justify-center">
-                                <span className="text-xs text-white">⚡</span>
-                              </div>
-                            )}
-                            {message.metadata?.failed && (
-                              <div className="absolute -bottom-2 -right-2 w-4 h-4 bg-red-500 rounded-full flex items-center justify-center">
-                                <span className="text-xs text-white">⚠</span>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      ))
-                    )}
-                    {isBuilding && (
-                      <div className="flex justify-start">
-                        <div className="bg-gray-800/50 border border-gray-700/50 p-4 rounded-2xl flex items-center space-x-3">
-                          <Loader2 className="h-5 w-5 animate-spin text-teal-400" />
-                          <span className="text-gray-100">Building your changes...</span>
-                        </div>
-                      </div>
-                    )}
+                  {/* Messages using MessageList component for consistency */}
+                  <div ref={messagesContainerRef} className="flex-1 overflow-hidden">
+                    <MessageList
+                      messages={messages || []}
+                      loading={conversationLoading || isBuilding}
+                      shouldScrollToBottom={true}
+                      className="h-full"
+                    />
                   </div>
 
                   {/* Message Input */}
-                  <div className="p-4 border-t border-gray-700/50">
+                  <div className="border-t border-gray-700 p-4 bg-gray-800/30 backdrop-blur-sm">
                     {/* Selected Element Indicator */}
                     {selectedElement && (
                       <div className="mb-3 p-3 bg-teal-500/10 border border-teal-400/30 rounded-lg">
@@ -1198,7 +1161,7 @@ The user has visually selected this specific UI element and wants to modify it. 
                       </div>
                     )}
                     
-                    <div className="flex space-x-3">
+                    <div className="flex gap-2">
                       <input
                         type="text"
                         value={currentMessage}
@@ -1211,15 +1174,19 @@ The user has visually selected this specific UI element and wants to modify it. 
                             ? "Click an element in the preview to modify it..."
                             : "Describe what you want to build or change..."
                         }
-                        className="flex-1 p-3 border border-gray-600 bg-gray-800/50 text-white rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent placeholder-gray-400"
+                        className="flex-1 bg-gray-800/80 border border-gray-600 hover:border-teal-500/50 text-white placeholder-gray-400 transition-all duration-300 focus:border-teal-400 focus:shadow-teal-400/20 backdrop-blur-sm p-3 rounded-xl focus:outline-none"
                         disabled={conversationLoading || isBuilding}
                       />
                       <button
                         onClick={handleSendMessage}
                         disabled={!currentMessage.trim() || conversationLoading || isBuilding}
-                        className="bg-gradient-to-r from-teal-600 to-cyan-600 text-white p-3 rounded-xl hover:from-teal-700 hover:to-cyan-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg"
+                        className="bg-teal-600 hover:bg-teal-700 transition-all duration-300 hover:scale-105 shadow-lg hover:shadow-teal-500/30 text-white p-3 rounded-xl disabled:opacity-50 disabled:cursor-not-allowed"
                       >
-                        <Send className="h-5 w-5" />
+                        {conversationLoading || isBuilding ? (
+                          <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                        ) : (
+                          <Send className="h-5 w-5" />
+                        )}
                       </button>
                     </div>
                   </div>
@@ -1313,7 +1280,6 @@ The user has visually selected this specific UI element and wants to modify it. 
                           // Generate inspection URL with the captured path
                           if (preview && selectedProject) {
                             try {
-                              const { data: { session } } = await supabase.auth.getSession();
                               const authToken = session?.access_token;
                               if (authToken) {
                                 let apiUrl = process.env.NEXT_PUBLIC_ORCHESTRATOR_URL || 'http://localhost:4000';

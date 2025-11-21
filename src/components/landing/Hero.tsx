@@ -5,7 +5,11 @@ import { CeliadorLogo } from '../ui/celiador-logo';
 import { ArrowRight, Sparkles, Code, Zap, Play, CheckCircle, Terminal, Palette } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
-export default function Hero() {
+interface HeroProps {
+  onOpenSignUp?: () => void;
+}
+
+export default function Hero({ onOpenSignUp }: HeroProps) {
   const router = useRouter();
 
   return (
@@ -71,7 +75,7 @@ export default function Hero() {
                 variant="celiador"
                 size="xl"
                 className="text-lg px-8 py-4 shadow-xl shadow-teal-500/25 hover:shadow-2xl hover:shadow-teal-500/30 transition-all duration-300"
-                onClick={() => router.push('/dashboard')}
+                onClick={() => onOpenSignUp ? onOpenSignUp() : router.push('/dashboard')}
               >
                 Start Building Free
                 <ArrowRight className="ml-2 h-6 w-6" />

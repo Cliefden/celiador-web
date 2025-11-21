@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Header from '../components/layout/Header';
 import Footer from '../components/layout/Footer';
@@ -10,19 +10,24 @@ import Templates from '../components/landing/Templates';
 import { Button } from '../components/ui/button';
 import { CeliadorLogo } from '../components/ui/celiador-logo';
 import { useAuth } from '../contexts/AuthContext';
+import SignUpModal from '../components/auth/SignUpModal';
+import SignInModal from '../components/auth/SignInModal';
 
 export default function HomePage() {
   const { user, isLoading } = useAuth();
   const router = useRouter();
+  const [isSignUpModalOpen, setIsSignUpModalOpen] = useState(false);
+  const [isSignInModalOpen, setIsSignInModalOpen] = useState(false);
   
   // Testing Vercel deployment - 2025-09-16
 
   useEffect(() => {
-    console.log('HomePage: Auth state changed', { user: !!user, isLoading });
+    console.log('HomePage: Auth state changed', { user: !!user, isLoading, email: user?.email });
     
     // If user is authenticated, redirect to dashboard
-    if (!isLoading && user) {
-      console.log('HomePage: Redirecting to dashboard');
+    // Wait a bit to ensure auth state is stable
+    if (!isLoading && user && user.email) {
+      console.log('HomePage: User authenticated with email:', user.email, 'redirecting to dashboard');
       router.push('/dashboard');
     }
   }, [user, isLoading, router]);
@@ -58,10 +63,10 @@ export default function HomePage() {
 
   return (
     <div className="min-h-screen bg-black">
-      <Header />
+      <Header onOpenSignUp={() => setIsSignUpModalOpen(true)} />
       
       {/* Hero Section */}
-      <Hero />
+      <Hero onOpenSignUp={() => setIsSignUpModalOpen(true)} />
       
       {/* Features Section */}
       <Features />
@@ -169,9 +174,9 @@ export default function HomePage() {
               <Button 
                 size="xl"
                 className="!bg-white !text-teal-600 hover:!bg-gray-100 hover:!text-teal-700 px-8 py-4 text-lg !font-semibold shadow-xl hover:shadow-2xl transition-all duration-300 hover:scale-105"
-                onClick={() => window.location.href = '/dashboard'}
+                onClick={() => setIsSignUpModalOpen(true)}
               >
-                Get Started Free
+                Start Building Free
                 <svg className="w-5 h-5 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3" />
                 </svg>
@@ -211,6 +216,25 @@ export default function HomePage() {
       </div>
 
       <Footer />
+      
+      {/* Auth Modals */}
+      <SignInModal 
+        isOpen={isSignInModalOpen}
+        onClose={() => setIsSignInModalOpen(false)}
+        onSwitchToSignUp={() => {
+          setIsSignInModalOpen(false);
+          setIsSignUpModalOpen(true);
+        }}
+      />
+      
+      <SignUpModal 
+        isOpen={isSignUpModalOpen}
+        onClose={() => setIsSignUpModalOpen(false)}
+        onSwitchToSignIn={() => {
+          setIsSignUpModalOpen(false);
+          setIsSignInModalOpen(true);
+        }}
+      />
     </div>
   );
 }

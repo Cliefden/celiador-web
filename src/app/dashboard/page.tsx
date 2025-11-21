@@ -24,12 +24,43 @@ interface Project {
 export default function DashboardPage() {
   const { user, profile, isLoading, signOut } = useAuth();
   const router = useRouter();
+  const [isMounted, setIsMounted] = useState(false);
+  
+  // Enhanced debugging with timestamps and stack traces
+  const debugLog = (message: string, data?: any) => {
+    const timestamp = new Date().toISOString();
+    console.log(`🔍 [DASHBOARD ${timestamp}] ${message}`, data || '');
+  };
+  
+  debugLog('RENDER', { 
+    isLoading, 
+    hasUser: !!user, 
+    userEmail: user?.email,
+    isMounted,
+    pathname: typeof window !== 'undefined' ? window.location.pathname : 'SSR'
+  });
 
   useEffect(() => {
-    if (!isLoading && !user) {
+    setIsMounted(true);
+  }, []);
+
+  useEffect(() => {
+    debugLog('AUTH_STATE_CHANGE', { 
+      hasUser: !!user, 
+      userEmail: user?.email,
+      isLoading, 
+      isMounted,
+      shouldRedirect: !isLoading && !user && isMounted,
+      isClientSide: typeof window !== 'undefined' 
+    });
+    
+    // CRITICAL FIX: Only redirect on client-side after auth context has fully loaded
+    // This prevents SSR redirects before authentication state is available
+    if (typeof window !== 'undefined' && !isLoading && !user && isMounted) {
+      debugLog('REDIRECTING_TO_HOMEPAGE', 'No user found after client auth load');
       router.push('/');
     }
-  }, [user, isLoading, router]);
+  }, [user, isLoading, router, isMounted]);
 
   const handleLogout = async () => {
     try {
@@ -42,8 +73,8 @@ export default function DashboardPage() {
     }
   };
 
-  // Show loading state while checking authentication
-  if (isLoading) {
+  // Prevent hydration mismatch by ensuring client-side only rendering
+  if (!isMounted || isLoading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">

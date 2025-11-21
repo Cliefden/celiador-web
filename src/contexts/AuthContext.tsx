@@ -41,7 +41,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [session, setSession] = useState<Session | null>(null);
-  const [isLoading, setIsLoading] = useState(false); // TEMPORARY: Set to false to unblock page loading
+  const [isLoading, setIsLoading] = useState(true);
   
   // Session tracking state
   const [sessionData, setSessionData] = useState<any>(null);
@@ -382,24 +382,73 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     
     const initializeAuth = async () => {
       try {
-        console.log('AuthContext: Starting auth initialization...');
-        console.log('AuthContext: Supabase URL:', process.env.NEXT_PUBLIC_SUPABASE_URL);
+        const timestamp = new Date().toISOString();
+        console.log(`🔍 [AUTH ${timestamp}] Starting auth initialization...`);
+        console.log(`🔍 [AUTH ${timestamp}] Supabase URL:`, process.env.NEXT_PUBLIC_SUPABASE_URL);
+        console.log(`🔍 [AUTH ${timestamp}] isMounted:`, isMounted);
         
-        // Test basic Supabase connectivity
+        // Check local storage for existing session
         try {
-          const testResponse = await supabase.from('profiles').select('count', { count: 'exact', head: true });
-          console.log('AuthContext: Supabase connectivity test:', { 
-            error: testResponse.error, 
-            status: testResponse.status,
-            statusText: testResponse.statusText 
-          });
-        } catch (testError) {
-          console.error('AuthContext: Supabase connectivity test failed:', testError);
+          const localStorageSession = localStorage.getItem('sb-' + process.env.NEXT_PUBLIC_SUPABASE_URL?.split('//')[1]?.split('.')[0] + '-auth-token');
+          console.log('AuthContext: LocalStorage session exists:', !!localStorageSession);
+        } catch (storageError) {
+          console.warn('AuthContext: Could not check localStorage:', storageError);
         }
         
-        // Get initial session
-        const { data: { session }, error } = await supabase.auth.getSession();
-        console.log('AuthContext: Got session:', !!session, 'User:', session?.user?.email, 'Error:', error);
+        // Skip connectivity test to avoid hanging
+        
+        // Try to get session with fallback to localStorage parsing
+        console.log('AuthContext: About to call getSession...');
+        let session = null;
+        let error = null;
+        
+        try {
+          // Try the normal Supabase getSession first with a short timeout
+          const sessionPromise = supabase.auth.getSession();
+          const timeoutPromise = new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('getSession timeout')), 3000)
+          );
+          
+          const result = await Promise.race([sessionPromise, timeoutPromise]);
+          session = (result as any).data?.session;
+          error = (result as any).error;
+          
+          console.log('AuthContext: getSession completed successfully!');
+        } catch (sessionError) {
+          console.warn('AuthContext: getSession failed/timed out, trying localStorage fallback:', sessionError);
+          
+          // Fallback: manually parse session from localStorage
+          try {
+            const storageKey = `sb-${process.env.NEXT_PUBLIC_SUPABASE_URL?.split('//')[1]?.split('.')[0]}-auth-token`;
+            const storedSession = localStorage.getItem(storageKey);
+            
+            if (storedSession) {
+              const parsedSession = JSON.parse(storedSession);
+              console.log('AuthContext: Found stored session:', parsedSession);
+              
+              if (parsedSession.access_token && parsedSession.expires_at) {
+                const now = Math.floor(Date.now() / 1000);
+                if (parsedSession.expires_at > now) {
+                  // Session is valid, create a mock session object
+                  session = {
+                    access_token: parsedSession.access_token,
+                    refresh_token: parsedSession.refresh_token,
+                    expires_at: parsedSession.expires_at,
+                    token_type: 'bearer',
+                    user: parsedSession.user
+                  };
+                  console.log('AuthContext: Successfully restored session from localStorage');
+                } else {
+                  console.log('AuthContext: Stored session is expired');
+                }
+              }
+            }
+          } catch (parseError) {
+            console.error('AuthContext: Failed to parse localStorage session:', parseError);
+          }
+        }
+        
+        console.log('AuthContext: Final session state:', !!session, 'User:', session?.user?.email);
         
         if (error) {
           console.error('AuthContext: Session error:', error);
@@ -428,26 +477,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         console.log('AuthContext: Setting up auth state listener...');
         const { data: { subscription } } = supabase.auth.onAuthStateChange(
           async (event, session) => {
-            console.log('AuthContext: Auth state changed:', event, !!session);
+            console.log('AuthContext: Auth state changed:', event, !!session, session?.user?.email);
             if (!isMounted) return;
             
             setSession(session);
             setUser(session?.user ?? null);
+            
+            console.log('AuthContext: Updated user state:', !!session?.user, session?.user?.email);
 
             if (session?.user) {
+              console.log('AuthContext: Fetching profile for user:', session.user.id);
               const userProfile = await fetchProfile(session.user.id);
               if (isMounted) {
                 setProfile(userProfile);
+                console.log('AuthContext: Profile set:', !!userProfile);
               }
             } else {
               setProfile(null);
+              console.log('AuthContext: No session, clearing profile');
             }
           }
         );
 
         // Auth initialization complete
         if (isMounted) {
-          console.log('AuthContext: Auth initialization complete, setting loading to false');
+          console.log('AuthContext: Auth initialization complete, setting loading to false. User:', !!session?.user);
           setIsLoading(false);
         }
 
@@ -463,11 +517,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     // Add timeout to detect auth issues
     const timeoutId = setTimeout(() => {
-      console.log('AuthContext: Timeout reached, forcing loading to false');
+      console.warn('AuthContext: Timeout reached after 10 seconds, forcing loading to false');
       if (isMounted) {
+        console.warn('AuthContext: Auth initialization timed out - this may indicate a network or Supabase issue');
         setIsLoading(false);
       }
-    }, 2000); // Reduced to 2 seconds to test timeout mechanism
+    }, 10000); // 10 seconds to allow for slower network
 
     initializeAuth().then(() => {
       clearTimeout(timeoutId);

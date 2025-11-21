@@ -268,7 +268,7 @@ export function MessageList({ messages, loading, shouldScrollToBottom, className
   return (
     <div 
       ref={scrollRef}
-      className={clsx('overflow-y-auto p-4 space-y-4', className)}
+      className={clsx('overflow-y-auto px-3 py-4', className)}
       onScroll={handleScroll}
       style={{ 
         scrollBehavior: 'auto'

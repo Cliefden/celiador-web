@@ -59,101 +59,45 @@ export function MessageBubble({
   };
 
   return (
-    <div
-      className={clsx(
-        'flex gap-3',
-        isUser ? 'justify-end' : 'justify-start'
-      )}
-    >
-      {!isUser && (
-        <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-sm">
-          {getMessageIcon()}
-        </div>
-      )}
-      
-      <div
-        className={clsx(
-          'max-w-[80%] rounded-lg px-4 py-2 text-sm',
-          isUser
-            ? 'bg-primary text-primary-foreground'
-            : isSystem
-            ? 'bg-muted text-muted-foreground border border-border'
-            : 'bg-accent text-accent-foreground border border-border',
-          isLoading && 'animate-pulse'
-        )}
-      >
-        {/* Message type label */}
-        {getMessageTypeLabel() && (
-          <div className="text-xs opacity-75 mb-1">
-            {getMessageTypeLabel()}
-          </div>
-        )}
-        
-        {/* Message content */}
-        <div className="whitespace-pre-wrap break-words">
-          {isLoading ? (
-            <span className="inline-flex items-center gap-1">
-              <span className="w-2 h-2 bg-current rounded-full animate-bounce"></span>
-              <span className="w-2 h-2 bg-current rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></span>
-              <span className="w-2 h-2 bg-current rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></span>
-            </span>
-          ) : (
-            message.content
-          )}
-        </div>
-        
-        {/* Related job indicator */}
-        {message.relatedJobId && (
-          <div className="text-xs mt-2 pt-2 border-t border-current/20 opacity-75">
-            <div className="flex items-center justify-between">
-              <span className="inline-flex items-center gap-1">
-                {jobStatus === 'PENDING' && '⏳ Pending'}
-                {jobStatus === 'RUNNING' && '🔄 Running'}
-                {jobStatus === 'COMPLETED' && '✅ Completed'}
-                {jobStatus === 'FAILED' && '❌ Failed'}
-                {jobStatus === 'CANCELLED' && '🚫 Cancelled'}
-                {!jobStatus && '🔗 Job linked'}
-              </span>
-              {jobStatus === 'RUNNING' && (
-                <div className="flex space-x-1">
-                  <div className="w-1 h-1 bg-current rounded-full animate-pulse"></div>
-                  <div className="w-1 h-1 bg-current rounded-full animate-pulse" style={{ animationDelay: '0.2s' }}></div>
-                  <div className="w-1 h-1 bg-current rounded-full animate-pulse" style={{ animationDelay: '0.4s' }}></div>
-                </div>
-              )}
-            </div>
-            
-            {/* Job results */}
-            {jobStatus === 'COMPLETED' && jobResult && (
-              <div className="mt-1 text-xs bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300 rounded px-2 py-1">
-                {typeof jobResult === 'object' && jobResult.message 
-                  ? jobResult.message 
-                  : 'Job completed successfully'}
-              </div>
-            )}
-            
-            {jobStatus === 'FAILED' && jobs[message.relatedJobId]?.error && (
-              <div className="mt-1 text-xs bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 rounded px-2 py-1">
-                Error: {jobs[message.relatedJobId].error}
-              </div>
-            )}
-          </div>
-        )}
-        
-        {/* Timestamp */}
-        {!isLoading && (
-          <div className={clsx(
-            'text-xs mt-2 opacity-75',
-            isUser ? 'text-right' : 'text-left'
-          )}>
-            {formatTime(message.createdAt)}
-          </div>
+    <div className="w-full mb-3">
+      {/* Message Content - Clean and minimal */}
+      <div className={clsx(
+        "prose prose-sm max-w-none dark:prose-invert",
+        "whitespace-pre-wrap break-words leading-relaxed",
+        isUser 
+          ? "text-gray-900 dark:text-white font-medium bg-teal-100 dark:bg-teal-900/40 px-3 py-2 rounded-lg" 
+          : isSystem
+          ? "text-amber-800 dark:text-amber-200 bg-amber-50/40 dark:bg-amber-950/20 px-3 py-2 rounded text-sm italic"
+          : "text-gray-200 dark:text-gray-200 leading-relaxed",
+        isLoading && "animate-pulse"
+      )}>
+        {isLoading ? (
+          <span className="inline-flex items-center gap-2 text-gray-500 dark:text-gray-400">
+            <span className="w-2 h-2 bg-current rounded-full animate-bounce"></span>
+            <span className="w-2 h-2 bg-current rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></span>
+            <span className="w-2 h-2 bg-current rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></span>
+            <span className="ml-2">AI analyzing your input...</span>
+          </span>
+        ) : (
+          message.content
         )}
       </div>
       
-      {isUser && (
-        <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-sm">
-          {getMessageIcon()}
+      {/* Related job indicator - only if needed */}
+      {message.relatedJobId && jobStatus && jobStatus !== 'COMPLETED' && (
+        <div className="mt-2 text-xs text-gray-600 dark:text-gray-400 bg-gray-50/50 dark:bg-gray-800/50 rounded p-2">
+          <span className="inline-flex items-center gap-1.5">
+            {jobStatus === 'PENDING' && '⏳ Task Pending'}
+            {jobStatus === 'RUNNING' && '🔄 Task Running'}
+            {jobStatus === 'FAILED' && '❌ Task Failed'}
+            {jobStatus === 'CANCELLED' && '🚫 Task Cancelled'}
+          </span>
+          
+          {jobStatus === 'FAILED' && jobs[message.relatedJobId]?.error && (
+            <div className="mt-1 text-red-600 dark:text-red-400 text-xs">
+              Error: {jobs[message.relatedJobId].error}
+            </div>
+          )}
         </div>
       )}
     </div>

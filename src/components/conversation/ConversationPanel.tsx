@@ -148,7 +148,7 @@ export function ConversationPanel({
             className="flex-1 overflow-y-auto"
           />
           
-          <form onSubmit={handleSubmit} className="p-4 border-t">
+          <form onSubmit={handleSubmit} className="border-t border-gray-700 p-4 bg-gray-800/30 backdrop-blur-sm">
             <div className="flex gap-2">
               <Input
                 ref={inputRef}
@@ -156,18 +156,20 @@ export function ConversationPanel({
                 onChange={(e) => setMessage(e.target.value)}
                 placeholder="Ask about your project..."
                 disabled={isLoading}
-                className="flex-1"
+                className="flex-1 bg-gray-800/80 border-gray-600 hover:border-teal-500/50 text-white placeholder-gray-400 transition-all duration-300 focus:border-teal-400 focus:shadow-teal-400/20 backdrop-blur-sm"
               />
               <Button 
                 type="submit" 
                 disabled={!message.trim() || isLoading}
                 size="icon"
+                className="bg-teal-600 hover:bg-teal-700 transition-all duration-300 hover:scale-105 shadow-lg hover:shadow-teal-500/30"
               >
-                {isLoading ? '⏳' : '→'}
+                {isLoading ? (
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  '→'
+                )}
               </Button>
-            </div>
-            <div className="text-xs text-muted-foreground mt-2 text-center">
-              Press Enter to send
             </div>
           </form>
         </div>
@@ -206,7 +208,7 @@ export function ConversationPanel({
           className="flex-1"
         />
         
-        <form onSubmit={handleSubmit} className="p-4 border-t">
+        <form onSubmit={handleSubmit} className="border-t border-gray-700 p-4 bg-gray-800/30 backdrop-blur-sm">
           <div className="flex gap-2">
             <Input
               ref={inputRef}
@@ -214,17 +216,22 @@ export function ConversationPanel({
               onChange={(e) => setMessage(e.target.value)}
               placeholder="Ask about your project..."
               disabled={isLoading}
-              className="flex-1"
+              className="flex-1 bg-gray-800/80 border-gray-600 hover:border-teal-500/50 text-white placeholder-gray-400 transition-all duration-300 focus:border-teal-400 focus:shadow-teal-400/20 backdrop-blur-sm"
             />
             <Button 
               type="submit" 
               disabled={!message.trim() || isLoading}
               size="icon"
+              className="bg-teal-600 hover:bg-teal-700 transition-all duration-300 hover:scale-105 shadow-lg hover:shadow-teal-500/30"
             >
-              {isLoading ? '⏳' : '→'}
+              {isLoading ? (
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              ) : (
+                '→'
+              )}
             </Button>
           </div>
-          <div className="text-xs text-muted-foreground mt-2 text-center">
+          <div className="text-xs text-gray-400 mt-2 text-center">
             Press Ctrl+/ to toggle • Enter to send
           </div>
         </form>

@@ -169,6 +169,17 @@ export function useConversation(projectId?: string): UseConversationReturn {
           return prev;
         }
         
+        // If this is an assistant message, check if we have a temporary one to replace
+        if (newMessage.role === 'assistant') {
+          const tempIndex = prev.findIndex(msg => msg.id.startsWith('temp-ai-') && msg.role === 'assistant');
+          if (tempIndex >= 0) {
+            console.log('📝 Replacing temporary AI message with real one:', newMessage.id);
+            const updated = [...prev];
+            updated[tempIndex] = newMessage;
+            return updated;
+          }
+        }
+        
         console.log('📝 Adding new message to conversation:', newMessage.id);
         return [...prev, newMessage];
       });
@@ -518,43 +529,20 @@ export function useConversation(projectId?: string): UseConversationReturn {
         console.log('[useConversation] AI API response data:', responseData);
         const { response: aiContent, actions } = responseData;
 
-        // Save AI response to database
-        console.log('[useConversation] Saving AI response to database...');
-        const assistantResponse = {
-          conversationid: activeConversation.id,
+        // Note: AI message is already saved by the backend - no need to save here
+        console.log('[useConversation] AI response received from backend');
+        
+        // Add AI message to UI immediately (will be updated via WebSocket when backend saves it)
+        const tempAiMessage: Message = {
+          id: `temp-ai-${Date.now()}`,
           content: aiContent,
           role: 'assistant',
-          messagetype: actions ? 'command' : 'text', // Mark as command if actions detected
-          userid: user.id,
-          creator: user.id,
-          relatedjobid: actions?.jobId || null,
-          metadata: actions ? { actionsDetected: actions.detected } : null
+          messageType: actions ? 'command' : 'text',
+          createdAt: new Date().toISOString(),
+          metadata: actions ? { actionsDetected: actions.detected } : null,
+          relatedJobId: actions?.jobId || null
         };
-
-        console.log('[useConversation] AI response object:', assistantResponse);
-
-        const { data: savedAssistantMessage, error: assistantMessageError } = await supabase
-          .from('messages')
-          .insert([assistantResponse])
-          .select()
-          .single();
-
-        if (assistantMessageError) {
-          console.error('[useConversation] Error saving AI message:', assistantMessageError);
-          throw assistantMessageError;
-        }
-
-        console.log('[useConversation] AI message saved successfully:', savedAssistantMessage.id);
-
-        setMessages(prev => [...prev, {
-          id: savedAssistantMessage.id,
-          content: savedAssistantMessage.content,
-          role: 'assistant' as const,
-          messageType: 'text' as const,
-          createdAt: savedAssistantMessage.createdat,
-          metadata: savedAssistantMessage.metadata,
-          relatedJobId: savedAssistantMessage.relatedjobid
-        }]);
+        setMessages(prev => [...prev, tempAiMessage]);
 
       } catch (err) {
         console.error('Error getting AI response:', err);
