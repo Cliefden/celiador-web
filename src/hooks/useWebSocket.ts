@@ -158,7 +158,7 @@ export function useWebSocket(options: UseWebSocketOptions = {}) {
         onConnect?.();
       };
 
-      ws.onmessage = (event) => {
+      ws.onmessage = async (event) => {
         try {
           const message = JSON.parse(event.data);
           setLastMessage(message);
