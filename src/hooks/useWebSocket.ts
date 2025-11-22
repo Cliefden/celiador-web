@@ -25,7 +25,7 @@ interface WebSocketStats {
 }
 
 export function useWebSocket(options: UseWebSocketOptions = {}) {
-  const { session } = useAuth();
+  const { session, refreshAuth } = useAuth();
   const [isConnected, setIsConnected] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState<string>('Disconnected');
@@ -112,6 +112,22 @@ export function useWebSocket(options: UseWebSocketOptions = {}) {
       return;
     }
 
+    // Check if token is expired before connecting
+    try {
+      if (session?.expires_at) {
+        const now = Math.floor(Date.now() / 1000);
+        const expiresAt = session.expires_at;
+        
+        if (now >= expiresAt - 60) { // Refresh if expiring within 60 seconds
+          console.log('🔄 Token expiring soon, refreshing before WebSocket connection...');
+          await refreshAuth();
+          return; // Let the effect handle reconnection with fresh token
+        }
+      }
+    } catch (error) {
+      console.error('Error checking/refreshing token:', error);
+    }
+
     setIsConnecting(true);
     setConnectionStatus('Connecting...');
 
@@ -157,6 +173,20 @@ export function useWebSocket(options: UseWebSocketOptions = {}) {
               channels.forEach(channel => {
                 ws.send(JSON.stringify({ type: 'subscribe', channel }));
               });
+              break;
+
+            case 'authentication_failed':
+              console.log('❌ WebSocket authentication failed - refreshing token');
+              setConnectionStatus('Authentication failed - refreshing token');
+              
+              // Try to refresh the token and reconnect
+              try {
+                await refreshAuth();
+                // Close current connection to trigger reconnect with new token
+                ws.close();
+              } catch (error) {
+                console.error('Failed to refresh token:', error);
+              }
               break;
 
             case 'subscribed':
