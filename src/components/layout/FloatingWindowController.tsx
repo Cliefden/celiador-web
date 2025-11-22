@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { FloatingWindow, FloatingActionButton, FloatingWindowContent } from './FloatingWindow';
-import { Files, MessageSquare, Activity, Settings, Code2, Github } from 'lucide-react';
+import { Files, MessageSquare, Activity, Settings, Github } from 'lucide-react';
 
 interface FloatingWindowControllerProps {
   projectId?: string;
@@ -31,7 +31,7 @@ export function FloatingWindowController({
     setActiveWindow(null);
   };
 
-  const availableWindows: FloatingWindowContent[] = ['files', 'chat', 'activity', 'integrations', 'agents', 'code', 'settings'];
+  const availableWindows: FloatingWindowContent[] = ['files', 'chat', 'activity', 'integrations', 'agents', 'settings'];
 
   return (
     <div className={className}>

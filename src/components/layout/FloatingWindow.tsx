@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { X, Files, MessageSquare, Settings, Activity, Code2, Github, Triangle, Bot, CheckIcon, ClockIcon, PlayIcon, PauseIcon, RefreshCw } from 'lucide-react';
+import { X, Files, MessageSquare, Settings, Activity, Github, Triangle, Bot, CheckIcon, ClockIcon, PlayIcon, PauseIcon, RefreshCw } from 'lucide-react';
 import { ProjectFileExplorer } from '../file-tree/ProjectFileExplorer';
 import { ActivityFeed } from '../activity/ActivityFeed';
 import { GitHubIntegrationPanel } from '../integrations/GitHubIntegrationPanel';
@@ -15,7 +15,7 @@ import { AgentActivityPanel } from '../ecosystem/AgentActivityPanel';
 import { LivingEcosystemAssistant } from '../ai-assistant/LivingEcosystemAssistant';
 import { useLivingEcosystem } from '../../hooks/useLivingEcosystem';
 
-export type FloatingWindowContent = 'files' | 'chat' | 'activity' | 'settings' | 'code' | 'integrations' | 'agents';
+export type FloatingWindowContent = 'files' | 'chat' | 'activity' | 'settings' | 'integrations' | 'agents';
 
 interface FloatingWindowProps {
   isOpen: boolean;
@@ -46,11 +46,6 @@ const contentConfig = {
     title: 'Settings',
     icon: Settings,
     description: 'Configure project settings'
-  },
-  code: {
-    title: 'Code Assistant',
-    icon: Code2,
-    description: 'AI-powered code assistance'
   },
   integrations: {
     title: 'Integrations',
@@ -123,15 +118,6 @@ export function FloatingWindow({
           <FloatingSettingsPanel className="h-full" />
         );
       
-      case 'code':
-        return (
-          <div className="p-4 h-full flex items-center justify-center text-gray-300">
-            <div className="text-center">
-              <Code2 className="w-12 h-12 mx-auto mb-4 text-gray-300" />
-              <p>Code assistant coming soon...</p>
-            </div>
-          </div>
-        );
       
       case 'integrations':
         return projectId ? (
