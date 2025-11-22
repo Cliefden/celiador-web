@@ -61,11 +61,11 @@ export function ProjectFileExplorer({
   };
 
   useEffect(() => {
-    if (session && projectId) {
+    if (projectId) {
       fetchFiles();
       checkScaffoldingStatus();
     }
-  }, [projectId, session]);
+  }, [projectId]);
 
   // Poll for files during scaffolding
   useEffect(() => {
@@ -106,18 +106,25 @@ export function ProjectFileExplorer({
 
   const handleCreateFile = async (parentPath?: string) => {
     const fileName = prompt('Enter file name:');
-    if (!fileName || !session) return;
+    if (!fileName) return;
 
     try {
       setOperationLoading(`Creating file: ${fileName}`);
       setError(null);
+
+      // Get valid session with automatic refresh
+      const validSession = await getValidSession();
+      if (!validSession) {
+        setError('Session expired. Please refresh the page to sign in again.');
+        return;
+      }
 
       const filePath = parentPath ? `${parentPath}/${fileName}` : fileName;
       
       const response = await fetch(`${process.env.NEXT_PUBLIC_ORCHESTRATOR_URL || 'http://localhost:4000'}/projects/${projectId}/files/create`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${session.access_token}`,
+          'Authorization': `Bearer ${validSession.access_token}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ 
@@ -145,18 +152,25 @@ export function ProjectFileExplorer({
 
   const handleCreateFolder = async (parentPath?: string) => {
     const folderName = prompt('Enter folder name:');
-    if (!folderName || !session) return;
+    if (!folderName) return;
 
     try {
       setOperationLoading(`Creating folder: ${folderName}`);
       setError(null);
+
+      // Get valid session with automatic refresh
+      const validSession = await getValidSession();
+      if (!validSession) {
+        setError('Session expired. Please refresh the page to sign in again.');
+        return;
+      }
 
       const folderPath = parentPath ? `${parentPath}/${folderName}` : folderName;
       
       const response = await fetch(`${process.env.NEXT_PUBLIC_ORCHESTRATOR_URL || 'http://localhost:4000'}/projects/${projectId}/files/create`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${session.access_token}`,
+          'Authorization': `Bearer ${validSession.access_token}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ 
@@ -182,16 +196,21 @@ export function ProjectFileExplorer({
   };
 
   const handleDeleteFile = async (filePath: string) => {
-    if (!session) return;
-    
     try {
       setOperationLoading(`Deleting file: ${filePath}`);
       setError(null);
 
+      // Get valid session with automatic refresh
+      const validSession = await getValidSession();
+      if (!validSession) {
+        setError('Session expired. Please refresh the page to sign in again.');
+        return;
+      }
+
       const response = await fetch(`${process.env.NEXT_PUBLIC_ORCHESTRATOR_URL || 'http://localhost:4000'}/projects/${projectId}/files/${encodeURIComponent(filePath)}`, {
         method: 'DELETE',
         headers: {
-          'Authorization': `Bearer ${session.access_token}`,
+          'Authorization': `Bearer ${validSession.access_token}`,
         },
       });
 
@@ -212,17 +231,22 @@ export function ProjectFileExplorer({
   };
 
   const handleDeleteFolder = async (folderPath: string) => {
-    if (!session) return;
-    
     try {
       setOperationLoading(`Deleting folder: ${folderPath}`);
       setError(null);
+
+      // Get valid session with automatic refresh
+      const validSession = await getValidSession();
+      if (!validSession) {
+        setError('Session expired. Please refresh the page to sign in again.');
+        return;
+      }
 
       // Delete the folder by deleting all files in it (Supabase doesn't have folder concept)
       const response = await fetch(`${process.env.NEXT_PUBLIC_ORCHESTRATOR_URL || 'http://localhost:4000'}/projects/${projectId}/files/delete-folder`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${session.access_token}`,
+          'Authorization': `Bearer ${validSession.access_token}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ 
@@ -247,14 +271,19 @@ export function ProjectFileExplorer({
   };
 
   const checkScaffoldingStatus = async () => {
-    if (!projectId || !session) return;
+    if (!projectId) return;
     
     try {
+      // Get valid session with automatic refresh
+      const validSession = await getValidSession();
+      if (!validSession) {
+        return;
+      }
 
       // Check for active scaffold jobs
       const response = await fetch(`${process.env.NEXT_PUBLIC_ORCHESTRATOR_URL || 'http://localhost:4000'}/projects/${projectId}/jobs?type=SCAFFOLD&status=PENDING,RUNNING`, {
         headers: {
-          'Authorization': `Bearer ${session.access_token}`
+          'Authorization': `Bearer ${validSession.access_token}`
         }
       });
 
@@ -270,7 +299,7 @@ export function ProjectFileExplorer({
   };
 
   const fetchFiles = async (silent = false) => {
-    if (!projectId || !session) {
+    if (!projectId) {
       return;
     }
     
@@ -278,9 +307,18 @@ export function ProjectFileExplorer({
       if (!silent) setLoading(true);
       if (!silent) setError(null); // Clear errors when doing manual refresh
       
+      // Get valid session with automatic refresh
+      const validSession = await getValidSession();
+      if (!validSession) {
+        if (!silent) {
+          setError('Session expired. Please refresh the page to sign in again.');
+        }
+        return;
+      }
+      
       const response = await fetch(`${process.env.NEXT_PUBLIC_ORCHESTRATOR_URL || 'http://localhost:4000'}/projects/${projectId}/files/tree`, {
         headers: {
-          'Authorization': `Bearer ${session.access_token}`
+          'Authorization': `Bearer ${validSession.access_token}`
         }
       });
 
@@ -293,6 +331,11 @@ export function ProjectFileExplorer({
       } else if (response.status === 404) {
         setFiles([]);
         if (!silent) setError(null); // 404 is not really an error for empty projects
+      } else if (response.status === 401) {
+        // Token still invalid after refresh - need full re-authentication
+        if (!silent) {
+          setError('Authentication failed. Please refresh the page to sign in again.');
+        }
       } else {
         setFiles([]);
         if (!silent) {
