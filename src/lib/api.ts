@@ -11,8 +11,23 @@ export class ApiClient {
   }
 
   private static async getAuthHeaders() {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) throw new Error('No authentication session');
+    let { data: { session }, error } = await supabase.auth.getSession();
+    
+    // Check if session is expired or invalid
+    const now = Math.floor(Date.now() / 1000);
+    const isExpired = session?.expires_at && session.expires_at < now;
+    
+    if (!session || error || isExpired) {
+      console.log('[ApiClient] Session expired or invalid, attempting refresh...');
+      const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
+      
+      if (refreshError || !refreshData.session) {
+        throw new Error('No authentication session available and refresh failed');
+      }
+      
+      session = refreshData.session;
+      console.log('[ApiClient] Token refreshed successfully');
+    }
     
     return {
       'Authorization': `Bearer ${session.access_token}`,
@@ -245,22 +260,65 @@ export class ApiClient {
     return this.baseUrl;
   }
 
-  // Generic authenticated fetch method
+  // Generic authenticated fetch method with retry logic
   static async authenticatedFetch(endpoint: string, options: RequestInit = {}) {
-    const headers = await this.getAuthHeaders();
-    const response = await fetch(`${this.baseUrl}${endpoint}`, {
-      ...options,
-      headers: {
-        ...headers,
-        ...options.headers
+    try {
+      const headers = await this.getAuthHeaders();
+      const response = await fetch(`${this.baseUrl}${endpoint}`, {
+        ...options,
+        headers: {
+          ...headers,
+          ...options.headers
+        }
+      });
+
+      // If not a 401 error, handle normally
+      if (response.status !== 401) {
+        if (!response.ok) {
+          const error = await response.json().catch(() => ({ error: 'Request failed' }));
+          throw new Error(error.error || `Request failed with status ${response.status}`);
+        }
+        return response.json();
       }
-    });
 
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({ error: 'Request failed' }));
-      throw new Error(error.error || `Request failed with status ${response.status}`);
+      // Handle 401 error with retry
+      console.log('[ApiClient] 401 error, attempting token refresh...');
+      
+      // Force refresh session
+      const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
+      
+      if (refreshError || !refreshData.session) {
+        throw new Error('Authentication failed - unable to refresh token');
+      }
+
+      console.log('[ApiClient] Token refreshed, retrying request...');
+      
+      // Retry with fresh token
+      const retryHeaders = {
+        ...headers,
+        'Authorization': `Bearer ${refreshData.session.access_token}`,
+        ...options.headers
+      };
+      
+      const retryResponse = await fetch(`${this.baseUrl}${endpoint}`, {
+        ...options,
+        headers: retryHeaders
+      });
+
+      if (retryResponse.status === 401) {
+        throw new Error('Authentication failed even after token refresh - user may need to sign in again');
+      }
+
+      if (!retryResponse.ok) {
+        const error = await retryResponse.json().catch(() => ({ error: 'Request failed' }));
+        throw new Error(error.error || `Request failed with status ${retryResponse.status}`);
+      }
+
+      return retryResponse.json();
+
+    } catch (error) {
+      console.error('[ApiClient] Request failed:', error);
+      throw error;
     }
-
-    return response.json();
   }
 }

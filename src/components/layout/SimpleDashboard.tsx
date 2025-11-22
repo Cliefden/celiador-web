@@ -14,6 +14,7 @@ import { OnboardingFlow } from '../onboarding/OnboardingFlow';
 import { WelcomeBanner } from '../onboarding/WelcomeBanner';
 import { useOnboarding } from '../../hooks/useOnboarding';
 import { useUserPreferences } from '../../hooks/useUserPreferences';
+import { useAuthenticatedFetch } from '../../hooks/useAuthenticatedFetch';
 import { 
   Plus, 
   Send, 
@@ -99,6 +100,7 @@ export function SimpleDashboard({ initialUser, onLogout }: SimpleDashboardProps)
   
   const [user] = useState<User>(initialUser);
   const { session } = useAuth();
+  const authenticatedFetch = useAuthenticatedFetch();
   const [projects, setProjects] = useState<Project[]>([]);
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
   const [showCreateProject, setShowCreateProject] = useState(false);
@@ -295,18 +297,16 @@ export function SimpleDashboard({ initialUser, onLogout }: SimpleDashboardProps)
     const loadProjects = async () => {
       try {
         setLoading(true);
-        // Use session from AuthContext instead of calling Supabase directly
-        if (!session?.access_token) {
+        // Check if session exists (useAuthenticatedFetch will handle token validation)
+        if (!session) {
           console.log('[SimpleDashboard] No session available, skipping project load');
           setLoading(false);
           return;
         }
 
         const apiUrl = process.env.NEXT_PUBLIC_ORCHESTRATOR_URL || 'http://localhost:4000';
-        console.log('[SimpleDashboard] Loading projects with session token:', !!session.access_token);
-        const response = await fetch(`${apiUrl}/projects`, {
-          headers: { 'Authorization': `Bearer ${session.access_token}` }
-        });
+        console.log('[SimpleDashboard] Loading projects with authenticated fetch');
+        const response = await authenticatedFetch(`${apiUrl}/projects`);
 
         if (response.ok) {
           const projectsData = await response.json();
@@ -561,12 +561,9 @@ The user has visually selected this specific UI element and wants to modify it. 
     }
 
     try {
-      if (!session?.access_token) return;
-
       const apiUrl = process.env.NEXT_PUBLIC_ORCHESTRATOR_URL || 'http://localhost:4000';
-      const response = await fetch(`${apiUrl}/projects/${project.id}`, {
-        method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${session.access_token}` }
+      const response = await authenticatedFetch(`${apiUrl}/projects/${project.id}`, {
+        method: 'DELETE'
       });
 
       if (response.ok) {
