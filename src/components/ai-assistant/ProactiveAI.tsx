@@ -7,6 +7,7 @@ interface ProactiveAIProps {
   projectId?: string;
   agents: any[];
   isEnabled: boolean;
+  onTriggerIntent?: (intent: string) => void;
 }
 
 interface AIInsight {
@@ -19,15 +20,18 @@ interface AIInsight {
   priority: 'low' | 'medium' | 'high';
 }
 
-export function ProactiveAI({ projectId, agents, isEnabled }: ProactiveAIProps) {
+export function ProactiveAI({ projectId, agents, isEnabled, onTriggerIntent }: ProactiveAIProps) {
   const [activeInsights, setActiveInsights] = useState<AIInsight[]>([]);
   const [dismissed, setDismissed] = useState<Set<string>>(new Set());
+  
+  console.log('🎯 ProactiveAI render:', { projectId, isEnabled, activeInsightsCount: activeInsights.length, dismissedCount: dismissed.size });
 
   // Generate proactive insights based on project state
   useEffect(() => {
     if (!isEnabled || !projectId) return;
 
     const generateInsights = () => {
+      console.log('🎯 ProactiveAI generateInsights called');
       const insights: AIInsight[] = [];
       const now = new Date();
 
@@ -45,8 +49,8 @@ export function ProactiveAI({ projectId, agents, isEnabled }: ProactiveAIProps) 
         });
       }
 
-      // Performance insights
-      if (Math.random() > 0.3) {
+      // Performance insights - always show initially for testing
+      if (Math.random() > 0.1) {  // 90% chance
         insights.push({
           id: 'performance-check',
           type: 'opportunity',
@@ -58,8 +62,8 @@ export function ProactiveAI({ projectId, agents, isEnabled }: ProactiveAIProps) 
         });
       }
 
-      // Security insights
-      if (Math.random() > 0.4) {
+      // Security insights - always show initially for testing  
+      if (Math.random() > 0.1) {  // 90% chance
         insights.push({
           id: 'security-scan',
           type: 'warning',
@@ -71,8 +75,8 @@ export function ProactiveAI({ projectId, agents, isEnabled }: ProactiveAIProps) 
         });
       }
 
-      // Code quality insights
-      if (Math.random() > 0.2) {
+      // Code quality insights - always show initially for testing
+      if (Math.random() > 0.1) {  // 90% chance
         insights.push({
           id: 'code-quality',
           type: 'suggestion',
@@ -86,7 +90,8 @@ export function ProactiveAI({ projectId, agents, isEnabled }: ProactiveAIProps) 
 
       // Filter out dismissed insights
       const newInsights = insights.filter(insight => !dismissed.has(insight.id));
-      setActiveInsights(newInsights.slice(0, 2)); // Show max 2 at a time
+      console.log('🎯 ProactiveAI generated insights:', { total: insights.length, afterDismissed: newInsights.length, dismissed: Array.from(dismissed) });
+      setActiveInsights(newInsights.slice(0, 3)); // Show max 3 at a time
     };
 
     // Generate initial insights
@@ -153,10 +158,32 @@ export function ProactiveAI({ projectId, agents, isEnabled }: ProactiveAIProps) 
               <p className="text-xs opacity-90 mb-2">{insight.message}</p>
               {insight.action && (
                 <button
-                  onClick={() => {
-                    // This would trigger the AI action
-                    console.log('AI Action:', insight.action);
-                    dismissInsight(insight.id);
+                  onClick={async () => {
+                    console.log('🔍 ProactiveAI button clicked:', insight.action);
+                    console.log('🔍 onTriggerIntent available:', !!onTriggerIntent);
+                    
+                    // Trigger the actual intent through the ecosystem
+                    if (onTriggerIntent) {
+                      const intentMap: Record<string, string> = {
+                        'analyze performance': 'optimize application performance',
+                        'run security scan': 'enhance security and data protection',
+                        'review code quality': 'improve code quality and maintainability',
+                        'show agent status': 'show current agent status'
+                      };
+                      const intent = intentMap[insight.action] || insight.action;
+                      console.log('🔍 Mapped intent:', intent);
+                      
+                      try {
+                        await onTriggerIntent(intent);
+                        // Only dismiss on success
+                        dismissInsight(insight.id);
+                      } catch (error) {
+                        console.error('Failed to trigger intent:', error);
+                        // Don't dismiss on error - let user retry
+                      }
+                    } else {
+                      console.warn('⚠️ onTriggerIntent function not available');
+                    }
                   }}
                   className="text-xs bg-white/20 hover:bg-white/30 px-2 py-1 rounded transition-colors"
                 >

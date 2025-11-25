@@ -7,10 +7,28 @@ import { Card } from '../ui/card';
 import { MessageList } from './MessageList';
 import { ConversationHeader } from './ConversationHeader';
 import { useConversation } from './useConversation';
+import { MousePointer } from 'lucide-react';
 
 interface Project {
   id: string;
   name: string;
+}
+
+interface UIElement {
+  id: string;
+  type: string;
+  selector: string;
+  componentName?: string;
+  text?: string;
+  boundingBox?: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  };
+  attributes?: Record<string, any>;
+  styles?: Record<string, any>;
+  context?: any;
 }
 
 interface ConversationPanelProps {
@@ -21,6 +39,9 @@ interface ConversationPanelProps {
   onFileOperation?: () => void;
   embedded?: boolean; // New prop to control embedded vs floating mode
   conversationHook?: any; // Optional shared conversation hook
+  selectedElement?: UIElement | null; // Element selected in inspection mode
+  inspectionMode?: boolean; // Whether inspection mode is active
+  onClearSelectedElement?: () => void; // Function to clear selected element
 }
 
 export function ConversationPanel({ 
@@ -30,7 +51,10 @@ export function ConversationPanel({
   onToggle,
   onFileOperation,
   embedded = false,
-  conversationHook
+  conversationHook,
+  selectedElement,
+  inspectionMode = false,
+  onClearSelectedElement
 }: ConversationPanelProps) {
   const [isOpen, setIsOpen] = useState(embedded ? true : false); // Start open if embedded
   const [message, setMessage] = useState('');
@@ -79,10 +103,32 @@ export function ConversationPanel({
     e.preventDefault();
     if (!message.trim() || isLoading) return;
 
-    const messageText = message.trim();
+    let messageText = message.trim();
+    
+    // Enhanced message with element context if an element is selected
+    if (selectedElement) {
+      const elementContext = `
+
+SELECTED UI ELEMENT CONTEXT:
+- Element Type: ${selectedElement.type}
+- Component Name: ${selectedElement.componentName || 'Unknown'}
+- CSS Selector: ${selectedElement.selector}
+- Text Content: ${selectedElement.text || 'Not available'}
+${selectedElement.boundingBox ? `- Position: x=${selectedElement.boundingBox.x}, y=${selectedElement.boundingBox.y}` : '- Position: Not available'}
+${selectedElement.boundingBox ? `- Size: ${selectedElement.boundingBox.width}x${selectedElement.boundingBox.height}px` : '- Size: Not available'}
+${selectedElement.attributes ? `- HTML Attributes: ${JSON.stringify(selectedElement.attributes, null, 2)}` : ''}
+${selectedElement.styles ? `- Computed Styles: ${JSON.stringify(selectedElement.styles, null, 2)}` : ''}
+${selectedElement.context ? `- Parent Context: ${JSON.stringify(selectedElement.context, null, 2)}` : ''}
+
+The user has visually selected this specific UI element and wants to modify it. Please search through the provided project files to find this element and make the requested changes using the action format.`;
+      
+      messageText += elementContext;
+    }
+
     console.log('[ConversationPanel] Sending message:', messageText);
     console.log('[ConversationPanel] Current conversation:', conversation?.id);
     console.log('[ConversationPanel] Project ID:', selectedProject?.id || projectId);
+    console.log('[ConversationPanel] Selected Element:', selectedElement);
     
     setMessage('');
     setIsLoading(true);
@@ -149,12 +195,37 @@ export function ConversationPanel({
           />
           
           <form onSubmit={handleSubmit} className="border-t border-gray-700 p-4 bg-gray-800/30 backdrop-blur-sm">
+            {/* Selected Element Indicator */}
+            {selectedElement && (
+              <div className="mb-3 p-3 bg-teal-500/10 border border-teal-400/30 rounded-lg">
+                <div className="flex items-center space-x-2 text-teal-300">
+                  <MousePointer className="h-4 w-4" />
+                  <span className="text-sm font-medium">Selected Element:</span>
+                  <code className="bg-teal-400/20 px-2 py-1 rounded text-xs">
+                    {selectedElement.componentName || selectedElement.type}
+                  </code>
+                  <button 
+                    onClick={onClearSelectedElement}
+                    className="ml-auto text-teal-300 hover:text-teal-100"
+                    type="button"
+                  >
+                    ×
+                  </button>
+                </div>
+              </div>
+            )}
             <div className="flex gap-2">
               <Input
                 ref={inputRef}
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
-                placeholder="Ask about your project..."
+                placeholder={
+                  selectedElement 
+                    ? `Modify ${selectedElement.componentName || selectedElement.type}...`
+                    : inspectionMode
+                    ? "Click an element in the preview to modify it..."
+                    : "Ask about your project..."
+                }
                 disabled={isLoading}
                 className="flex-1 bg-gray-800/80 border-gray-600 hover:border-teal-500/50 text-white placeholder-gray-400 transition-all duration-300 focus:border-teal-400 focus:shadow-teal-400/20 backdrop-blur-sm"
               />

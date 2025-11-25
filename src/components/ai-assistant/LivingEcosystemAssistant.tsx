@@ -45,11 +45,12 @@ export function LivingEcosystemAssistant({
 }: LivingEcosystemAssistantProps) {
   const [message, setMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [activeView, setActiveView] = useState<'chat' | 'agents' | 'insights'>('chat');
+  const [activeView, setActiveView] = useState<'chat' | 'agents' | 'insights'>('agents');
   const [aiThinking, setAiThinking] = useState(false);
   const [currentContext, setCurrentContext] = useState<string>('');
   const [suggestedActions, setSuggestedActions] = useState<string[]>([]);
   const [isTyping, setIsTyping] = useState(false);
+  const [lastTypedTime, setLastTypedTime] = useState(Date.now());
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -81,9 +82,12 @@ export function LivingEcosystemAssistant({
     }
   }, [shouldScrollToBottom, messages]);
 
-  // AI Context Analysis - analyze user input for intelligent responses
+  // AI Context Analysis - only trigger when user is actively typing
   useEffect(() => {
-    if (message.length > 10) {
+    const now = Date.now();
+    const timeSinceLastType = now - lastTypedTime;
+    
+    if (message.length > 10 && timeSinceLastType < 100) { // Only if typed recently
       setAiThinking(true);
       const timer = setTimeout(() => {
         // Simulate AI understanding context
@@ -105,14 +109,15 @@ export function LivingEcosystemAssistant({
           'Want me to check accessibility compliance?'
         ];
         setSuggestedActions(suggestions.slice(0, 2));
-      }, 1000);
+      }, 1500);
       
       return () => clearTimeout(timer);
-    } else {
+    } else if (message.length <= 10) {
+      setAiThinking(false);
       setCurrentContext('');
       setSuggestedActions([]);
     }
-  }, [message]);
+  }, [message, lastTypedTime]);
 
   // Simulate AI typing when processing complex intents
   useEffect(() => {
@@ -383,10 +388,6 @@ The user has visually selected this specific UI element and wants to modify it. 
               ref={messagesContainerRef}
               className="flex-1 overflow-y-auto p-4 space-y-4"
             >
-              {/* Always show ProactiveAI at the top */}
-              <div className="mb-4">
-                <ProactiveAI projectId={projectId} agents={agents || []} isEnabled={isEnabled} />
-              </div>
               
               {conversation && messages && messages.length > 0 ? (
                 <MessageList 
@@ -516,7 +517,10 @@ The user has visually selected this specific UI element and wants to modify it. 
                 <Input
                   ref={inputRef}
                   value={message}
-                  onChange={(e) => setMessage(e.target.value)}
+                  onChange={(e) => {
+                    setMessage(e.target.value);
+                    setLastTypedTime(Date.now()); // Track when user types
+                  }}
                   placeholder={
                     selectedElement 
                       ? `Modify ${selectedElement.componentName || selectedElement.type}...`
@@ -630,6 +634,36 @@ The user has visually selected this specific UI element and wants to modify it. 
                   {agents.filter(a => a.status === 'active').length} active
                 </span>
               </div>
+              
+              {/* ProactiveAI Suggestions */}
+              {projectId && (
+                <div className="mb-4">
+                  <div className="text-sm font-medium text-gray-300 mb-3">💡 AI Suggestions</div>
+                  <ProactiveAI 
+                    projectId={projectId} 
+                    agents={agents || []} 
+                    isEnabled={isEnabled}
+                    onTriggerIntent={async (intent: string) => {
+                      if (processUserIntent && projectId) {
+                        try {
+                          await processUserIntent(intent, {
+                            projectId,
+                            userId: 'user',
+                            projectContext: {
+                              name: 'Current Project',
+                              tech_stack: ['React', 'TypeScript', 'Next.js'],
+                              current_files: []
+                            }
+                          });
+                        } catch (error) {
+                          console.error('❌ Failed to trigger intent from LivingEcosystemAssistant:', error);
+                          throw error;
+                        }
+                      }
+                    }}
+                  />
+                </div>
+              )}
               
               {agents.length === 0 ? (
                 <div className="text-center py-8 text-gray-400">

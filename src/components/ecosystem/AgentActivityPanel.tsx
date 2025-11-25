@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { CheckIcon, ClockIcon, X, PlayIcon, PauseIcon } from 'lucide-react';
 import { useLivingEcosystem } from '../../hooks/useLivingEcosystem';
+import { ProactiveAI } from '../ai-assistant/ProactiveAI';
 
 interface Agent {
   id: string;
@@ -30,6 +31,7 @@ interface AgentActivityPanelProps {
   className?: string;
   onAgentAction?: (agentId: string, action: 'pause' | 'resume' | 'stop') => void;
   onSuggestionApply?: (agentId: string, suggestionIndex: number) => void;
+  onTriggerIntent?: (intent: string) => Promise<void>;
 }
 
 const getAgentConfig = (type: Agent['type']) => {
@@ -272,7 +274,7 @@ function AgentCard({ agent, onAction, onSuggestionApply }: {
   );
 }
 
-export function AgentActivityPanel({ projectId, userId, className = "", onAgentAction, onSuggestionApply }: AgentActivityPanelProps) {
+export function AgentActivityPanel({ projectId, userId, className = "", onAgentAction, onSuggestionApply, onTriggerIntent }: AgentActivityPanelProps) {
   const [isMinimized, setIsMinimized] = useState(false);
   
   // Get ecosystem data from hook with safe fallbacks
@@ -336,6 +338,23 @@ export function AgentActivityPanel({ projectId, userId, className = "", onAgentA
       {/* Agent List */}
       {!isMinimized && (
         <div className="flex-1 overflow-y-auto p-4 space-y-4">
+          {/* Proactive AI Suggestions */}
+          {projectId && (
+            <div className="mb-4">
+              <div className="text-sm font-medium text-gray-700 mb-3">💡 AI Suggestions</div>
+              <ProactiveAI 
+                projectId={projectId} 
+                agents={agents || []} 
+                isEnabled={isEnabled}
+                onTriggerIntent={onTriggerIntent}
+              />
+            </div>
+          )}
+          
+          {agents.length > 0 && (
+            <div className="text-sm font-medium text-gray-700 mb-3">🤖 Active Agents</div>
+          )}
+          
           {agents
             .sort((a, b) => {
               // Active agents first

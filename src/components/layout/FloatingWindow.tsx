@@ -13,6 +13,7 @@ import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { AgentActivityPanel } from '../ecosystem/AgentActivityPanel';
 import { LivingEcosystemAssistant } from '../ai-assistant/LivingEcosystemAssistant';
+import { ProactiveAI } from '../ai-assistant/ProactiveAI';
 import { useLivingEcosystem } from '../../hooks/useLivingEcosystem';
 
 export type FloatingWindowContent = 'files' | 'chat' | 'activity' | 'settings' | 'integrations' | 'agents';
@@ -405,11 +406,10 @@ interface FloatingAgentsPanelProps {
 }
 
 function FloatingAgentsPanel({ projectId }: FloatingAgentsPanelProps) {
-  // Import the existing AgentActivityPanel as a floating version
-  // We need to modify it to work without the fixed positioning
+  // Use the Living Ecosystem Assistant for full ecosystem features
   return (
     <div className="h-full">
-      <AgentActivityPanelFloating projectId={projectId} />
+      <LivingEcosystemAssistant projectId={projectId} className="h-full" />
     </div>
   );
 }
@@ -422,7 +422,8 @@ function AgentActivityPanelFloating({ projectId }: { projectId?: string }) {
     isEnabled = false,
     agents = [],
     controlAgent,
-    applySuggestion
+    applySuggestion,
+    processUserIntent
   } = useLivingEcosystem(projectId) || {};
   
   // Show message if not enabled or no agents
@@ -466,6 +467,41 @@ function AgentActivityPanelFloating({ projectId }: { projectId?: string }) {
 
       {/* Agent List */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
+        {/* Proactive AI Suggestions */}
+        {projectId && (
+          <div className="mb-4">
+            <div className="text-sm font-medium text-gray-300 mb-3">💡 AI Suggestions</div>
+            <ProactiveAI 
+              projectId={projectId} 
+              agents={agents || []} 
+              isEnabled={isEnabled}
+              onTriggerIntent={async (intent: string) => {
+                if (processUserIntent && projectId) {
+                  try {
+                    console.log('🚀 FloatingWindow ProactiveAI triggering intent:', intent);
+                    await processUserIntent(intent, {
+                      projectId,
+                      userId: 'user', // TODO: Get real user ID from auth context
+                      projectContext: {
+                        name: 'Current Project',
+                        tech_stack: ['React', 'TypeScript', 'Next.js'],
+                        current_files: []
+                      }
+                    });
+                  } catch (error) {
+                    console.error('❌ Failed to trigger intent from FloatingWindow:', error);
+                    throw error; // Re-throw to let ProactiveAI handle UI state
+                  }
+                }
+              }}
+            />
+          </div>
+        )}
+        
+        {agents.length > 0 && (
+          <div className="text-sm font-medium text-gray-300 mb-3">🤖 Active Agents</div>
+        )}
+        
         {agents
           .sort((a, b) => {
             // Active agents first

@@ -41,8 +41,7 @@ import { CeliadorLogo } from '../ui/celiador-logo';
 import { OfflineStatusBanner } from '../ui/OfflineStatusIndicator';
 import { AIStatusBar } from '../ecosystem/AIStatusBar';
 import { ModeToggleTooltip } from '../ui/ModeToggleTooltip';
-import { LivingEcosystemAssistant } from '../ai-assistant/LivingEcosystemAssistant';
-import { useLivingEcosystem } from '../../hooks/useLivingEcosystem';
+import { ConversationPanel } from '../conversation/ConversationPanel';
 
 interface User {
   id: string;
@@ -88,11 +87,45 @@ interface UIElement {
     parentClass?: string;
     siblingCount?: number;
     indexInParent?: number;
+    // Enhanced context from inspection system
+    parent?: {
+      tagName?: string;
+      className?: string;
+      id?: string;
+      role?: string;
+      boundingBox?: {
+        x: number;
+        y: number;
+        width: number;
+        height: number;
+      };
+      styles?: Record<string, string>;
+    };
+    reactInfo?: {
+      isNextjsComponent?: boolean;
+      isTailwindStyled?: boolean;
+      isCSSModules?: boolean;
+      isStyledComponents?: boolean;
+      possibleFramework?: string;
+    };
+    semantic?: {
+      purpose?: string;
+      actionType?: string;
+      interactive?: boolean;
+      formRelated?: boolean;
+    };
   };
   metadata?: {
     filePath?: string;
     lineNumber?: number;
     props?: Record<string, any>;
+  };
+  accessibility?: {
+    hasAriaLabel?: boolean;
+    role?: string;
+    tabIndex?: number;
+    isVisible?: boolean;
+    isFocusable?: boolean;
   };
 }
 
@@ -242,15 +275,6 @@ export function SimpleDashboard({ initialUser, onLogout }: SimpleDashboardProps)
     shouldScrollToBottom
   } = conversationHook || {};
 
-  // Living Ecosystem hook for AI Enhanced mode
-  const {
-    isEnabled: isLivingEcosystemEnabled,
-    isConnected: isLivingEcosystemConnected,
-    agents,
-    projectDNA,
-    activeIntent,
-    ecosystemStatus
-  } = useLivingEcosystem(preferences.dashboardMode === 'ai-enhanced' ? selectedProject?.id : undefined);
 
   // Auto-scroll implementation
   useEffect(() => {
@@ -372,20 +396,23 @@ export function SimpleDashboard({ initialUser, onLogout }: SimpleDashboardProps)
     }
   }, [selectedProject?.id]);
 
-  // Set preview URL when preview or inspection mode changes
+  // Set preview URL when preview changes (but NOT when inspection mode changes)
   useEffect(() => {
     const updatePreviewUrl = async () => {
       // Skip if we're manually setting the URL to avoid race conditions
       if (manuallySettingUrl) {
+        console.log('🔍 [DEBUG] Skipping URL update - manually setting URL flag is true');
         return;
       }
       
       // Skip if inspection mode is true to prevent overriding inspection URL
       if (inspectionMode) {
+        console.log('🔍 [DEBUG] Skipping URL update - inspection mode is active');
         return;
       }
       
       if (preview?.status === 'running') {
+        console.log('🔍 [DEBUG] Updating preview URL for normal mode');
         const url = await getPreviewUrl();
         setCurrentPreviewUrl(url);
       } else {
@@ -394,7 +421,7 @@ export function SimpleDashboard({ initialUser, onLogout }: SimpleDashboardProps)
     };
     
     updatePreviewUrl();
-  }, [preview?.url, preview?.status, preview?.id, inspectionMode, selectedProject?.id, manuallySettingUrl]);
+  }, [preview?.url, preview?.status, preview?.id, selectedProject?.id, manuallySettingUrl]); // REMOVED inspectionMode dependency to prevent race condition
 
   // Add a simple fallback timer for stuck previews
   useEffect(() => {
@@ -421,19 +448,28 @@ export function SimpleDashboard({ initialUser, onLogout }: SimpleDashboardProps)
       if (event.data.type === 'INSPECTION_ELEMENT_CLICKED') {
         const inspectableElement = event.data.element;
         
-        // Convert from InspectableElement to UIElement format
+        console.log('📨 [SimpleDashboard] Received enhanced element data:', inspectableElement);
+        
+        // Convert from enhanced InspectableElement to UIElement format
         const uiElement: UIElement = {
           id: inspectableElement.id,
           type: inspectableElement.type,
           selector: inspectableElement.selector,
-          componentName: inspectableElement.text || inspectableElement.type,
-          boundingBox: {
-            x: inspectableElement.x,
-            y: inspectableElement.y,
-            width: inspectableElement.width,
-            height: inspectableElement.height
-          }
+          componentName: inspectableElement.componentName || inspectableElement.textContent || inspectableElement.type,
+          text: inspectableElement.textContent,
+          boundingBox: inspectableElement.boundingBox || {
+            x: inspectableElement.x || 0,
+            y: inspectableElement.y || 0,
+            width: inspectableElement.width || 0,
+            height: inspectableElement.height || 0
+          },
+          attributes: inspectableElement.attributes || {},
+          styles: inspectableElement.styles || {},
+          context: inspectableElement.context || {},
+          accessibility: inspectableElement.accessibility || {}
         };
+        
+        console.log('✅ [SimpleDashboard] Converted to UIElement:', uiElement);
         
         handleElementSelection(uiElement);
       }
@@ -546,13 +582,58 @@ The user has visually selected this specific UI element and wants to modify it. 
     }
   };
 
-  const handleProjectCreated = (newProject: Project) => {
-    setProjects(prev => [newProject, ...prev]);
-    setSelectedProject(newProject);
+  const handleProjectCreated = async (newProject: Project) => {
+    console.log('🎯 [SimpleDashboard] handleProjectCreated called with:', newProject);
+    console.log('🎯 [SimpleDashboard] Current projects count before update:', projects.length);
+    console.log('🎯 [SimpleDashboard] newProject structure:', JSON.stringify(newProject, null, 2));
+    
+    // Close modal first
     setShowCreateProject(false);
+    
+    // Add the new project to local state
+    setProjects(prev => {
+      console.log('🎯 [SimpleDashboard] Previous projects:', prev.length, 'projects');
+      const updated = [newProject, ...prev];
+      console.log('🎯 [SimpleDashboard] Updated projects:', updated.length, 'projects');
+      return updated;
+    });
+    
+    console.log('🎯 [SimpleDashboard] Setting selected project to:', newProject.name);
+    setSelectedProject(newProject);
+    
+    // Store the selected project in localStorage
+    if (newProject.id) {
+      localStorage.setItem('selectedProjectId', newProject.id);
+      console.log('🎯 [SimpleDashboard] Stored project ID in localStorage:', newProject.id);
+    }
     
     // Mark first project creation for onboarding
     markFirstProjectCreated();
+    
+    // Also refresh the projects list from the backend to ensure consistency
+    try {
+      console.log('🔄 [SimpleDashboard] Refreshing projects list from backend...');
+      const apiUrl = process.env.NEXT_PUBLIC_ORCHESTRATOR_URL || 'http://localhost:4000';
+      const response = await authenticatedFetch(`${apiUrl}/projects`);
+      
+      if (response.ok) {
+        const refreshedProjects = await response.json();
+        console.log('🔄 [SimpleDashboard] Refreshed projects from backend:', refreshedProjects.length);
+        setProjects(refreshedProjects);
+        
+        // Ensure the new project is still selected
+        const refreshedProject = refreshedProjects.find((p: Project) => p.id === newProject.id);
+        if (refreshedProject) {
+          setSelectedProject(refreshedProject);
+          console.log('🔄 [SimpleDashboard] Confirmed new project exists in refreshed list');
+        }
+      }
+    } catch (error) {
+      console.error('🔄 [SimpleDashboard] Failed to refresh projects list:', error);
+      // Don't throw - the project was already added locally
+    }
+    
+    console.log('🎯 [SimpleDashboard] handleProjectCreated completed');
   };
 
   const handleDeleteProject = async (project: Project) => {
@@ -588,7 +669,9 @@ The user has visually selected this specific UI element and wants to modify it. 
 
 
   const toggleInspectionMode = async () => {
+    console.log('🔍 [DEBUG] toggleInspectionMode called, current mode:', inspectionMode);
     const newMode = !inspectionMode;
+    console.log('🔍 [DEBUG] Switching to mode:', newMode);
     
     // When enabling inspection mode, try to get current path from tracking or iframe URL
     if (newMode) {
@@ -650,6 +733,29 @@ The user has visually selected this specific UI element and wants to modify it. 
         setSelectedElement(null);
       }
       
+      // Reset to root path
+      setCurrentPreviewPath('/');
+      setInspectionSourcePath('/');
+      
+      // Clear the backend's tracked last path
+      if (preview && selectedProject && session?.access_token) {
+        try {
+          const apiUrl = process.env.NEXT_PUBLIC_ORCHESTRATOR_URL || 'http://localhost:4000';
+          await fetch(`${apiUrl}/projects/${selectedProject.id}/preview/${preview.id}/set-path`, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${session.access_token}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ path: '/' })
+          });
+          console.log('🔄 [Reset Preview] Backend path reset to /');
+        } catch (error) {
+          console.error('Error resetting backend path:', error);
+          // Continue with frontend reset even if backend call fails
+        }
+      }
+      
       // If preview is stuck in syncing/starting state, try to stop and restart it
       if (preview && selectedProject && (preview.status === 'syncing' || preview.status === 'starting')) {
         try {
@@ -662,7 +768,7 @@ The user has visually selected this specific UI element and wants to modify it. 
           }, 1000);
         } catch (error) {
           console.error('Error force restarting preview:', error);
-          // Fall back to just refreshing the URL
+          // Fall back to just refreshing the URL at root path
           setTimeout(async () => {
             if (preview?.status === 'running') {
               const url = await getPreviewUrl();
@@ -671,7 +777,7 @@ The user has visually selected this specific UI element and wants to modify it. 
           }, 100);
         }
       } else {
-        // For running previews or no preview, just refresh the URL
+        // For running previews or no preview, refresh the URL at root path
         setTimeout(async () => {
           if (preview?.status === 'running') {
             const url = await getPreviewUrl();
@@ -751,7 +857,9 @@ The user has visually selected this specific UI element and wants to modify it. 
         }
         
         // Pass the captured path to the inspection endpoint
-        const inspectionUrl = `${apiUrl}/projects/${selectedProject.id}/preview/${preview.id}/inspection?token=${authToken}&path=${encodeURIComponent(inspectionSourcePath)}`;
+        // Add cache-busting timestamp to force fresh inspection load
+        const timestamp = Date.now();
+        const inspectionUrl = `${apiUrl}/projects/${selectedProject.id}/preview/${preview.id}/inspection?token=${authToken}&path=${encodeURIComponent(inspectionSourcePath)}&_t=${timestamp}`;
         return inspectionUrl;
       } catch (error) {
         console.error('Error getting auth token for inspection:', error);
@@ -1081,14 +1189,36 @@ The user has visually selected this specific UI element and wants to modify it. 
               style={{ width: isDesktop ? `${chatPanelWidth}px` : '100%' }}
             >
               {preferences.dashboardMode === 'ai-enhanced' ? (
-                /* AI Enhanced Mode - Living Ecosystem Assistant */
-                <LivingEcosystemAssistant 
-                  projectId={selectedProject?.id} 
-                  className="h-full" 
-                  selectedElement={selectedElement}
-                  inspectionMode={inspectionMode}
-                  onClearSelectedElement={() => setSelectedElement(null)}
-                />
+                /* AI Enhanced Mode - Conversation Panel with Header */
+                <>
+                  {/* Chat Header */}
+                  <div className="bg-gradient-to-r from-teal-600 to-cyan-600 text-white p-4">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-3">
+                        <div className="w-8 h-8 bg-white/20 rounded-lg flex items-center justify-center">
+                          <CeliadorLogo size="sm" variant="icon" />
+                        </div>
+                        <div>
+                          <h2 className="font-semibold text-lg">AI Assistant</h2>
+                          <p className="text-teal-100 text-sm">Building {selectedProject.name}</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Conversation Panel */}
+                  <div className="flex-1 overflow-hidden">
+                    <ConversationPanel 
+                      selectedProject={selectedProject}
+                      projectId={selectedProject?.id} 
+                      className="h-full" 
+                      embedded={true}
+                      selectedElement={selectedElement}
+                      inspectionMode={inspectionMode}
+                      onClearSelectedElement={() => setSelectedElement(null)}
+                    />
+                  </div>
+                </>
               ) : (
                 /* Classic Mode - Basic Chat Interface */
                 <>
@@ -1281,8 +1411,20 @@ The user has visually selected this specific UI element and wants to modify it. 
                               if (authToken) {
                                 let apiUrl = process.env.NEXT_PUBLIC_ORCHESTRATOR_URL || 'http://localhost:4000';
                                 // Don't pass path parameter - let backend use its tracking
-                                const inspectionUrl = `${apiUrl}/projects/${selectedProject.id}/preview/${preview.id}/inspection?token=${authToken}`;
+                                // Add cache-busting timestamp to force iframe reload
+                                const timestamp = Date.now();
+                                const inspectionUrl = `${apiUrl}/projects/${selectedProject.id}/preview/${preview.id}/inspection?token=${authToken}&_t=${timestamp}`;
+                                console.log('🔍 [DEBUG] Setting inspection URL:', inspectionUrl);
+                                console.log('🔍 [DEBUG] Previous URL was:', currentPreviewUrl);
                                 setCurrentPreviewUrl(inspectionUrl);
+                                console.log('🔍 [DEBUG] Inspection URL set, should reload iframe');
+                                
+                                // Verify URL change after a short delay
+                                setTimeout(() => {
+                                  console.log('🔍 [DEBUG] Current preview URL after change:', currentPreviewUrl);
+                                  const iframe = document.querySelector('iframe');
+                                  console.log('🔍 [DEBUG] Actual iframe src:', iframe?.src);
+                                }, 100);
                               }
                             } catch (error) {
                               console.error('Error getting auth token:', error);

@@ -31,7 +31,7 @@ export function FloatingWindowController({
     setActiveWindow(null);
   };
 
-  const availableWindows: FloatingWindowContent[] = ['files', 'chat', 'activity', 'integrations', 'agents', 'settings'];
+  const availableWindows: FloatingWindowContent[] = ['files', 'activity', 'integrations', 'agents', 'settings'];
 
   return (
     <div className={className}>

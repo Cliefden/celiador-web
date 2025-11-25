@@ -61,6 +61,7 @@ export function ProjectFileExplorer({
   };
 
   useEffect(() => {
+    console.log('🔍 [ProjectFileExplorer] useEffect triggered with projectId:', projectId);
     if (projectId) {
       fetchFiles();
       checkScaffoldingStatus();
@@ -300,32 +301,51 @@ export function ProjectFileExplorer({
 
   const fetchFiles = async (silent = false) => {
     if (!projectId) {
+      console.log('🔍 [ProjectFileExplorer] No projectId provided');
       return;
     }
+    
+    console.log('🔍 [ProjectFileExplorer] Fetching files for project:', projectId, 'silent:', silent);
     
     try {
       if (!silent) setLoading(true);
       if (!silent) setError(null); // Clear errors when doing manual refresh
       
       // Get valid session with automatic refresh
-      const validSession = await getValidSession();
+      console.log('🔍 [ProjectFileExplorer] Getting valid session...');
+      
+      // Use session from auth context if available, otherwise fall back to getValidSession
+      let validSession = session;
       if (!validSession) {
+        console.log('🔍 [ProjectFileExplorer] No session from context, calling getValidSession...');
+        validSession = await getValidSession();
+      }
+      
+      console.log('🔍 [ProjectFileExplorer] Valid session result:', validSession ? 'SUCCESS' : 'FAILED');
+      if (!validSession) {
+        console.log('🔍 [ProjectFileExplorer] No valid session available');
         if (!silent) {
           setError('Session expired. Please refresh the page to sign in again.');
         }
         return;
       }
       
-      const response = await fetch(`${process.env.NEXT_PUBLIC_ORCHESTRATOR_URL || 'http://localhost:4000'}/projects/${projectId}/files/tree`, {
+      const url = `${process.env.NEXT_PUBLIC_ORCHESTRATOR_URL || 'http://localhost:4000'}/projects/${projectId}/files/tree`;
+      console.log('🔍 [ProjectFileExplorer] Making request to:', url);
+      
+      const response = await fetch(url, {
         headers: {
           'Authorization': `Bearer ${validSession.access_token}`
         }
       });
+      
+      console.log('🔍 [ProjectFileExplorer] Response status:', response.status);
 
       if (response.ok) {
         const data = await response.json();
         const newFileCount = data.tree?.length || 0;
         
+        console.log('🔍 [ProjectFileExplorer] Setting files, count:', newFileCount, 'data:', data);
         setFiles(data.tree || []);
         if (!silent) setError(null); // Clear any previous errors on success
       } else if (response.status === 404) {
@@ -344,16 +364,18 @@ export function ProjectFileExplorer({
         }
       }
     } catch (error) {
+      console.error('🔍 [ProjectFileExplorer] Error fetching files:', error);
       setFiles([]);
       if (!silent) {
         setError(`Failed to load files: ${error instanceof Error ? error.message : 'Network error'}`);
       }
     } finally {
-      if (!silent) {
-        setLoading(false);
-      }
+      console.log('🔍 [ProjectFileExplorer] fetchFiles completed, setting loading to false');
+      if (!silent) setLoading(false);
     }
   };
+
+  console.log('🔍 [ProjectFileExplorer] Render state:', { loading, filesCount: files.length, error });
 
   if (loading) {
     return (

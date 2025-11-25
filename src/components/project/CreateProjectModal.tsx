@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { X, Plus, Code, Sparkles, Zap, Palette, ShoppingCart, MessageSquare, BarChart3, Globe, Briefcase, Rocket } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { ApiClient } from '../../lib/api';
+import { useAuth } from '../../contexts/AuthContext';
 
 interface Project {
   id: string;
@@ -71,6 +72,7 @@ interface Template {
 }
 
 export function CreateProjectModal({ isOpen, onClose, onProjectCreated, userId }: CreateProjectModalProps) {
+  const { session } = useAuth();
   const [name, setName] = useState('');
   const [templateKey, setTemplateKey] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -114,19 +116,28 @@ export function CreateProjectModal({ isOpen, onClose, onProjectCreated, userId }
       try {
         console.log('CreateProjectModal: Checking authentication...');
         
-        // Use Promise.race to add timeout at the API level
-        const authResult = await Promise.race([
-          supabase.auth.getSession(),
-          new Promise((_, reject) => 
-            setTimeout(() => reject(new Error('Auth API timeout')), 10000)
-          )
-        ]);
+        // Use session from auth context if available, otherwise fall back to supabase call
+        let sessionData = session;
+        let error = null;
         
-        const { data: { session }, error } = authResult as any;
+        if (!sessionData) {
+          console.log('CreateProjectModal: No session from context, trying supabase...');
+          // Use Promise.race to add timeout at the API level
+          const authResult = await Promise.race([
+            supabase.auth.getSession(),
+            new Promise((_, reject) => 
+              setTimeout(() => reject(new Error('Auth API timeout')), 10000)
+            )
+          ]);
+          
+          const { data: { session: supabaseSession }, error: supabaseError } = authResult as any;
+          sessionData = supabaseSession;
+          error = supabaseError;
+        }
         
         console.log('CreateProjectModal: Auth check result:', { 
-          hasSession: !!session, 
-          hasUser: !!session?.user, 
+          hasSession: !!sessionData, 
+          hasUser: !!sessionData?.user, 
           error: error?.message 
         });
         
@@ -136,7 +147,7 @@ export function CreateProjectModal({ isOpen, onClose, onProjectCreated, userId }
           console.warn('CreateProjectModal: Auth error but continuing with template loading');
         }
         
-        if (!session || !session.user) {
+        if (!sessionData || !sessionData.user) {
           console.log('CreateProjectModal: No session found, but continuing');
           // Don't block template loading, just log the issue
         }
@@ -269,6 +280,9 @@ export function CreateProjectModal({ isOpen, onClose, onProjectCreated, userId }
       ]);
       
       console.log('✅ [CreateProjectModal] Project created successfully:', newProject);
+      console.log('✅ [CreateProjectModal] Project data structure:', JSON.stringify(newProject, null, 2));
+      console.log('✅ [CreateProjectModal] Calling onProjectCreated with:', newProject);
+      
       onProjectCreated(newProject);
       
       // Clear fields
