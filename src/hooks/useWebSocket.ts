@@ -48,7 +48,10 @@ export function useWebSocket(options: UseWebSocketOptions = {}) {
   } = options;
 
   const getWebSocketUrl = useCallback(async (): Promise<string | null> => {
-    if (!session?.access_token) return null;
+    if (!session?.access_token) {
+      console.log('[WebSocket] No session token available, skipping connection');
+      return null;
+    }
 
     try {
       const response = await fetch(`${process.env.NEXT_PUBLIC_ORCHESTRATOR_URL || 'http://localhost:4000'}/api/realtime/connection-info`, {
@@ -58,7 +61,11 @@ export function useWebSocket(options: UseWebSocketOptions = {}) {
       });
 
       if (!response.ok) {
-        console.error('[WebSocket] Failed to get connection info:', response.status);
+        if (response.status === 401) {
+          console.log('[WebSocket] Authentication failed, user needs to login');
+        } else {
+          console.error('[WebSocket] Failed to get connection info:', response.status);
+        }
         return null;
       }
 
@@ -108,7 +115,12 @@ export function useWebSocket(options: UseWebSocketOptions = {}) {
   }, [sendMessage]);
 
   const connect = useCallback(async () => {
-    if (isConnecting || isConnected || !session?.access_token) {
+    if (isConnecting || isConnected) {
+      return;
+    }
+    
+    if (!session?.access_token) {
+      console.log('[WebSocket] No session available, skipping WebSocket connection');
       return;
     }
 
@@ -238,8 +250,14 @@ export function useWebSocket(options: UseWebSocketOptions = {}) {
       };
 
       ws.onerror = (error) => {
-        console.error('❌ WebSocket error:', error);
-        setConnectionStatus('Connection error');
+        // Only log WebSocket errors if we have a valid session and expect WebSocket to work
+        if (session?.access_token) {
+          console.error('❌ WebSocket error:', error);
+          setConnectionStatus('Connection error');
+        } else {
+          console.log('[WebSocket] Connection failed (no authentication)');
+          setConnectionStatus('Not authenticated');
+        }
         onError?.(error);
       };
 
@@ -250,10 +268,14 @@ export function useWebSocket(options: UseWebSocketOptions = {}) {
     }
   }, [session?.access_token, getWebSocketUrl, channels, onConnect, onMessage, onDisconnect, onError, autoReconnect, baseReconnectInterval]);
 
-  // Auto-connect when session is available
+  // Auto-connect when session is available and user is authenticated
   useEffect(() => {
-    if (session?.access_token && !isConnected && !isConnecting) {
+    if (session?.access_token && session?.user && !isConnected && !isConnecting) {
+      console.log('[WebSocket] Session available, attempting connection for user:', session.user.id);
       connect();
+    } else if (!session?.access_token && (isConnected || isConnecting)) {
+      console.log('[WebSocket] Session lost, disconnecting WebSocket');
+      disconnect();
     }
 
     // Cleanup function that doesn't depend on the disconnect callback
@@ -268,7 +290,7 @@ export function useWebSocket(options: UseWebSocketOptions = {}) {
         wsRef.current = null;
       }
     };
-  }, [session?.access_token]);
+  }, [session?.access_token, session?.user?.id]);
 
   // Ping the server periodically to keep connection alive
   useEffect(() => {

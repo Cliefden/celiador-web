@@ -85,6 +85,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const startSessionTracking = async () => {
     if (!session?.access_token || isSessionTracking) return;
 
+    // Check if token is expired before starting session tracking
+    try {
+      if (session?.expires_at) {
+        const now = Math.floor(Date.now() / 1000);
+        const expiresAt = session.expires_at;
+        
+        if (now >= expiresAt - 60) { // Refresh if expiring within 60 seconds
+          console.log('[SessionTracking] Token expiring soon, refreshing before starting session...');
+          await refreshAuth();
+          return; // Let the effect handle session start with fresh token
+        }
+      }
+    } catch (error) {
+      console.error('[SessionTracking] Error checking/refreshing token:', error);
+      return; // Don't start session tracking if token refresh failed
+    }
+
     try {
       const sessionId = generateSessionId();
       const deviceInfo = getDeviceInfo();
@@ -127,7 +144,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         
         console.log('[SessionTracking] Session started successfully');
       } else {
-        console.error('[SessionTracking] Failed to start session:', response.statusText);
+        if (response.status === 401) {
+          console.log('[SessionTracking] Token expired, attempting to refresh...');
+          try {
+            await refreshAuth();
+            // Don't log error for expected authentication failures after sleep
+          } catch (refreshError) {
+            console.log('[SessionTracking] Token refresh failed, user needs to login again');
+          }
+        } else {
+          console.error('[SessionTracking] Failed to start session:', response.statusText);
+        }
       }
     } catch (error) {
       console.error('[SessionTracking] Error starting session:', error);
@@ -317,7 +344,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!isSessionTracking) return;
 
-    const handleVisibilityChange = () => {
+    const handleVisibilityChange = async () => {
       if (document.hidden) {
         // Page is hidden - don't end session but stop heartbeat temporarily
         if (heartbeatIntervalRef.current) {
@@ -325,8 +352,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           heartbeatIntervalRef.current = null;
         }
       } else {
-        // Page is visible - resume heartbeat
-        if (sessionData) {
+        // Page is visible - check if we need to refresh auth first (computer may have been asleep)
+        console.log('[SessionTracking] Page visible again, checking session validity...');
+        
+        // Check if the session token might be expired (common after sleep)
+        if (session?.expires_at) {
+          const now = Math.floor(Date.now() / 1000);
+          const expiresAt = session.expires_at;
+          
+          if (now >= expiresAt - 300) { // Refresh if expiring within 5 minutes
+            console.log('[SessionTracking] Session token may be expired after sleep, refreshing...');
+            try {
+              await refreshAuth();
+              // Wait a bit for the auth state to update
+              setTimeout(() => {
+                // Session tracking will restart automatically via useEffect when session updates
+                if (sessionData && isSessionTracking) {
+                  startHeartbeat(sessionData.sessionId);
+                }
+                trackActivity();
+              }, 1000);
+              return;
+            } catch (error) {
+              console.log('[SessionTracking] Failed to refresh auth after wake:', error);
+            }
+          }
+        }
+        
+        // Resume heartbeat with current session
+        if (sessionData && isSessionTracking) {
           startHeartbeat(sessionData.sessionId);
         }
         trackActivity();
@@ -338,7 +392,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [isSessionTracking, sessionData]);
+  }, [isSessionTracking, sessionData, session]);
 
   // Handle page unload
   useEffect(() => {
