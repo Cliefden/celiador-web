@@ -7,6 +7,19 @@ import { tiers } from "@/lib/site";
 export const metadata: Metadata = {
   title: "Pricing",
   description: "Start free with your own model key, or go Pro for hosted frontier models.",
+  alternates: {
+    canonical: "/pricing",
+  },
+  openGraph: {
+    title: "Pricing — Celiador",
+    description: "Start free with your own model key, or go Pro for hosted frontier models.",
+    url: "https://celiador.ai/pricing",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Pricing — Celiador",
+    description: "Start free with your own model key, or go Pro for hosted frontier models.",
+  },
 };
 
 export default function PricingPage() {

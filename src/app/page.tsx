@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { Button, Container, Eyebrow, SectionHeading } from "@/components/ui";
 import { EditorMock } from "@/components/EditorMock";
@@ -6,9 +7,63 @@ import { EmailCapture } from "@/components/EmailCapture";
 import { iconMap, AppleIcon, ArrowIcon, CheckIcon, SparkIcon } from "@/components/icons";
 import { features, steps, site, tiers } from "@/lib/site";
 
+export const metadata: Metadata = {
+  alternates: {
+    canonical: "/",
+  },
+  openGraph: {
+    title: `${site.name} — ${site.tagline}`,
+    description: site.description,
+    url: site.url,
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: `${site.name} — ${site.tagline}`,
+    description: site.description,
+  },
+};
+
 export default function HomePage() {
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "Organization",
+        "@id": `${site.url}/#organization`,
+        name: site.name,
+        url: site.url,
+        logo: `${site.url}/icon.svg`,
+        description: site.description,
+      },
+      {
+        "@type": "SoftwareApplication",
+        "@id": `${site.url}/#software`,
+        name: site.name,
+        applicationCategory: "DeveloperApplication",
+        operatingSystem: "macOS",
+        offers: {
+          "@type": "Offer",
+          price: "0",
+          priceCurrency: "USD",
+        },
+        description: site.description,
+        featureList: [
+          "AI agent for code editing",
+          "Whole-repo context understanding",
+          "Multi-file edits with reviewable diffs",
+          "Built on VS Code",
+          "Native macOS application",
+        ],
+      },
+    ],
+  };
+
   return (
     <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
       {/* ── Hero ─────────────────────────────────────────── */}
       <section className="relative overflow-hidden">
         <div className="pointer-events-none absolute inset-0 grid-bg" />

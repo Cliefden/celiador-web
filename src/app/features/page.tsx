@@ -8,6 +8,21 @@ export const metadata: Metadata = {
   title: "Features",
   description:
     "A native macOS AI editor with a whole-repo agent, reviewable diffs, and the full VS Code ecosystem.",
+  alternates: {
+    canonical: "/features",
+  },
+  openGraph: {
+    title: "Features — Celiador",
+    description:
+      "A native macOS AI editor with a whole-repo agent, reviewable diffs, and the full VS Code ecosystem.",
+    url: "https://celiador.ai/features",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Features — Celiador",
+    description:
+      "A native macOS AI editor with a whole-repo agent, reviewable diffs, and the full VS Code ecosystem.",
+  },
 };
 
 const deepDives = [

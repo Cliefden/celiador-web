@@ -4,6 +4,19 @@ import { Container, Eyebrow } from "@/components/ui";
 export const metadata: Metadata = {
   title: "Changelog",
   description: "What's new in Celiador.",
+  alternates: {
+    canonical: "/changelog",
+  },
+  openGraph: {
+    title: "Changelog — Celiador",
+    description: "What's new in Celiador.",
+    url: "https://celiador.ai/changelog",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Changelog — Celiador",
+    description: "What's new in Celiador.",
+  },
 };
 
 const entries = [

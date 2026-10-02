@@ -7,6 +7,19 @@ import { site } from "@/lib/site";
 export const metadata: Metadata = {
   title: "Download",
   description: `Download ${site.name} for macOS. Join the private preview.`,
+  alternates: {
+    canonical: "/download",
+  },
+  openGraph: {
+    title: "Download — Celiador",
+    description: `Download ${site.name} for macOS. Join the private preview.`,
+    url: "https://celiador.ai/download",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Download — Celiador",
+    description: `Download ${site.name} for macOS. Join the private preview.`,
+  },
 };
 
 export default function DownloadPage() {

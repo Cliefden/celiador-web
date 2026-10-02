@@ -11,7 +11,6 @@ export const site = {
   downloadHref: "/download",
   macVersion: "0.1.0 (preview)",
   minMacOS: "macOS 13 Ventura or later · Apple Silicon",
-  github: "https://github.com/Cliefden/celiador",
 };
 
 export const nav: { label: string; href: string }[] = [
@@ -173,7 +172,6 @@ export const footerLinks: { heading: string; links: { label: string; href: strin
     links: [
       { label: "About", href: "/about" },
       { label: "Contact", href: "/contact" },
-      { label: "GitHub", href: site.github },
     ],
   },
   {

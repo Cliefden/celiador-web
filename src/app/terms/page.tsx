@@ -4,6 +4,19 @@ import { LegalPage } from "../legal/legal";
 export const metadata: Metadata = {
   title: "Terms of Service",
   description: "The terms for using Celiador.",
+  alternates: {
+    canonical: "/terms",
+  },
+  openGraph: {
+    title: "Terms of Service — Celiador",
+    description: "The terms for using Celiador.",
+    url: "https://celiador.ai/terms",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Terms of Service — Celiador",
+    description: "The terms for using Celiador.",
+  },
 };
 
 export default function TermsPage() {
