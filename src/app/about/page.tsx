@@ -4,6 +4,19 @@ import { Button, Container, Eyebrow } from "@/components/ui";
 export const metadata: Metadata = {
   title: "About",
   description: "Why we're building Celiador — a native AI editor for people who ship.",
+  alternates: {
+    canonical: "/about",
+  },
+  openGraph: {
+    title: "About — Celiador",
+    description: "Why we're building Celiador — a native AI editor for people who ship.",
+    url: "https://celiador.ai/about",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "About — Celiador",
+    description: "Why we're building Celiador — a native AI editor for people who ship.",
+  },
 };
 
 const values = [

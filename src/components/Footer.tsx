@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { footerLinks, site } from "@/lib/site";
-import { BrandMark, GithubIcon } from "./icons";
+import { BrandMark } from "./icons";
 import { Container } from "./ui";
 
 export function Footer() {
@@ -14,15 +14,6 @@ export function Footer() {
               <span className="text-[15px] font-semibold tracking-tight">{site.name}</span>
             </Link>
             <p className="mt-4 max-w-xs text-sm leading-relaxed text-fog">{site.description}</p>
-            <Link
-              href={site.github}
-              target="_blank"
-              rel="noreferrer"
-              className="mt-5 inline-flex items-center gap-2 text-sm text-fog transition-colors hover:text-white"
-            >
-              <GithubIcon className="h-4 w-4" />
-              GitHub
-            </Link>
           </div>
 
           {footerLinks.map((col) => (

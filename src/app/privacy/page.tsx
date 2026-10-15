@@ -4,6 +4,19 @@ import { LegalPage } from "../legal/legal";
 export const metadata: Metadata = {
   title: "Privacy Policy",
   description: "How Celiador handles your data.",
+  alternates: {
+    canonical: "/privacy",
+  },
+  openGraph: {
+    title: "Privacy Policy — Celiador",
+    description: "How Celiador handles your data.",
+    url: "https://celiador.ai/privacy",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Privacy Policy — Celiador",
+    description: "How Celiador handles your data.",
+  },
 };
 
 export default function PrivacyPage() {

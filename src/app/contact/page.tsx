@@ -5,6 +5,19 @@ import { ContactForm } from "@/components/ContactForm";
 export const metadata: Metadata = {
   title: "Contact",
   description: "Talk to the Celiador team about teams, security, or partnerships.",
+  alternates: {
+    canonical: "/contact",
+  },
+  openGraph: {
+    title: "Contact — Celiador",
+    description: "Talk to the Celiador team about teams, security, or partnerships.",
+    url: "https://celiador.ai/contact",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Contact — Celiador",
+    description: "Talk to the Celiador team about teams, security, or partnerships.",
+  },
 };
 
 export default function ContactPage() {

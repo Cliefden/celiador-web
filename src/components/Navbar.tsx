@@ -50,14 +50,6 @@ export function Navbar() {
         </nav>
 
         <div className="hidden items-center gap-3 md:flex">
-          <Link
-            href={site.github}
-            target="_blank"
-            rel="noreferrer"
-            className="text-sm text-fog transition-colors hover:text-white"
-          >
-            GitHub
-          </Link>
           <Button href="/download" variant="primary" icon="download">
             Download
           </Button>
