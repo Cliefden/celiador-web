@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Container, Eyebrow } from "@/components/ui";
+import { DocsSearch } from "@/components/DocsSearch";
 import { formatLimit, publishedLimits } from "@/lib/limits";
 import { latestMacDmgHref, latestMacRelease } from "@/lib/releases";
 
@@ -39,13 +40,7 @@ export default async function DocsPage() {
           first agent pull request in about ten minutes.
         </p>
 
-        <nav className="mt-8 flex flex-wrap gap-2">
-          {sections.map((s) => (
-            <a key={s.id} href={`#${s.id}`} className="rounded-full border border-line bg-white/[0.02] px-3 py-1 text-xs text-fog hover:text-white">
-              {s.title}
-            </a>
-          ))}
-        </nav>
+        <DocsSearch sections={sections} />
 
         <div className="mt-10 space-y-6 text-sm leading-relaxed text-fog [&_h2]:mt-10 [&_h2]:scroll-mt-24 [&_h2]:text-xl [&_h2]:font-semibold [&_h2]:text-white [&_h3]:mt-6 [&_h3]:font-semibold [&_h3]:text-white [&_code]:rounded [&_code]:bg-white/[0.06] [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:font-mono [&_code]:text-[12px] [&_code]:text-white [&_kbd]:rounded [&_kbd]:border [&_kbd]:border-line [&_kbd]:bg-white/[0.04] [&_kbd]:px-1.5 [&_kbd]:py-0.5 [&_kbd]:font-mono [&_kbd]:text-[12px] [&_kbd]:text-white">
           <h2 id="install">Install</h2>
