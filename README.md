@@ -1,4 +1,9 @@
-# celiador-web
+# celiador-web — moved
+
+> **This repository is archived.** Since 2026-10-29 the site lives in
+> [`Cliefden/celiador`](https://github.com/Cliefden/celiador) under
+> [`web/`](https://github.com/Cliefden/celiador/tree/main/web), with its full
+> history. Open issues and pull requests there.
 
 Marketing site for **Celiador**: issue in, pull request out. Label a GitHub issue
 `celiador` and an agent runs it on your Mac in its own git worktree, opens a pull
